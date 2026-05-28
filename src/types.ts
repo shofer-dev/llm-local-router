@@ -167,12 +167,38 @@ export interface ThrottlingConfig {
     windowMinutes: number;
 }
 
+export interface PerModelConfig {
+    /** Model weight for smooth weighted round-robin (default: 1) */
+    weight?: number;
+    /** Per-model throttling overrides composite-level defaults */
+    throttling?: ThrottlingConfig;
+}
+
+export interface CompositeHealthConfig {
+    /** Consecutive failures before marking unhealthy (default: 3) */
+    failureThreshold?: number;
+    /** Cooldown in ms before probing an unhealthy model (default: 30000) */
+    cooldownMs?: number;
+    /** Consecutive failures to enter degraded state (default: 1) */
+    degradedThreshold?: number;
+}
+
 export interface CompositeModelConfig {
     strategy: CompositeStrategy;
-    models: string[];
+    /** List of underlying model IDs, or objects with per-model config */
+    models: string[] | Array<string | { id: string; weight?: number; throttling?: ThrottlingConfig }>;
+    /** Composite-level throttling (shared across all underlying models) */
     throttling?: ThrottlingConfig;
+    /** Per-attempt timeout for non-streaming requests (ms, default: 120000) */
     perAttemptTimeoutMs?: number;
+    /** Per-attempt inactivity timeout for streaming requests (ms, default: 30000).
+     *  Reset on each received chunk — a steadily-streaming thinking model is never
+     *  cancelled mid-response. */
+    streamingTimeoutMs?: number;
+    /** Total wall-clock timeout across all failovers (ms, default: 300000) */
     totalTimeoutMs?: number;
+    /** Health monitoring configuration */
+    health?: CompositeHealthConfig;
 }
 
 // ─── Provider configuration ─────────────────────────────────────────

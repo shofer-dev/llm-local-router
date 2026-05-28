@@ -4,21 +4,22 @@
  * Handles shofer/* composite models that wrap multiple underlying models
  * with configurable routing strategies:
  *   - failover: tries models in strict order; on failure, falls back
- *   - round_robin: distributes requests across available models
+ *   - round_robin: smooth weighted round-robin (nginx-style) across models
  *
  * Streaming requests follow a "first-byte rule": once any chunk has been
  * sent to the client, failover to a different model is not possible.
  * Only pre-first-byte failures trigger failover.
  *
  * Ported from llm-router/internal/services/composite.go.
- * Simplified: no Redis, no per-replica health monitor, no Prometheus metrics.
+ * Simplified: no Redis, no per-replica metrics.
+ * Enhanced: smooth WRR, configurable health cooldown, degraded state.
  */
 
 import {
     ChatCompletionRequest,
     ChatCompletionResponse,
     CompositeModelConfig,
-    CompositeStrategy,
+    CompositeHealthConfig,
     ThrottlingConfig,
 } from './types';
 import { ProviderRouter } from './provider-client';
@@ -34,26 +35,39 @@ export interface CompositeSendResult {
     attempts: number;
 }
 
+/** Health state per underlying model. */
+enum HealthState {
+    Healthy = 'healthy',
+    Degraded = 'degraded',
+    Unhealthy = 'unhealthy',
+}
+
 /**
  * In-memory health tracking per underlying model.
  */
 interface ModelHealth {
+    state: HealthState;
     consecutiveFailures: number;
     lastFailureTime: number;
-    isUnhealthy: boolean;
-    unhealthySince: number;
+    lastStateChangeMs: number;
 }
 
 /**
  * In-memory throttling state per underlying model.
  */
 interface ModelThrottle {
-    /** Number of requests in the current window */
     windowCount: number;
-    /** Start of the current window (epoch ms) */
     windowStart: number;
-    /** Current number of in-flight requests */
     inFlight: number;
+}
+
+/**
+ * Resolved per-model configuration.
+ */
+interface ResolvedModelConfig {
+    id: string;
+    weight: number;
+    throttling: ThrottlingConfig;
 }
 
 const DEFAULT_THROTTLING: ThrottlingConfig = {
@@ -62,8 +76,24 @@ const DEFAULT_THROTTLING: ThrottlingConfig = {
     windowMinutes: 5,
 };
 
-/** How long an unhealthy model stays quarantined before probing */
-const UNHEALTHY_COOLDOWN_MS = 30_000; // 30 seconds
+const DEFAULT_HEALTH: Required<CompositeHealthConfig> = {
+    failureThreshold: 3,
+    cooldownMs: 30_000,
+    degradedThreshold: 1,
+};
+
+const DEFAULT_STREAMING_TIMEOUT_MS = 30_000;
+const DEFAULT_PER_ATTEMPT_TIMEOUT_MS = 120_000;
+
+/**
+ * Smooth weighted round-robin state (nginx-style).
+ * Tracks current weight per model to avoid bursting.
+ */
+interface SWRRState {
+    models: string[];
+    weights: Map<string, number>;
+    currentWeights: Map<string, number>;
+}
 
 export class CompositeService {
     private router: ProviderRouter;
@@ -75,8 +105,8 @@ export class CompositeService {
     // Per-model throttling
     private throttle = new Map<string, ModelThrottle>();
 
-    // Round-robin state per composite model
-    private rrCounters = new Map<string, number>();
+    // Smooth WRR state per composite model
+    private swrrState = new Map<string, SWRRState>();
 
     constructor(router: ProviderRouter) {
         this.router = router;
@@ -108,6 +138,31 @@ export class CompositeService {
     }
 
     /**
+     * Get resolved per-model configs for a composite.
+     */
+    getResolvedModels(compositeModelId: string): ResolvedModelConfig[] {
+        const config = this.compositeConfigs.get(compositeModelId);
+        if (!config) return [];
+
+        const compositeThrottle = config.throttling ?? DEFAULT_THROTTLING;
+        const result: ResolvedModelConfig[] = [];
+
+        for (const entry of config.models) {
+            if (typeof entry === 'string') {
+                result.push({ id: entry, weight: 1, throttling: compositeThrottle });
+            } else {
+                result.push({
+                    id: entry.id,
+                    weight: entry.weight ?? 1,
+                    throttling: entry.throttling ?? compositeThrottle,
+                });
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Send a request through a composite model with failover/load-balancing.
      */
     async sendCompositeRequest(
@@ -122,21 +177,36 @@ export class CompositeService {
         }
 
         const logger = getLogger();
+        const health = config.health ?? {};
+        const resolvedModels = this.getResolvedModels(compositeModelId);
         const attempts: string[] = [];
         let failoverOccurred = false;
 
-        // Get candidate models based on strategy
-        const candidates = this.getCandidates(compositeModelId, config);
-
-        if (candidates.length === 0) {
+        // Get candidate model IDs based on strategy
+        const candidateIds = this.getCandidates(compositeModelId, config, resolvedModels);
+        if (candidateIds.length === 0) {
             throw new Error(`No healthy models available for composite: ${compositeModelId}`);
         }
 
         let lastError: Error | undefined;
+        const totalStart = Date.now();
+        const totalTimeout = config.totalTimeoutMs ?? 300_000;
 
-        for (const candidateModel of candidates) {
+        for (const candidateModel of candidateIds) {
+            // Check total timeout
+            if (Date.now() - totalStart > totalTimeout) {
+                throw new Error(
+                    `Total timeout exceeded for composite ${compositeModelId} ` +
+                    `(${totalTimeout}ms). Tried: ${attempts.join(', ')}`
+                );
+            }
+
+            // Find the resolved config for this model
+            const resolvedModel = resolvedModels.find(m => m.id === candidateModel);
+            const modelThrottle = resolvedModel?.throttling ?? DEFAULT_THROTTLING;
+
             // Check if throttled
-            if (this.isThrottled(candidateModel, config.throttling)) {
+            if (this.isThrottled(candidateModel, modelThrottle)) {
                 logger.debug(`Skipping throttled model: ${candidateModel}`);
                 continue;
             }
@@ -147,20 +217,38 @@ export class CompositeService {
             // Acquire throttle slot
             this.acquireThrottle(candidateModel);
 
-            try {
-                // Create a per-attempt abort controller
-                const attemptAbort = new AbortController();
+            let firstByteReceived = false;
 
-                // Wire parent cancellation
+            try {
+                const attemptAbort = new AbortController();
                 abortController.signal.addEventListener('abort', () => attemptAbort.abort());
 
-                const perAttemptTimeout = config.perAttemptTimeoutMs ?? 120_000;
-                const timeoutId = setTimeout(() => attemptAbort.abort(), perAttemptTimeout);
+                // Use streaming timeout if request is streaming, else per-attempt timeout
+                const isStreaming = request.stream !== false;
+                const timeoutMs = isStreaming
+                    ? (config.streamingTimeoutMs ?? DEFAULT_STREAMING_TIMEOUT_MS)
+                    : (config.perAttemptTimeoutMs ?? DEFAULT_PER_ATTEMPT_TIMEOUT_MS);
 
-                // For streaming: wrap onChunk to track first-byte
-                let firstByteReceived = false;
+                let lastChunkMs = Date.now();
+                let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+                const resetInactivityTimer = () => {
+                    if (timeoutId) clearTimeout(timeoutId);
+                    if (isStreaming) {
+                        timeoutId = setTimeout(() => {
+                            attemptAbort.abort();
+                        }, timeoutMs);
+                    } else {
+                        // Non-streaming: one-shot timeout
+                        timeoutId = setTimeout(() => attemptAbort.abort(), timeoutMs);
+                    }
+                };
+                resetInactivityTimer();
                 const wrappedOnChunk = (chunk: ChatCompletionResponse) => {
                     firstByteReceived = true;
+                    lastChunkMs = Date.now();
+                    // Reset inactivity timer on each chunk for streaming
+                    if (isStreaming) resetInactivityTimer();
                     onChunk(chunk);
                 };
 
@@ -171,14 +259,13 @@ export class CompositeService {
                     attemptAbort,
                 );
 
-                clearTimeout(timeoutId);
+                if (timeoutId) clearTimeout(timeoutId);
 
-                // Success — update health
-                this.recordSuccess(candidateModel);
+                this.recordSuccess(candidateModel, health);
 
                 logger.debug(
                     `Composite ${compositeModelId}: served by ${candidateModel} ` +
-                    `(attempt ${attempts.length}/${candidates.length})`
+                    `(attempt ${attempts.length}/${candidateIds.length})`
                 );
 
                 return {
@@ -188,17 +275,23 @@ export class CompositeService {
                     attempts: attempts.length,
                 };
             } catch (err) {
-                clearTimeout((err as any)?.timeoutId);
                 lastError = err as Error;
 
-                // If first byte was already received during streaming, can't failover
-                // (This is handled by the streaming loop aborting on error)
+                // If first byte was received mid-stream, failover is blocked
+                if (firstByteReceived) {
+                    logger.warning(
+                        `Composite ${compositeModelId}: ${candidateModel} failed mid-stream ` +
+                        `— cannot failover (first-byte rule)`
+                    );
+                    throw err;
+                }
+
                 logger.warning(
                     `Composite ${compositeModelId}: ${candidateModel} failed ` +
-                    `(attempt ${attempts.length}/${candidates.length}): ${lastError.message}`
+                    `(attempt ${attempts.length}/${candidateIds.length}): ${lastError.message}`
                 );
 
-                this.recordFailure(candidateModel);
+                this.recordFailure(candidateModel, health);
             } finally {
                 this.releaseThrottle(candidateModel);
             }
@@ -210,26 +303,80 @@ export class CompositeService {
         );
     }
 
-    /**
-     * Get candidate models ordered by strategy.
-     */
-    private getCandidates(compositeId: string, config: CompositeModelConfig): string[] {
-        const healthy = config.models.filter(m => !this.isUnhealthy(m));
+    // ─── Candidate selection ────────────────────────────────────────
 
-        if (config.strategy === 'failover' || config.strategy === ('failover' as CompositeStrategy)) {
-            return healthy;
+    private getCandidates(
+        compositeId: string,
+        config: CompositeModelConfig,
+        resolvedModels: ResolvedModelConfig[],
+    ): string[] {
+        const health = config.health ?? {};
+        const healthyIds = resolvedModels
+            .filter(m => !this.isUnhealthy(m.id, health))
+            .map(m => m.id);
+
+        if (healthyIds.length === 0) return [];
+
+        if (config.strategy === 'round_robin') {
+            return this.smoothWRRSelect(compositeId, resolvedModels, health);
         }
 
-        // Round-robin: start from the last-used index
-        if (healthy.length === 0) return [];
+        // failover: strict order, but skip unhealthy
+        return healthyIds;
+    }
 
-        let counter = this.rrCounters.get(compositeId) ?? 0;
-        const startIdx = counter % healthy.length;
-        counter = (counter + 1) % healthy.length;
-        this.rrCounters.set(compositeId, counter);
+    /**
+     * Smooth weighted round-robin (nginx-style).
+     * Each model has a weight; we track current_weight per model and
+     * select the one with highest current_weight, then subtract the
+     * total weight. This avoids bursting to high-weight nodes.
+     */
+    private smoothWRRSelect(
+        compositeId: string,
+        resolvedModels: ResolvedModelConfig[],
+        healthCfg: CompositeHealthConfig,
+    ): string[] {
+        let state = this.swrrState.get(compositeId);
+        const totalWeight = resolvedModels.reduce((sum, m) => {
+            if (this.isUnhealthy(m.id, healthCfg)) return sum;
+            return sum + m.weight;
+        }, 0);
 
-        // Reorder: models from startIdx to end, then 0 to startIdx-1
-        return [...healthy.slice(startIdx), ...healthy.slice(0, startIdx)];
+        if (totalWeight === 0) return [];
+
+        if (!state || state.models.length !== resolvedModels.length) {
+            state = {
+                models: resolvedModels.map(m => m.id),
+                weights: new Map(resolvedModels.map(m => [m.id, m.weight])),
+                currentWeights: new Map(resolvedModels.map(m => [m.id, 0])),
+            };
+            this.swrrState.set(compositeId, state);
+        }
+
+        // Return a single-model array for the SWRR pick.
+        // The caller iterates; for round-robin we only return one candidate
+        // per call and rely on repeated calls to distribute.
+        let bestModel = '';
+        let bestWeight = -1;
+
+        for (const model of resolvedModels) {
+            if (this.isUnhealthy(model.id, healthCfg)) {
+                state.currentWeights.set(model.id, 0);
+                continue;
+            }
+            const current = (state.currentWeights.get(model.id) ?? 0) + model.weight;
+            state.currentWeights.set(model.id, current);
+            if (current > bestWeight) {
+                bestWeight = current;
+                bestModel = model.id;
+            }
+        }
+
+        if (bestModel) {
+            state.currentWeights.set(bestModel, bestWeight - totalWeight);
+        }
+
+        return bestModel ? [bestModel] : [];
     }
 
     // ─── Health tracking ───────────────────────────────────────────
@@ -237,39 +384,62 @@ export class CompositeService {
     private getHealth(modelId: string): ModelHealth {
         let h = this.health.get(modelId);
         if (!h) {
-            h = { consecutiveFailures: 0, lastFailureTime: 0, isUnhealthy: false, unhealthySince: 0 };
+            h = {
+                state: HealthState.Healthy,
+                consecutiveFailures: 0,
+                lastFailureTime: 0,
+                lastStateChangeMs: 0,
+            };
             this.health.set(modelId, h);
         }
         return h;
     }
 
-    private recordSuccess(modelId: string): void {
+    private recordSuccess(modelId: string, healthCfg: CompositeHealthConfig): void {
         const h = this.getHealth(modelId);
         h.consecutiveFailures = 0;
-        h.isUnhealthy = false;
+        if (h.state !== HealthState.Healthy) {
+            h.state = HealthState.Healthy;
+            h.lastStateChangeMs = Date.now();
+        }
     }
 
-    private recordFailure(modelId: string): void {
+    private recordFailure(modelId: string, healthCfg: CompositeHealthConfig): void {
         const h = this.getHealth(modelId);
         h.consecutiveFailures++;
         h.lastFailureTime = Date.now();
 
-        // Mark unhealthy after 3 consecutive failures
-        if (h.consecutiveFailures >= 3) {
-            h.isUnhealthy = true;
-            h.unhealthySince = Date.now();
+        const failureThreshold = healthCfg.failureThreshold ?? DEFAULT_HEALTH.failureThreshold;
+        const degradedThreshold = healthCfg.degradedThreshold ?? DEFAULT_HEALTH.degradedThreshold;
+
+        if (h.consecutiveFailures >= failureThreshold && h.state !== HealthState.Unhealthy) {
+            h.state = HealthState.Unhealthy;
+            h.lastStateChangeMs = Date.now();
+            getLogger().warning(
+                `Model ${modelId} marked unhealthy after ${h.consecutiveFailures} consecutive failures`
+            );
+        } else if (h.consecutiveFailures >= degradedThreshold && h.state === HealthState.Healthy) {
+            h.state = HealthState.Degraded;
+            h.lastStateChangeMs = Date.now();
+            getLogger().warning(
+                `Model ${modelId} degraded after ${h.consecutiveFailures} consecutive failures`
+            );
         }
     }
 
-    private isUnhealthy(modelId: string): boolean {
+    private isUnhealthy(modelId: string, healthCfg: CompositeHealthConfig): boolean {
         const h = this.getHealth(modelId);
-        if (!h.isUnhealthy) return false;
+        if (h.state === HealthState.Healthy) return false;
 
-        // Probe after cooldown period
-        const elapsed = Date.now() - h.unhealthySince;
-        if (elapsed > UNHEALTHY_COOLDOWN_MS) {
-            // Allow one probe attempt
-            h.isUnhealthy = false;
+        // Degraded models are still usable
+        if (h.state === HealthState.Degraded) return false;
+
+        // Unhealthy: probe after cooldown
+        const cooldownMs = healthCfg.cooldownMs ?? DEFAULT_HEALTH.cooldownMs;
+        const elapsed = Date.now() - h.lastStateChangeMs;
+        if (elapsed > cooldownMs) {
+            h.state = HealthState.Degraded; // allow one probe
+            h.lastStateChangeMs = Date.now();
             return false;
         }
 
@@ -278,7 +448,7 @@ export class CompositeService {
 
     // ─── Throttling ─────────────────────────────────────────────────
 
-    private getThrottle(modelId: string, config?: ThrottlingConfig): ModelThrottle {
+    private getThrottle(modelId: string): ModelThrottle {
         let t = this.throttle.get(modelId);
         if (!t) {
             t = { windowCount: 0, windowStart: Date.now(), inFlight: 0 };
@@ -287,23 +457,19 @@ export class CompositeService {
         return t;
     }
 
-    private isThrottled(modelId: string, config?: ThrottlingConfig): boolean {
-        const tc = config ?? DEFAULT_THROTTLING;
-        const t = this.getThrottle(modelId, tc);
+    private isThrottled(modelId: string, config: ThrottlingConfig): boolean {
+        const t = this.getThrottle(modelId);
 
-        // Check concurrency limit
-        if (t.inFlight >= tc.maxConcurrent) return true;
+        if (t.inFlight >= config.maxConcurrent) return true;
 
-        // Check sliding window rate limit
-        const windowMs = tc.windowMinutes * 60 * 1000;
+        const windowMs = config.windowMinutes * 60 * 1000;
         if (Date.now() - t.windowStart > windowMs) {
-            // Window expired, reset
             t.windowCount = 0;
             t.windowStart = Date.now();
             return false;
         }
 
-        return t.windowCount >= tc.requestsPerWindow;
+        return t.windowCount >= config.requestsPerWindow;
     }
 
     private acquireThrottle(modelId: string): void {
@@ -314,8 +480,6 @@ export class CompositeService {
 
     private releaseThrottle(modelId: string): void {
         const t = this.throttle.get(modelId);
-        if (t && t.inFlight > 0) {
-            t.inFlight--;
-        }
+        if (t && t.inFlight > 0) t.inFlight--;
     }
 }

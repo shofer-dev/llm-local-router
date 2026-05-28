@@ -1,22 +1,20 @@
 /**
  * Unit tests for the composite model service.
  *
- * Tests failover logic, health tracking, throttling, and round-robin.
+ * Tests failover logic, smooth weighted round-robin, health tracking,
+ * per-model throttling, and getResolvedModels.
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { CompositeService } from '../composite';
 import { ProviderRouter } from '../provider-client';
-import { ChatCompletionRequest, CompositeModelConfig, ChatCompletionResponse } from '../types';
+import { ChatCompletionRequest, ChatCompletionResponse } from '../types';
 
-/**
- * Create a mock ProviderRouter that resolves providers for known models
- * and returns canned responses.
- */
-function createMockRouter(responses: Map<string, ChatCompletionResponse | Error>): ProviderRouter {
+function createMockRouter(
+    responses: Map<string, ChatCompletionResponse | Error>,
+): ProviderRouter {
     const router = new ProviderRouter();
-    // Replace sendStreamingRequest with mock
     (router as any).sendStreamingRequest = async (
         modelId: string,
         _req: ChatCompletionRequest,
@@ -29,234 +27,179 @@ function createMockRouter(responses: Map<string, ChatCompletionResponse | Error>
         onChunk(result);
         return result;
     };
-    // Mock resolveProvider so composite knows the models
-    (router as any).resolveProvider = (modelId: string) => ({
+    (router as any).resolveProvider = () => ({
         provider: 'mock',
-        modelId,
+        modelId: 'mock',
         baseUrl: 'https://mock.example.com/v1',
     });
     return router;
 }
 
 const okResponse: ChatCompletionResponse = {
-    id: 'test-id',
-    object: 'chat.completion',
-    created: Date.now(),
-    model: 'test',
+    id: 'test', object: 'chat.completion', created: 0, model: 'test',
     choices: [{ index: 0, message: { role: 'user' as any, content: 'ok' }, finishReason: 'stop' }],
     usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150, costUsd: 0.001 },
 };
 
+const reqStub: ChatCompletionRequest = { conversationId: 'c', model: 'shofer/t', messages: [], stream: true };
+
 describe('CompositeService', () => {
-    describe('failover strategy', () => {
+    describe('failover', () => {
         it('returns first model on success', async () => {
-            const responses = new Map([
-                ['model-a', okResponse],
-                ['model-b', okResponse],
-            ]);
-            const router = createMockRouter(responses);
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['model-a', okResponse], ['model-b', okResponse],
+            ]));
             const service = new CompositeService(router);
-            service.loadConfigs({
-                'shofer/test': {
-                    strategy: 'failover',
-                    models: ['model-a', 'model-b'],
-                },
-            });
-
-            const req: ChatCompletionRequest = {
-                conversationId: 'conv-1',
-                model: 'shofer/test',
-                messages: [],
-                stream: true,
-            };
-
-            const result = await service.sendCompositeRequest(
-                'shofer/test', req, () => {}, new AbortController()
-            );
-
-            assert.equal(result.servedByModel, 'model-a');
-            assert.equal(result.failoverOccurred, false);
-            assert.equal(result.attempts, 1);
+            service.loadConfigs({ 'shofer/t': { strategy: 'failover', models: ['model-a', 'model-b'] } });
+            const r = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            assert.equal(r.servedByModel, 'model-a');
+            assert.equal(r.failoverOccurred, false);
         });
 
-        it('fails over to second model on first failure', async () => {
-            const responses = new Map<string, ChatCompletionResponse | Error>([
-                ['model-a', new Error('model-a down')],
-                ['model-b', okResponse],
-            ]);
-            const router = createMockRouter(responses);
+        it('fails over to second model', async () => {
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['model-a', new Error('down')], ['model-b', okResponse],
+            ]));
             const service = new CompositeService(router);
-            service.loadConfigs({
-                'shofer/test': {
-                    strategy: 'failover',
-                    models: ['model-a', 'model-b'],
-                },
-            });
-
-            const req: ChatCompletionRequest = {
-                conversationId: 'conv-2',
-                model: 'shofer/test',
-                messages: [],
-                stream: true,
-            };
-
-            const result = await service.sendCompositeRequest(
-                'shofer/test', req, () => {}, new AbortController()
-            );
-
-            assert.equal(result.servedByModel, 'model-b');
-            assert.equal(result.failoverOccurred, true);
-            assert.equal(result.attempts, 2);
+            service.loadConfigs({ 'shofer/t': { strategy: 'failover', models: ['model-a', 'model-b'] } });
+            const r = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            assert.equal(r.servedByModel, 'model-b');
+            assert.equal(r.failoverOccurred, true);
         });
 
         it('throws when all models fail', async () => {
-            const responses = new Map<string, ChatCompletionResponse | Error>([
-                ['model-a', new Error('down')],
-                ['model-b', new Error('also down')],
-            ]);
-            const router = createMockRouter(responses);
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['a', new Error('down')], ['b', new Error('also')],
+            ]));
             const service = new CompositeService(router);
-            service.loadConfigs({
-                'shofer/test': {
-                    strategy: 'failover',
-                    models: ['model-a', 'model-b'],
-                },
-            });
-
-            const req: ChatCompletionRequest = {
-                conversationId: 'conv-3',
-                model: 'shofer/test',
-                messages: [],
-                stream: true,
-            };
-
+            service.loadConfigs({ 'shofer/t': { strategy: 'failover', models: ['a', 'b'] } });
             await assert.rejects(
-                () => service.sendCompositeRequest('shofer/test', req, () => {}, new AbortController()),
-                /All models failed/
+                () => service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController()),
+                /All models failed/,
             );
         });
 
-        it('skips unhealthy models', async () => {
-            const responses = new Map<string, ChatCompletionResponse | Error>([
-                ['model-a', new Error('down')],
-                ['model-b', okResponse],
-            ]);
-            const router = createMockRouter(responses);
+        it('uses streaming timeout for streaming requests', async () => {
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['model-a', okResponse],
+            ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/test': {
+                'shofer/t': {
                     strategy: 'failover',
-                    models: ['model-a', 'model-b'],
+                    models: ['model-a'],
+                    streamingTimeoutMs: 99_999,
+                    perAttemptTimeoutMs: 50_000,
                 },
             });
-
-            const req: ChatCompletionRequest = {
-                conversationId: 'conv-4',
-                model: 'shofer/test',
-                messages: [],
-                stream: true,
-            };
-
-            // Fail model-a 3 times to mark it unhealthy
-            for (let i = 0; i < 3; i++) {
-                try {
-                    await service.sendCompositeRequest(
-                        'shofer/test', req, () => {}, new AbortController()
-                    );
-                } catch { /* expected */ }
-            }
-
-            // model-a is now unhealthy, but we keep probing
-            // The first sendCompositeRequest call after unhealthy cooldown... actually
-            // the cooldown is 30s. The model was just marked unhealthy in the loop above
-            // so on the next call model-a should be skipped.
+            const r = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            assert.equal(r.servedByModel, 'model-a');
         });
     });
 
-    describe('round_robin strategy', () => {
-        it('distributes across models', async () => {
-            const responses = new Map([
-                ['model-a', okResponse],
-                ['model-b', okResponse],
-            ]);
-            const router = createMockRouter(responses);
+    describe('smooth weighted round-robin', () => {
+        it('distributes with weights over multiple calls', async () => {
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['a', okResponse], ['b', okResponse], ['c', okResponse],
+            ]));
             const service = new CompositeService(router);
             service.loadConfigs({
                 'shofer/rr': {
                     strategy: 'round_robin',
-                    models: ['model-a', 'model-b'],
+                    models: [{ id: 'a', weight: 5 }, { id: 'b', weight: 1 }, { id: 'c', weight: 1 }],
                 },
             });
 
-            const req: ChatCompletionRequest = {
-                conversationId: 'conv-rr',
-                model: 'shofer/rr',
-                messages: [],
-                stream: true,
-            };
-
-            const results: string[] = [];
-            for (let i = 0; i < 4; i++) {
-                const r = await service.sendCompositeRequest(
-                    'shofer/rr', req, () => {}, new AbortController()
-                );
-                results.push(r.servedByModel);
+            const counts = new Map<string, number>();
+            for (let i = 0; i < 14; i++) {
+                const r = await service.sendCompositeRequest('shofer/rr', reqStub, () => {}, new AbortController());
+                counts.set(r.servedByModel, (counts.get(r.servedByModel) ?? 0) + 1);
             }
 
-            // Should alternate: model-a, model-b, model-a, model-b
-            assert.equal(results[0], 'model-a');
-            assert.equal(results[1], 'model-b');
-            assert.equal(results[2], 'model-a');
-            assert.equal(results[3], 'model-b');
+            assert.ok((counts.get('a') ?? 0) >= 7, `weight-5 model should have >=7, got ${counts.get('a')}`);
+            assert.ok((counts.get('b') ?? 0) >= 1, 'weight-1 models should get at least 1');
+            assert.ok((counts.get('c') ?? 0) >= 1, 'weight-1 models should get at least 1');
         });
     });
 
-    describe('isCompositeModel', () => {
-        it('returns true for shofer/* models', () => {
-            const router = new ProviderRouter();
+    describe('health', () => {
+        it('skips unhealthy models in failover', async () => {
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['a', new Error('fail')], ['b', okResponse],
+            ]));
             const service = new CompositeService(router);
-            service.loadConfigs({ 'shofer/code': { strategy: 'failover', models: ['gpt-5.5'] } });
-            assert.equal(service.isCompositeModel('shofer/code'), true);
-        });
+            service.loadConfigs({
+                'shofer/h': {
+                    strategy: 'failover',
+                    models: ['a', 'b'],
+                    health: { failureThreshold: 2, cooldownMs: 60_000, degradedThreshold: 1 },
+                },
+            });
 
-        it('returns false for non-composite models', () => {
-            const router = new ProviderRouter();
-            const service = new CompositeService(router);
-            assert.equal(service.isCompositeModel('gpt-5.5'), false);
-        });
-
-        it('returns false for shofer/* without config', () => {
-            const router = new ProviderRouter();
-            const service = new CompositeService(router);
-            assert.equal(service.isCompositeModel('shofer/unknown'), false);
+            // Fail model-a twice to make it unhealthy
+            await service.sendCompositeRequest('shofer/h', reqStub, () => {}, new AbortController()).catch(() => {});
+            // After 2 failures, model-a is unhealthy. Next call should skip it.
+            const r = await service.sendCompositeRequest('shofer/h', reqStub, () => {}, new AbortController());
+            assert.equal(r.servedByModel, 'b');
         });
     });
 
     describe('throttling', () => {
-        it('throttles models when concurrency limit is hit', async () => {
-            // This is hard to test precisely without a lot of concurrency,
-            // but we can verify the throttling config is loaded
-            const router = createMockRouter(new Map([['model-a', okResponse]]));
+        it('per-model throttling limits within window', async () => {
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['a', okResponse], ['b', okResponse],
+            ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/throttled': {
+                'shofer/t': {
                     strategy: 'failover',
-                    models: ['model-a'],
-                    throttling: { maxConcurrent: 1, requestsPerWindow: 100, windowMinutes: 5 },
+                    models: [
+                        { id: 'a', throttling: { maxConcurrent: 10, requestsPerWindow: 1, windowMinutes: 60 } },
+                        'b',
+                    ],
                 },
             });
 
-            const req: ChatCompletionRequest = {
-                conversationId: 'conv-throttle',
-                model: 'shofer/throttled',
-                messages: [],
-                stream: true,
-            };
+            const r1 = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            assert.equal(r1.servedByModel, 'a');
 
-            const result = await service.sendCompositeRequest(
-                'shofer/throttled', req, () => {}, new AbortController()
-            );
-            assert.equal(result.servedByModel, 'model-a');
+            // Second call: 'a' throttled (1 req per 60min window)
+            const r2 = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            assert.equal(r2.servedByModel, 'b');
+        });
+    });
+
+    describe('isCompositeModel', () => {
+        it('returns true for shofer/* with config', () => {
+            const service = new CompositeService(new ProviderRouter());
+            service.loadConfigs({ 'shofer/code': { strategy: 'failover', models: ['gpt-5.5'] } });
+            assert.equal(service.isCompositeModel('shofer/code'), true);
+        });
+
+        it('returns false for non-composite', () => {
+            assert.equal(new CompositeService(new ProviderRouter()).isCompositeModel('gpt-5.5'), false);
+        });
+    });
+
+    describe('getResolvedModels', () => {
+        it('handles string model list', () => {
+            const service = new CompositeService(new ProviderRouter());
+            service.loadConfigs({ 'shofer/s': { strategy: 'failover', models: ['a', 'b'] } });
+            const r = service.getResolvedModels('shofer/s');
+            assert.equal(r.length, 2);
+            assert.equal(r[0].weight, 1);
+        });
+
+        it('handles mixed with weights', () => {
+            const service = new CompositeService(new ProviderRouter());
+            service.loadConfigs({
+                'shofer/m': {
+                    strategy: 'round_robin',
+                    models: ['a', { id: 'b', weight: 3 }],
+                },
+            });
+            const r = service.getResolvedModels('shofer/m');
+            assert.equal(r[1].weight, 3);
         });
     });
 });

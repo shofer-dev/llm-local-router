@@ -160,12 +160,13 @@ export class ProviderRouter {
         if (modelId.startsWith('shofer/') && this.compositeModels[modelId]) {
             // Return the first model's provider as a hint (composite layer overrides)
             const comp = this.compositeModels[modelId];
-            const firstModel = comp.models[0];
-            const provider = getProviderForModel(firstModel);
+            const firstEntry = comp.models[0];
+            const firstModelId = typeof firstEntry === 'string' ? firstEntry : firstEntry.id;
+            const provider = getProviderForModel(firstModelId);
             if (provider) {
                 return {
                     provider,
-                    modelId: firstModel,
+                    modelId: firstModelId,
                     baseUrl: PROVIDER_BASE_URLS[provider],
                 };
             }

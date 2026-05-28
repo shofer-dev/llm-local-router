@@ -107,8 +107,56 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
      * mostly a no-op but still fires the change event so the VS Code LM
      * API picks up models.
      */
+    /**
+     * Compute the capability intersection and min context/max_output for a
+     * composite model based on its underlying models. Returns undefined
+     * if no underlying models are found in the registry.
+     */
+    private computeCompositeModelInfo(compositeId: string): ProviderModelInfo | undefined {
+        const resolved = this.composite.getResolvedModels(compositeId);
+        if (resolved.length === 0) return undefined;
+
+        let minInput = Infinity;
+        let minOutput = Infinity;
+        let imageInput = true;
+        let toolCalling = true;
+        let promptCache = true;
+
+        for (const rm of resolved) {
+            const m = this.availableModels.find(a => a.id === rm.id);
+            if (!m) continue;
+            minInput = Math.min(minInput, m.maxInputTokens);
+            minOutput = Math.min(minOutput, m.maxOutputTokens);
+            imageInput = imageInput && m.capabilities.imageInput;
+            toolCalling = toolCalling && m.capabilities.toolCalling;
+            promptCache = promptCache && m.capabilities.promptCache;
+        }
+
+        if (!isFinite(minInput)) return undefined;
+
+        return {
+            id: compositeId,
+            name: compositeId,
+            family: compositeId.replace(/\//g, '_'),
+            version: '1.0',
+            maxInputTokens: minInput,
+            maxOutputTokens: minOutput,
+            capabilities: { imageInput, toolCalling, promptCache },
+            // Composite models don't have a single price; pricing is resolved
+            // per-request based on the underlying model that served it.
+            pricing: undefined,
+        };
+    }
+
     async fetchModels(): Promise<ProviderModelInfo[]> {
         const models = getProviderModelInfoList();
+
+        // Append composite model entries with computed capability intersections
+        for (const compositeId of this.composite.getCompositeModelIds()) {
+            const info = this.computeCompositeModelInfo(compositeId);
+            if (info) models.push(info);
+        }
+
         this.setAvailableModels(models);
         this.connectionStatus = {
             isConnected: this.router.hasAnyApiKey(),
