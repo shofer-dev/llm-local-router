@@ -151,23 +151,41 @@ Each provider file handles protocol-specific transformations:
 
 ### 4. CompositeService (`composite.ts`)
 
-Handles `shofer/*` composite models with reliability features.
+Handles `shofer/*` composite models with reliability features — the primary place where health monitoring, throttling, and timeout policies live. Any model (even a single one) can be wrapped in a composite config to get these guarantees.
 
 **Strategies:**
 - **failover**: Tries models in strict order. On failure (HTTP error, timeout, stream abort), falls back to the next model.
-- **round_robin**: Distributes requests across available models in rotation.
+- **round_robin**: Smooth weighted round-robin (nginx-style). Each model has a `weight` (default: 1). The algorithm tracks per-model `currentWeight`, picks the highest, then subtracts the total — distributing proportionally without bursting to high-weight nodes. Unhealthy models are excluded.
 
-**Health tracking:**
-- Tracks consecutive failures per underlying model
-- Marks a model unhealthy after 3 consecutive failures
-- Probes unhealthy models after 30-second cooldown
+**Model configs** accept either a plain string (`"model-id"`) or an object:
+```json
+{ "id": "model-a", "weight": 5, "throttling": { "maxConcurrent": 10 } }
+```
+Per-model `throttling` overrides composite-level defaults for that model only.
 
-**Throttling:**
-- **Concurrency limit**: Maximum in-flight requests per model (default: 50)
-- **Sliding window rate limit**: Maximum requests per time window (default: 100 per 5 minutes)
+**Health tracking — three states:**
+| State | Trigger | Behavior |
+|-------|---------|----------|
+| `healthy` | Initial / after success | Normal routing |
+| `degraded` | `degradedThreshold` consecutive failures (default: 1) | Still used, but failure counter accumulates |
+| `unhealthy` | `failureThreshold` consecutive failures (default: 3) | Quarantined — skipped during candidate selection |
+
+Unhealthy models are probed after `cooldownMs` (configurable, default: 30s) by transitioning back to `degraded` for a single probe attempt.
+
+**Throttling (per-model):**
+- **Concurrency limit** (`maxConcurrent`): Maximum in-flight requests per model (default: 50)
+- **Sliding window rate limit** (`requestsPerWindow` / `windowMinutes`): Maximum requests per time window (default: 100 per 5 minutes)
 - Throttled models are skipped during candidate selection
+- Each underlying model can have independent throttling via `{id, throttling}` config
 
-**First-byte rule:** Streaming failover is only possible before the first response chunk is sent. Once data flows to the client, the current model must complete.
+**Timeouts — three levels:**
+- `streamingTimeoutMs` (default: 30s) — inactivity timeout for streaming; resets on each received chunk so a steadily-streaming thinking model is never cancelled mid-response
+- `perAttemptTimeoutMs` (default: 120s) — hard wall-clock deadline for non-streaming attempts
+- `totalTimeoutMs` (default: 300s) — total budget across all failovers; once exceeded, the best error so far is returned
+
+**First-byte rule:** Streaming failover is only possible before the first response chunk is sent. Once data flows to the client, the current model must complete — mid-stream failures propagate to the client.
+
+**Capability intersection:** Composite model entries surfaced via the VS Code LM API are computed by intersecting the capabilities of all underlying models — the minimum `maxInputTokens`/`maxOutputTokens` and the boolean AND of `imageInput`/`toolCalling`/`promptCache`. This is the safe lower bound: any request fitting the advertised capabilities is guaranteed to fit every underlying candidate, so failover never gets blocked on capability mismatch.
 
 ### 5. Model Registry (`model-registry.ts`)
 
@@ -234,7 +252,7 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 9. Anthropic: custom Messages API path
    Others: standard OpenAI-compatible HTTP POST to provider's /v1/chat/completions
 10. Parse SSE stream (data: {...}\n\n)
-11. Apply chunk transformers (MiniMax <think> extraction, DeepSeek cache token mapping)
+11. Apply chunk transformers (MiniMax reasoning_details → reasoning_content, DeepSeek prompt_cache_hit_tokens mapping)
 12. For each chunk:
     - Report reasoning_content as LanguageModelThinkingPart
     - Report text content as LanguageModelTextPart
@@ -250,9 +268,10 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 ```
 1. LanguageModelProvider.fetchModels()
 2. getProviderModelInfoList() reads from ALL_MODELS registry
-3. For each model: convert registry entry to ProviderModelInfo
-4. Fire onDidChangeLanguageModelChatInformation event
-5. VS Code picks up models via provideLanguageModelChatInformation()
+3. For each composite model: compute capability intersection from underlying models
+4. For each model: convert registry entry to ProviderModelInfo
+5. Fire onDidChangeLanguageModelChatInformation event
+6. VS Code picks up models via provideLanguageModelChatInformation()
 ```
 
 ## Error Handling
@@ -282,7 +301,7 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 | Provider communication | Go HTTP client with custom transport tuning, connection pooling, HTTP/2 multiplexing, 64KB buffer pools | Node.js `fetch()` API (built into VS Code runtime) |
 | Caching | Redis-backed prompt cache + reasoning cache | No caching (direct API calls) |
 | Rate limiting | Redis-backed distributed rate limiting | In-process per-instance throttling |
-| Health monitoring | Ring buffer, Prometheus metrics, per-replica | Simple consecutive-failure counter with cooldown |
+| Health monitoring | Ring buffer, Prometheus metrics, per-replica | Three-state (healthy/degraded/unhealthy) with configurable thresholds and cooldown |
 | Multi-tenancy | Designed for multiple concurrent clients | Single user (per VS Code instance) |
 | Deployment | Docker container + Redis + Kubernetes | VS Code extension (.vsix) |
 | Configuration | Environment variables in `.env` | VS Code settings + SecretStorage |

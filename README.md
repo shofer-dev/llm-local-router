@@ -78,18 +78,52 @@ Define `shofer/*` composite models in a JSON file referenced by `shofer.router.c
     "strategy": "failover",
     "models": ["deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.5"],
     "throttling": { "maxConcurrent": 50, "requestsPerWindow": 100, "windowMinutes": 5 },
+    "streamingTimeoutMs": 30000,
     "perAttemptTimeoutMs": 120000,
-    "totalTimeoutMs": 600000
+    "totalTimeoutMs": 600000,
+    "health": {
+      "failureThreshold": 3,
+      "degradedThreshold": 1,
+      "cooldownMs": 30000
+    }
   },
   "shofer/balanced": {
     "strategy": "round_robin",
-    "models": ["deepseek-v4-pro", "claude-sonnet-4-6"]
+    "models": [
+      { "id": "deepseek-v4-pro", "weight": 3 },
+      { "id": "claude-sonnet-4-6", "weight": 1 }
+    ],
+    "streamingTimeoutMs": 30000
+  },
+  "shofer/budget": {
+    "strategy": "failover",
+    "models": [
+      { "id": "gpt-5.4-nano", "throttling": { "maxConcurrent": 5, "requestsPerWindow": 20, "windowMinutes": 5 } },
+      "deepseek-v4-flash"
+    ]
   }
 }
 ```
 
+**Strategies:**
 - **failover**: Tries models in strict order. On failure, falls back to the next.
-- **round_robin**: Distributes requests across available models.
+- **round_robin**: Smooth weighted round-robin (nginx-style) — distributes requests proportional to model weights without bursting.
+
+**Model entries** accept either a plain string (`"model-id"`) or an object with per-model overrides:
+- `{ "id": "model-id", "weight": 5 }` — weight for round-robin (default: 1)
+- `{ "id": "model-id", "throttling": {...} }` — per-model throttling overrides composite-level defaults
+
+**Health monitoring** (three states, configurable via `health`):
+- `healthy` → `degraded` after `degradedThreshold` consecutive failures (still usable)
+- `degraded` → `unhealthy` after `failureThreshold` consecutive failures (quarantined)
+- Unhealthy models are probed after `cooldownMs` (default: 30s)
+
+**Timeouts:**
+- `streamingTimeoutMs` — inactivity timeout for streaming (resets on each chunk, default: 30s)
+- `perAttemptTimeoutMs` — hard deadline per attempt for non-streaming (default: 120s)
+- `totalTimeoutMs` — total budget across all failovers (default: 300s)
+
+**Capability intersection**: Composite models advertised via VS Code LM API report the minimum `maxInputTokens`/`maxOutputTokens` and the intersection of `imageInput`/`toolCalling`/`promptCache` across all underlying models — safe lower bounds that guarantee failover never hits a capability mismatch.
 
 ### Shofer Integration
 
