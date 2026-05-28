@@ -1,0 +1,79 @@
+"""Bazel build rules for Shofer LLM Router VSCode extension."""
+
+load("@aspect_rules_js//js:defs.bzl", "js_run_devserver")
+
+genrule(
+    name = "build_extension",
+    srcs = glob([
+        "src/**/*.ts",
+        "package.json",
+        "package-lock.json",
+        "tsconfig.json",
+    ]),
+    outs = ["main.js"],
+    cmd = "$(location //extensions/shofer-router:build_script) > $@",
+    local = True,
+    tools = ["//extensions/shofer-router:build_script"],
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "build_script",
+    outs = ["build.sh"],
+    cmd = """cat > $@ << 'EOF'
+#!/bin/bash
+set -e
+cd extensions/shofer-router
+npm ci --ignore-scripts
+npm run compile
+cat out/main.js
+EOF
+chmod +x $@
+""",
+)
+
+genrule(
+    name = "package_script",
+    outs = ["package.sh"],
+    cmd = """cat > $@ << 'EOF'
+#!/bin/bash
+set -e
+cd extensions/shofer-router
+npm ci --ignore-scripts >&2
+npm run compile >&2
+npx @vscode/vsce package --no-update-package-json >&2
+VERSION=$$(node -p "require('./package.json').version")
+mv "shofer-router-$${VERSION}.vsix" shofer-router.vsix
+cat shofer-router.vsix
+EOF
+chmod +x $@
+""",
+)
+
+genrule(
+    name = "package",
+    srcs = glob([
+        "src/**/*.ts",
+        "package.json",
+        "package-lock.json",
+        "tsconfig.json",
+        "README.md",
+    ]),
+    outs = ["shofer-router.vsix"],
+    cmd = "$(location //extensions/shofer-router:package_script) > $@",
+    local = True,
+    tags = ["requires-network"],
+    tools = ["//extensions/shofer-router:package_script"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "src",
+    srcs = glob([
+        "src/**/*",
+        "package.json",
+        "package-lock.json",
+        "tsconfig.json",
+    ]),
+    visibility = ["//visibility:public"],
+)

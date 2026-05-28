@@ -1,0 +1,113 @@
+{
+  "name": "shofer-router",
+  "displayName": "Shofer LLM Router",
+  "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
+  "version": "0.1.0",
+  "publisher": "arkware",
+  "repository": "https://github.com/arkware/arkware.ai",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "enabledApiProposals": [
+    "chatProvider",
+    "languageModelThinkingPart"
+  ],
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "main": "./out/main.js",
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:rust",
+    "onLanguage:java",
+    "onLanguage:json",
+    "onLanguage:markdown",
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "shofer",
+        "displayName": "Shofer LLM Router",
+        "configurationSchema": {
+          "type": "object",
+          "properties": {
+            "apiKey": {
+              "type": "string",
+              "description": "API key for provider authentication (stored securely via SecretStorage)",
+              "format": "password"
+            }
+          },
+          "required": []
+        }
+      }
+    ],
+    "configuration": {
+      "title": "Shofer LLM Router",
+      "properties": {
+        "shofer.router.defaultModel": {
+          "type": "string",
+          "default": "deepseek-v4-pro",
+          "description": "Default model to use for completions"
+        },
+        "shofer.router.timeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "Request timeout in milliseconds (default 5 min for long LLM responses)"
+        },
+        "shofer.router.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable the LLM router provider"
+        },
+        "shofer.router.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug logging"
+        },
+        "shofer.router.compositeModelsFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a composite-models.json file defining arkware/* composite models"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "shofer.llm.configure",
+        "title": "Shofer LLM Router: Configure",
+        "description": "Configure the Shofer LLM Router settings"
+      },
+      {
+        "command": "shofer.llm.showModels",
+        "title": "Shofer LLM Router: Show Models",
+        "description": "Show available models"
+      },
+      {
+        "command": "shofer.llm.refreshModels",
+        "title": "Shofer LLM Router: Refresh Models",
+        "description": "Refresh the list of available models"
+      },
+      {
+        "command": "shofer.llm.testConnection",
+        "title": "Shofer LLM Router: Test Connection",
+        "description": "Test connectivity to LLM providers"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./tsconfig.json",
+    "watch": "tsc -p ./tsconfig.json --watch",
+    "package": "npm run compile && npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.96.0",
+    "typescript": "^5.7.2",
+    "@vscode/vsce": "^3.2.2"
+  }
+}

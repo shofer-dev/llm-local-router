@@ -1,0 +1,8 @@
+.vscodeignore
+node_modules/
+src/
+.gitignore
+*.md
+BUILD.bazel
+tsconfig.json
+*.vsix
