@@ -47,11 +47,11 @@ export class MetricsStorage {
      * if a database file already exists at the given path.
      */
     static async create(dbPath: string): Promise<MetricsStorage> {
-        // Dynamic import — sql.js is a large WASM module that may not be
-        // available when the extension is installed from a VSIX (node_modules
-        // are not bundled). We import lazily inside create() so that the
-        // top-level module load doesn't crash if sql.js is missing.
-        const sqlModule = await import('sql.js');
+        // sql.js is bundled in the vendor/ directory so it works from a VSIX
+        // (node_modules are not included in VSIX packages). The import uses
+        // __dirname-relative path to load the bundled copy.
+        const sqlJsPath = path.join(__dirname, '..', 'vendor', 'sql-wasm.js');
+        const sqlModule = await import(sqlJsPath);
         const initSqlJs = sqlModule.default;
 
         const dir = path.dirname(dbPath);
