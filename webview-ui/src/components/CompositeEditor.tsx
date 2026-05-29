@@ -3,6 +3,7 @@ import StrategySelector from './StrategySelector';
 import ModelList from './ModelList';
 import ConfigSection from './ConfigSection';
 import NumberInput from './NumberInput';
+import CapabilityPreview from './CapabilityPreview';
 import type { CompositeModelConfig, ModelRegistrySummary, UnderlyingModelEntry } from '../types';
 
 interface Props {
@@ -92,6 +93,9 @@ export default function CompositeEditor({ composite, modelRegistry, onChange }: 
         modelRegistry={modelRegistry}
         onChange={updateModels}
       />
+
+      {/* Live capability intersection — updates as models are added/removed */}
+      <CapabilityPreview composite={composite} modelRegistry={modelRegistry} />
 
       {/* Throttling */}
       <ConfigSection title="Throttling">

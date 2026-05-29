@@ -1,7 +1,6 @@
 import React from 'react';
 import CompositeList from './CompositeList';
 import CompositeEditor from './CompositeEditor';
-import CapabilityPreview from './CapabilityPreview';
 import type { CompositeModelConfig, ModelRegistrySummary } from '../types';
 import { getVsCodeApi, onMessage } from '../utils/vscode';
 
@@ -134,12 +133,6 @@ export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
           modelRegistry={modelRegistry}
           onChange={handleUpdateSelected}
         />
-
-        {selectedModel && (
-          <div style={{ padding: '0 12px 12px' }}>
-            <CapabilityPreview composite={selectedModel} modelRegistry={modelRegistry} />
-          </div>
-        )}
       </div>
     </div>
   );
