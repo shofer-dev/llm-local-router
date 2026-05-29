@@ -308,6 +308,31 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 | Observability | Prometheus metrics + OpenTelemetry tracing | VS Code output channel logging |
 | Reasoning cache | Redis-backed DeepSeek/Moonshot reasoning store | Placeholder injection ("•") for missing reasoning_content |
 
+### 8. Metrics Collector (`metrics-collector.ts`)
+
+In-process, in-memory metrics aggregation with 5-minute aligned time windows. Replaces the Prometheus metrics subsystem from the Go `llm-router` service (which exported ~16 counters/histograms/gauges) with an equivalent in-process collector suitable for a VS Code extension.
+
+**Design rationale**: VS Code extensions cannot expose HTTP endpoints, so a Prometheus scrape endpoint is not feasible. Instead, metrics are aggregated in-memory and exposed via:
+- Side-channel commands (`shofer.llm.getMetrics`, `shofer.llm.exportMetrics`, etc.)
+- Future: SQLite persistence, webview dashboard
+
+**Window structure**: Each 5-minute window aggregates per-model statistics:
+- Request counts by status (success/error/timeout/cancelled)
+- Latency: TTFB and TTLB samples with p50/p90/p99 percentiles
+- Token aggregates: prompt, completion, cached, cache creation
+- Cost (USD) from registry pricing × actual usage
+- Cache hit ratio: cached / total prompt tokens
+- Error type breakdown (http_4xx, http_5xx, http_429, timeout, cancelled, network_error, parse_error, unknown)
+- Availability: success / (success + error + timeout)
+
+**Composite model tracking**: Each window also records composite routing distributions — which underlying model served how many requests, failover counts, mid-stream failures, and total attempts.
+
+**Throttle tracking**: Models skipped during composite candidate selection due to rate/concurrency limits are counted separately.
+
+**Memory**: Up to 288 windows retained (24 hours at 5-minute granularity). Each window stores per-model stats including raw latency samples. For a single-user extension, this is well under 1 MB.
+
+**Prometheus export**: `toPrometheusText()` produces Prometheus text format compatible with node_exporter textfile collector, enabling external scraping if desired.
+
 ## Security
 
 ### API Key Storage
@@ -335,6 +360,75 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 - Cost ledger bounded at 1024 entries (LRU eviction)
 - Tool call accumulation maps cleared after each completion
 - No persistent caches (no Redis dependency)
+
+## Metrics & Observability
+
+### Collected Metrics
+
+Every chat completion request (success or failure) is recorded automatically. The following metrics are tracked per 5-minute window:
+
+#### (a) Cost & Token Usage by Model
+| Metric | Description |
+|--------|-------------|
+| `totalCostUsd` | USD cost from registry pricing × actual token usage |
+| `totalPromptTokens` | Total input/prompt tokens |
+| `totalCompletionTokens` | Total output/completion tokens |
+| `totalCachedTokens` | Tokens served from prompt cache (lower cost) |
+| `totalCacheCreationTokens` | Tokens written to prompt cache |
+| `cacheHitRatio` | cached / total prompt tokens |
+
+#### (b) Reliability (Latency, Availability, SLO)
+| Metric | Description |
+|--------|-------------|
+| `ttfbP50/P90/P99` | Time-to-first-byte percentiles (ms) |
+| `ttlbP50/P90/P99` | Time-to-last-byte percentiles (ms) |
+| `availability` | success / (success + error + timeout) ratio |
+| `errorTypes` | Breakdown by error class (http_4xx, http_5xx, http_429, timeout, network_error, etc.) |
+| `successCount / errorCount / timeoutCount / cancelledCount` | Request outcome counters |
+
+#### (c) Primary & Composite Models
+Both primary models (e.g., `deepseek-v4-pro`) and composite models (e.g., `shofer/code`) are tracked identically. The `isComposite` flag distinguishes them.
+
+#### (d) Composite Load-Balancing Distribution
+| Metric | Description |
+|--------|-------------|
+| `CompositeDistribution.modelCounts` | underlyingModelId → request count |
+| `CompositeDistribution.failoverCount` | Requests where at least one failover occurred |
+| `CompositeDistribution.midstreamFailureCount` | Failures after first byte (unrecoverable) |
+| `CompositeDistribution.totalAttempts` | Total attempts across all requests |
+
+#### (e) Additional KPIs
+| Metric | Description |
+|--------|-------------|
+| `throttleSkipCount` | Models skipped during candidate selection due to rate/concurrency limits |
+| `perWindow requestCount` | Request volume per 5-minute window |
+| `prompt/completion token ratio` | Efficiency metric (derivable from aggregates) |
+| Error budget | If SLO target is 99%, error budget = 1% × total requests (derivable) |
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `Shofer LLM Router: Show Metrics` | Interactive model selection with current window stats |
+| `Shofer LLM Router: Show Model Stats` | Detailed stats for a specific model |
+| `Shofer LLM Router: Export Metrics (Prometheus)` | Prometheus text format export |
+| `Shofer LLM Router: Show Composite Distribution` | Load-balancing distribution for composite models |
+
+### Export Format
+
+The Prometheus export produces gauges for the current window:
+```
+shofer_router_requests_window{model, provider, status}
+shofer_router_cost_usd_window{model, provider}
+shofer_router_tokens_window{model, provider, type}
+shofer_router_latency_seconds{model, provider, quantile, phase}
+shofer_router_availability{model, provider}
+shofer_router_cache_hit_ratio{model, provider}
+shofer_router_composite_requests{composite, underlying}
+shofer_router_composite_failover_total{composite}
+shofer_router_throttle_skips_total{model}
+shofer_router_errors_window{model, error_type}
+```
 
 ## Future Enhancements
 

@@ -141,6 +141,22 @@ Shofer's `vscode-lm` provider consumes this extension. Enable it in Shofer:
 - `Shofer LLM Router: Show Models` — Display all available models
 - `Shofer LLM Router: Refresh Models` — Refresh the model list
 - `Shofer LLM Router: Test Connection` — Test API key configuration
+- `Shofer LLM Router: Show Metrics` — Per-model cost, latency, availability metrics
+- `Shofer LLM Router: Show Model Stats` — Detailed statistics for a specific model
+- `Shofer LLM Router: Export Metrics (Prometheus)` — Export in Prometheus text format
+- `Shofer LLM Router: Show Composite Distribution` — Load-balancing distribution for composite models
+
+## Metrics & Observability
+
+Every chat completion request is automatically recorded with per-5-minute window aggregation covering:
+
+- **Cost & tokens by model**: USD cost (from registry pricing), prompt/completion/cached tokens, cache hit ratio
+- **Reliability**: TTFB/TTLB latency percentiles (p50/p90/p99), availability %, error-type breakdown
+- **Composite load-balancing**: Which underlying model served how many requests, failover counts, attempts
+- **Additional KPIs**: Throttle skips, per-window request volume
+
+Metrics are exposed via commands and can be exported in Prometheus text format for external monitoring.
+
 
 ## Project Structure
 
@@ -153,6 +169,7 @@ extensions/shofer-router/
 │   ├── provider-client.ts           # Provider router and factory
 │   ├── composite.ts                 # Composite model failover/round-robin
 │   ├── model-registry.ts            # All model definitions + pricing
+│   ├── metrics-collector.ts         # In-memory 5-min windowed metrics aggregation
 │   ├── secret-storage.ts            # SecretStorage API key wrapper
 │   ├── logger.ts                    # Structured logging
 │   ├── types.ts                     # Shared TypeScript types

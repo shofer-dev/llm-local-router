@@ -27,10 +27,13 @@ import {
     ToolDefinition,
     ChatCompletionRequest,
     ChatCompletionResponse,
+    MetricsRequestEntry,
+    ErrorType,
 } from './types';
 import { getProviderModelInfoList, toPerMillionPricing } from './llm-client';
-import { ALL_MODELS } from './model-registry';
+import { ALL_MODELS, getProviderForModel } from './model-registry';
 import { getLogger, Logger } from './logger';
+import { getMetricsCollector, classifyError } from './metrics-collector';
 
 export { ProviderModelInfo, ModelCapabilities, ModelPricingPerMillion, ConnectionStatus, RouterConfig };
 
@@ -271,11 +274,17 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         const buildPreparingMarker = (name: string, byteCount: number): string =>
             `\x00tool_preparing\x00${name}\x00${byteCount}\x00`;
 
-        try {
-            // Use composite service if this is a composite model
-            const isComposite = this.composite.isCompositeModel(modelId);
+        // Metrics: track timing
+        const requestStartMs = Date.now();
+        let ttfbMs = 0;
+        const isComposite = this.composite.isCompositeModel(modelId);
 
+        try {
             const onChunk = (chunk: ChatCompletionResponse) => {
+                // Record TTFB on first chunk
+                if (ttfbMs === 0) {
+                    ttfbMs = Date.now() - requestStartMs;
+                }
                 for (const choice of chunk.choices) {
                     // Report reasoning content
                     if (choice.delta?.reasoningContent?.trim()) {
@@ -333,19 +342,31 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
                 }
             };
 
-            let result: { response: ChatCompletionResponse; servedByModel: string };
+            let result: {
+                response: ChatCompletionResponse;
+                servedByModel: string;
+                failoverOccurred: boolean;
+                attempts: number;
+            };
 
             if (isComposite) {
                 const compositeResult = await this.composite.sendCompositeRequest(
                     modelId, request, onChunk, abortController
                 );
-                result = { response: compositeResult.response, servedByModel: compositeResult.servedByModel };
+                result = {
+                    response: compositeResult.response,
+                    servedByModel: compositeResult.servedByModel,
+                    failoverOccurred: compositeResult.failoverOccurred,
+                    attempts: compositeResult.attempts,
+                };
             } else {
                 const response = await this.router.sendStreamingRequest(
                     modelId, request, onChunk, abortController
                 );
-                result = { response, servedByModel: modelId };
+                result = { response, servedByModel: modelId, failoverOccurred: false, attempts: 1 };
             }
+
+            const ttlbMs = Date.now() - requestStartMs;
 
             // Log usage
             if (result.response.usage) {
@@ -361,8 +382,16 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
                     this.recordRequestCost(conversationId, result.response.usage.costUsd);
                 }
             }
+
+            // Record success metrics
+            this.recordMetrics(modelId, isComposite, result, ttfbMs, ttlbMs, requestStartMs);
         } catch (error) {
-            this.logger.errorWithError('Chat completion failed', error as Error);
+            const ttlbMs = Date.now() - requestStartMs;
+            const err = error as Error;
+            this.logger.errorWithError('Chat completion failed', err);
+
+            // Record error metrics
+            this.recordErrorMetrics(modelId, isComposite, err, ttfbMs, ttlbMs, requestStartMs);
             throw error;
         }
     }
@@ -676,6 +705,93 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
 
     isReady(): boolean {
         return this.config.enabled && this.connectionStatus.isConnected;
+    }
+
+    // ─── Metrics recording ────────────────────────────────────────
+
+    /**
+     * Build and record a MetricsRequestEntry on successful completion.
+     */
+    private recordMetrics(
+        modelId: string,
+        isComposite: boolean,
+        result: { response: ChatCompletionResponse; servedByModel: string; failoverOccurred: boolean; attempts: number },
+        ttfbMs: number,
+        ttlbMs: number,
+        requestStartMs: number,
+    ): void {
+        try {
+            const usage = result.response.usage;
+            const provider = getProviderForModel(result.servedByModel) ?? 'unknown';
+
+            const entry: MetricsRequestEntry = {
+                timestamp: new Date(requestStartMs).toISOString(),
+                modelId,
+                provider,
+                isComposite,
+                compositeModelId: isComposite ? modelId : undefined,
+                servedByModel: result.servedByModel,
+                status: 'success',
+                ttfbMs,
+                ttlbMs,
+                promptTokens: usage?.promptTokens ?? 0,
+                completionTokens: usage?.completionTokens ?? 0,
+                cachedTokens: usage?.cachedTokens ?? 0,
+                cacheCreationTokens: usage?.cacheCreationTokens ?? 0,
+                costUsd: usage?.costUsd ?? 0,
+                failoverOccurred: result.failoverOccurred,
+                attempts: result.attempts,
+            };
+
+            getMetricsCollector().recordRequest(entry);
+        } catch (metricsError) {
+            // Metrics recording must never throw — silently ignore
+            this.logger.debug(`Failed to record success metrics: ${(metricsError as Error).message}`);
+        }
+    }
+
+    /**
+     * Build and record a MetricsRequestEntry on failed completion.
+     */
+    private recordErrorMetrics(
+        modelId: string,
+        isComposite: boolean,
+        error: Error,
+        ttfbMs: number,
+        ttlbMs: number,
+        requestStartMs: number,
+    ): void {
+        try {
+            const { errorType, status } = classifyError(error);
+            // Best-effort provider resolution from modelId
+            const provider = getProviderForModel(modelId) ?? 'unknown';
+
+            const entry: MetricsRequestEntry = {
+                timestamp: new Date(requestStartMs).toISOString(),
+                modelId,
+                provider,
+                isComposite,
+                compositeModelId: isComposite ? modelId : undefined,
+                servedByModel: modelId, // unknown which would have served
+                status,
+                errorType,
+                errorMessage: error.message,
+                ttfbMs,
+                ttlbMs,
+                promptTokens: 0,
+                completionTokens: 0,
+                cachedTokens: 0,
+                cacheCreationTokens: 0,
+                costUsd: 0,
+                failoverOccurred: false,
+                attempts: 0,
+            };
+
+            getMetricsCollector().recordRequest(entry);
+        } catch (metricsError) {
+            // Metrics recording must never throw — silently ignore
+            this.logger.debug(`Failed to record error metrics: ${(metricsError as Error).message}`);
+        }
     }
 
     dispose(): void {

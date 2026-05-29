@@ -24,6 +24,7 @@ import {
 } from './types';
 import { ProviderRouter } from './provider-client';
 import { getLogger } from './logger';
+import { getMetricsCollector } from './metrics-collector';
 
 export interface CompositeSendResult {
     response: ChatCompletionResponse;
@@ -208,6 +209,7 @@ export class CompositeService {
             // Check if throttled
             if (this.isThrottled(candidateModel, modelThrottle)) {
                 logger.debug(`Skipping throttled model: ${candidateModel}`);
+                getMetricsCollector().recordThrottleSkip(candidateModel);
                 continue;
             }
 
@@ -283,6 +285,7 @@ export class CompositeService {
                         `Composite ${compositeModelId}: ${candidateModel} failed mid-stream ` +
                         `— cannot failover (first-byte rule)`
                     );
+                    getMetricsCollector().recordMidstreamFailure(compositeModelId);
                     throw err;
                 }
 

@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import { LanguageModelProvider, RouterConfig } from './language-model-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
 import { loadApiKeys, onApiKeysChanged } from './secret-storage';
+import { initMetricsCollector, getMetricsCollector } from './metrics-collector';
 
 // ─── Extension state ──────────────────────────────────────────────
 
@@ -272,6 +273,189 @@ async function handleTestConnection(): Promise<void> {
     }
 }
 
+async function handleGetMetrics(): Promise<void> {
+    const collector = getMetricsCollector();
+    const win = collector.getCurrentWindow();
+    const summaries = collector.getAllModelSummaries(1); // last window only
+
+    if (summaries.length === 0) {
+        vscode.window.showInformationMessage('No metrics collected yet. Make some LLM requests first.');
+        return;
+    }
+
+    const items = summaries.map(s => ({
+        label: `$(graph) ${s.modelId}`,
+        description: `${s.provider}`,
+        detail: [
+            `Reqs: ${s.totalRequests} (${((s.availability ?? 0) * 100).toFixed(1)}% avail)`,
+            `Cost: $${s.totalCostUsd.toFixed(4)}`,
+            `TTLB: avg ${Math.round(s.avgTtlbMs)}ms / p90 ${Math.round(s.p90TtlbMs)}ms`,
+            `Tokens: ${s.totalPromptTokens.toLocaleString()} in / ${s.totalCompletionTokens.toLocaleString()} out`,
+            s.cacheHitRatio > 0 ? `Cache: ${(s.cacheHitRatio * 100).toFixed(1)}%` : '',
+        ].filter(Boolean).join(' | '),
+        modelId: s.modelId,
+    }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+        title: 'Shofer LLM Router: Model Metrics (current window)',
+        placeHolder: 'Select a model for details, or ESC to dismiss',
+        matchOnDescription: true,
+    });
+
+    if (selected) {
+        const history = collector.getModelHistory(selected.modelId, 12); // last hour
+        const summary = collector.getModelSummary(selected.modelId, 12);
+        if (!summary) return;
+
+        const lines = [
+            `=== ${selected.modelId} (${summary.provider}) ===`,
+            `Window: ${summary.windowCount} × 5m (${(summary.windowCount * 5 / 60).toFixed(1)}h)`,
+            ``,
+            `Requests:   ${summary.totalRequests} total`,
+            `  Success:  ${summary.totalSuccess}`,
+            `  Errors:   ${summary.totalErrors}`,
+            `  Timeouts: ${summary.totalTimeouts}`,
+            `  Cancel'd: ${summary.totalCancelled}`,
+            `Available:  ${((summary.availability ?? 0) * 100).toFixed(2)}%`,
+            ``,
+            `Latency:`,
+            `  TTFB avg: ${Math.round(summary.avgTtfbMs)}ms`,
+            `  TTLB avg: ${Math.round(summary.avgTtlbMs)}ms`,
+            `  TTLB p90: ${Math.round(summary.p90TtlbMs)}ms`,
+            ``,
+            `Tokens:`,
+            `  Prompt:    ${summary.totalPromptTokens.toLocaleString()}`,
+            `  Compl:     ${summary.totalCompletionTokens.toLocaleString()}`,
+            `  Cache hit: ${(summary.cacheHitRatio * 100).toFixed(1)}%`,
+            ``,
+            `Cost: $${summary.totalCostUsd.toFixed(6)}`,
+        ];
+
+        // Show per-window breakdown using window history
+        const windows = collector.getWindowHistory(12);
+        if (windows.length > 1) {
+            lines.push(``, `Per-window (newest first):`);
+            for (const win of windows) {
+                const modelStats = win.models[selected.modelId];
+                if (!modelStats) continue;
+                const ts = new Date(win.windowStart).toLocaleTimeString();
+                lines.push(`  ${ts}: ${modelStats.requestCount} reqs, ${((modelStats.availability ?? 0) * 100).toFixed(0)}% avail, $${modelStats.totalCostUsd.toFixed(4)}`);
+            }
+        }
+
+        const doc = await vscode.workspace.openTextDocument({
+            content: lines.join('\n'),
+            language: 'plaintext',
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+    }
+}
+
+async function handleGetModelStats(modelId?: string): Promise<void> {
+    if (!modelId) {
+        modelId = await vscode.window.showInputBox({
+            title: 'Model ID',
+            placeHolder: 'e.g., deepseek-v4-pro, shofer/code',
+        });
+    }
+    if (!modelId) return;
+
+    const collector = getMetricsCollector();
+    const summary = collector.getModelSummary(modelId);
+
+    if (!summary) {
+        vscode.window.showInformationMessage(`No metrics found for model: ${modelId}`);
+        return;
+    }
+
+    const lines = [
+        `Model:     ${summary.modelId}`,
+        `Provider:  ${summary.provider}`,
+        `Windows:   ${summary.windowCount} × 5m`,
+        `Requests:  ${summary.totalRequests} (${summary.totalSuccess} success, ${summary.totalErrors} error, ${summary.totalTimeouts} timeout)`,
+        `Available: ${((summary.availability ?? 0) * 100).toFixed(2)}%`,
+        `TTFB avg:  ${Math.round(summary.avgTtfbMs)}ms`,
+        `TTLB avg:  ${Math.round(summary.avgTtlbMs)}ms`,
+        `TTLB p90:  ${Math.round(summary.p90TtlbMs)}ms`,
+        `Tokens:    ${summary.totalPromptTokens.toLocaleString()} prompt / ${summary.totalCompletionTokens.toLocaleString()} compl`,
+        `Cache hit: ${(summary.cacheHitRatio * 100).toFixed(1)}%`,
+        `Cost:      $${summary.totalCostUsd.toFixed(6)}`,
+    ];
+
+    const doc = await vscode.workspace.openTextDocument({
+        content: lines.join('\n'),
+        language: 'plaintext',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+}
+
+async function handleExportMetrics(): Promise<void> {
+    const collector = getMetricsCollector();
+    const text = collector.toPrometheusText();
+
+    const doc = await vscode.workspace.openTextDocument({
+        content: text,
+        language: 'plaintext',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+}
+
+async function handleGetCompositeDistribution(compositeId?: string): Promise<void> {
+    if (!compositeId) {
+        compositeId = await vscode.window.showInputBox({
+            title: 'Composite Model ID',
+            placeHolder: 'e.g., shofer/code',
+        });
+    }
+    if (!compositeId) return;
+
+    const collector = getMetricsCollector();
+    const history = collector.getCompositeDistributionHistory(compositeId);
+
+    if (history.length === 0) {
+        vscode.window.showInformationMessage(`No routing data for composite model: ${compositeId}`);
+        return;
+    }
+
+    const lines = [`=== ${compositeId} Routing Distribution ===`, ''];
+
+    // Aggregate across all windows
+    const totalCounts: Record<string, number> = {};
+    let totalFailover = 0;
+    let totalAttempts = 0;
+    let totalMidstream = 0;
+
+    for (const dist of history) {
+        for (const [model, count] of Object.entries(dist.modelCounts)) {
+            totalCounts[model] = (totalCounts[model] ?? 0) + count;
+        }
+        totalFailover += dist.failoverCount;
+        totalAttempts += dist.totalAttempts;
+        totalMidstream += dist.midstreamFailureCount;
+    }
+
+    const totalReqs = Object.values(totalCounts).reduce((a, b) => a + b, 0);
+    lines.push(`Total requests: ${totalReqs}`);
+    lines.push(`Total attempts: ${totalAttempts} (avg ${(totalAttempts / Math.max(1, totalReqs)).toFixed(2)} per request)`);
+    lines.push(`Failover events: ${totalFailover}`);
+    lines.push(`Mid-stream failures: ${totalMidstream}`);
+    lines.push('');
+
+    const sorted = Object.entries(totalCounts).sort((a, b) => b[1] - a[1]);
+    lines.push('Underlying model distribution:');
+    for (const [model, count] of sorted) {
+        const pct = totalReqs > 0 ? ((count / totalReqs) * 100).toFixed(1) : '0.0';
+        const bar = '█'.repeat(Math.round((count / Math.max(1, sorted[0][1])) * 20));
+        lines.push(`  ${model.padEnd(25)} ${String(count).padStart(4)} (${pct}%) ${bar}`);
+    }
+
+    const doc = await vscode.workspace.openTextDocument({
+        content: lines.join('\n'),
+        language: 'plaintext',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+}
+
 // ─── Lifecycle ────────────────────────────────────────────────────
 
 function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void {
@@ -353,6 +537,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const debugEnabled = wsConfig.get('debug', false);
     initLogger('Shofer LLM Router', debugEnabled);
 
+    // Initialize metrics collector
+    initMetricsCollector();
+
     const logger = getLogger();
     logger.info('Shofer LLM Router activating...');
 
@@ -402,6 +589,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         (conversationId: string) => languageModelProvider?.getRequestCost(conversationId),
     );
 
+    // Metrics commands
+    const getMetricsCommand = vscode.commands.registerCommand(
+        'shofer.llm.getMetrics',
+        handleGetMetrics,
+    );
+    const getModelStatsCommand = vscode.commands.registerCommand(
+        'shofer.llm.getModelStats',
+        handleGetModelStats,
+    );
+    const exportMetricsCommand = vscode.commands.registerCommand(
+        'shofer.llm.exportMetrics',
+        handleExportMetrics,
+    );
+    const getCompositeDistributionCommand = vscode.commands.registerCommand(
+        'shofer.llm.getCompositeDistribution',
+        handleGetCompositeDistribution,
+    );
+
     // Configuration change listener
     const configChangeListener = vscode.workspace.onDidChangeConfiguration(handleConfigurationChange);
 
@@ -425,6 +630,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         getModelPricingCommand,
         getModelCapabilitiesCommand,
         getRequestCostCommand,
+        getMetricsCommand,
+        getModelStatsCommand,
+        exportMetricsCommand,
+        getCompositeDistributionCommand,
         configChangeListener,
         secretsListener,
     );

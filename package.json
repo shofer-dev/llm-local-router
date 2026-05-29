@@ -2,7 +2,7 @@
   "name": "shofer-router",
   "displayName": "Shofer LLM Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "arkware",
   "repository": "https://github.com/arkware/arkware.ai",
   "engines": {
@@ -102,6 +102,26 @@
         "command": "shofer.llm.testConnection",
         "title": "Shofer LLM Router: Test Connection",
         "description": "Test connectivity to LLM providers"
+      },
+      {
+        "command": "shofer.llm.getMetrics",
+        "title": "Shofer LLM Router: Show Metrics",
+        "description": "Show per-model cost, latency, and reliability metrics"
+      },
+      {
+        "command": "shofer.llm.getModelStats",
+        "title": "Shofer LLM Router: Show Model Stats",
+        "description": "Show detailed statistics for a specific model"
+      },
+      {
+        "command": "shofer.llm.exportMetrics",
+        "title": "Shofer LLM Router: Export Metrics (Prometheus)",
+        "description": "Export current metrics in Prometheus text format"
+      },
+      {
+        "command": "shofer.llm.getCompositeDistribution",
+        "title": "Shofer LLM Router: Show Composite Distribution",
+        "description": "Show load-balancing distribution for a composite model"
       }
     ]
   },
