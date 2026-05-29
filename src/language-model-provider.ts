@@ -224,17 +224,25 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         }
 
         const modelId = model.id;
-        this.logger.debug(`Processing chat request for model: ${modelId}`);
-
-        // Extract conversationId from modelOptions
         const conversationId = options.modelOptions?.conversationId as string | undefined;
+        const parentConversationId = options.modelOptions?.parentConversationId as string | undefined;
+        const rootConversationId = options.modelOptions?.rootConversationId as string | undefined;
+
+        // Structured request log at INFO level
+        const msgCount = messages.length;
+        const lastMsgRole = messages.length > 0
+            ? String(messages[messages.length - 1].role)
+            : 'none';
+        this.logger.info(
+            `REQ → model=${modelId} conv=${conversationId || '?'} ` +
+            `root=${rootConversationId || '?'} msgs=${msgCount} last=${lastMsgRole}`
+        );
+
         if (!conversationId) {
             throw new Error('conversationId is required in modelOptions');
         }
 
-        // Extract task hierarchy IDs for tracing
-        const parentConversationId = options.modelOptions?.parentConversationId as string | undefined;
-        const rootConversationId = options.modelOptions?.rootConversationId as string | undefined;
+        // parentConversationId and rootConversationId already extracted above
 
         // Extract systemPrompt from modelOptions (VS Code API lacks System role)
         const systemPrompt = options.modelOptions?.systemPrompt as string | undefined;
@@ -382,19 +390,23 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
 
             const ttlbMs = Date.now() - requestStartMs;
 
-            // Log usage
-            if (result.response.usage) {
-                this.logger.debug(
-                    `Token usage - Prompt: ${result.response.usage.promptTokens}, ` +
-                    `Completion: ${result.response.usage.completionTokens}, ` +
-                    `Total: ${result.response.usage.totalTokens}` +
-                    (result.response.usage.costUsd !== undefined
-                        ? `, Cost: $${result.response.usage.costUsd.toFixed(6)}`
-                        : '')
-                );
-                if (result.response.usage.costUsd !== undefined && result.response.usage.costUsd >= 0) {
-                    this.recordRequestCost(conversationId, result.response.usage.costUsd);
-                }
+            // Structured success log at INFO level
+            const usage = result.response.usage;
+            const costStr = usage?.costUsd !== undefined
+                ? `$${usage.costUsd.toFixed(6)}`
+                : '?';
+            this.logger.info(
+                `RES ← model=${modelId}` +
+                (result.servedByModel !== modelId ? ` served=${result.servedByModel}` : '') +
+                ` conv=${conversationId}` +
+                ` ttfb=${ttfbMs}ms ttlb=${ttlbMs}ms` +
+                (usage ? ` prompt=${usage.promptTokens} compl=${usage.completionTokens}` : '') +
+                (result.failoverOccurred ? ` failover=${result.attempts}` : '') +
+                ` cost=${costStr}`
+            );
+
+            if (usage?.costUsd !== undefined && usage.costUsd >= 0) {
+                this.recordRequestCost(conversationId, usage.costUsd);
             }
 
             // Record success metrics
