@@ -16,7 +16,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ModelPicker from './ModelPicker';
-import NumberInput from './NumberInput';
 import type { ModelRegistrySummary, UnderlyingModelEntry, RoutingStrategy } from '../types';
 
 interface Props {
@@ -165,15 +164,23 @@ function SortableModelItem({ id, model, index, strategy, modelRegistry, onUpdate
           />
         </div>
 
-        {/* Weight (round_robin only) */}
+        {/* Weight (round_robin only) — compact inline input */}
         {strategy === 'round_robin' && (
-          <div style={{ width: '80px' }}>
-            <NumberInput
-              label="Weight"
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+            <span style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)' }}>
+              Wt
+            </span>
+            <input
+              type="number"
+              className="vscode-input"
               value={model.weight}
               min={1}
               max={100}
-              onChange={(w) => onUpdate({ weight: w })}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v) && v >= 1 && v <= 100) onUpdate({ weight: v });
+              }}
+              style={{ width: '48px', padding: '2px 4px', fontSize: '11px' }}
             />
           </div>
         )}
