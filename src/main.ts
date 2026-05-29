@@ -13,7 +13,8 @@ import * as vscode from 'vscode';
 import { LanguageModelProvider, RouterConfig } from './language-model-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
 import { loadApiKeys, onApiKeysChanged } from './secret-storage';
-import { initMetricsCollector, getMetricsCollector } from './metrics-collector';
+import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
+import { MetricsStorage } from './metrics-storage';
 
 // ─── Extension state ──────────────────────────────────────────────
 
@@ -400,6 +401,62 @@ async function handleExportMetrics(): Promise<void> {
     await vscode.window.showTextDocument(doc, { preview: true });
 }
 
+
+async function handleGetCostHistory(): Promise<void> {
+    const collector = getMetricsCollector();
+    const storage = collector.getStorage();
+
+    if (!storage) {
+        vscode.window.showInformationMessage('Metrics storage is not available (SQLite not initialized).');
+        return;
+    }
+
+    const periods = [
+        { label: 'Last 1 hour', since: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString() },
+        { label: 'Last 6 hours', since: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() },
+        { label: 'Last 24 hours', since: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+        { label: 'Last 7 days', since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
+        { label: 'Last 30 days', since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() },
+    ];
+
+    const period = await vscode.window.showQuickPick(
+        periods.map(p => ({ label: p.label, since: p.since })),
+        { title: 'Cost History: Select time range', placeHolder: 'Choose a time range' },
+    );
+
+    if (!period) return;
+
+    const breakdown = storage.getCostBreakdown(period.since);
+
+    if (breakdown.length === 0) {
+        vscode.window.showInformationMessage(`No cost data for ${period.label.toLowerCase()}.`);
+        return;
+    }
+
+    const totalAll = breakdown.reduce((sum, m) => sum + m.totalCost, 0);
+    const lines = [
+        `=== Cost Breakdown (${period.label}) ===`,
+        `Total: $${totalAll.toFixed(6)} across ${breakdown.reduce((s, m) => s + m.requestCount, 0)} requests`,
+        '',
+    ];
+
+    for (const m of breakdown) {
+        const pct = totalAll > 0 ? ((m.totalCost / totalAll) * 100).toFixed(1) : '0.0';
+        lines.push(
+            `  ${m.modelId.padEnd(25)} ` +
+            `$${m.totalCost.toFixed(6).padStart(12)} ` +
+            `(${pct}%) `.padStart(9) +
+            `${String(m.requestCount).padStart(5)} reqs`
+        );
+    }
+
+    const doc = await vscode.workspace.openTextDocument({
+        content: lines.join('\n'),
+        language: 'plaintext',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+}
+
 async function handleGetCompositeDistribution(compositeId?: string): Promise<void> {
     if (!compositeId) {
         compositeId = await vscode.window.showInputBox({
@@ -537,8 +594,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const debugEnabled = wsConfig.get('debug', false);
     initLogger('Shofer LLM Router', debugEnabled);
 
-    // Initialize metrics collector
-    initMetricsCollector();
+    // Initialize metrics collector with SQLite persistence
+    const dbPath = vscode.Uri.joinPath(context.globalStorageUri, 'metrics.db').fsPath;
+    let storage: MetricsStorage | undefined;
+    try {
+        storage = new MetricsStorage(dbPath);
+    } catch (err) {
+        // Storage initialization failure is non-fatal — metrics still work in-memory
+        getLogger().warning(`Failed to initialize metrics storage: ${err}`);
+    }
+    initMetricsCollector(storage);
 
     const logger = getLogger();
     logger.info('Shofer LLM Router activating...');
@@ -606,6 +671,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         'shofer.llm.getCompositeDistribution',
         handleGetCompositeDistribution,
     );
+    const getCostHistoryCommand = vscode.commands.registerCommand(
+        'shofer.llm.getCostHistory',
+        handleGetCostHistory,
+    );
 
     // Configuration change listener
     const configChangeListener = vscode.workspace.onDidChangeConfiguration(handleConfigurationChange);
@@ -634,6 +703,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         getModelStatsCommand,
         exportMetricsCommand,
         getCompositeDistributionCommand,
+        getCostHistoryCommand,
         configChangeListener,
         secretsListener,
     );
@@ -664,6 +734,9 @@ export function deactivate(): void {
 
     stopHealthCheck();
     stopConnectionRetry();
+
+    // Flush metrics to storage before shutdown
+    shutdownMetricsCollector();
 
     if (statusBarItem) {
         statusBarItem.dispose();

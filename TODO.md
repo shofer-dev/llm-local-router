@@ -6,5 +6,5 @@
 - ✅ ~~Cost & token tracking by model per 5m window~~
 - ✅ ~~Reliability metrics (latency percentiles, availability, error breakdown)~~
 - ✅ ~~Composite load-balancing distribution tracking~~
-- A bundled SQLite client for persistent cost-tracking (in-memory metrics exist, just needs persistence layer)
+- ✅ ~~SQLite persistence~~ — better-sqlite3, automatic window flushes, 30-day retention, cost history command
 - Prometheus endpoint for metrics (text export exists, needs HTTP endpoint or file write)

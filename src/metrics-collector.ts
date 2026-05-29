@@ -24,6 +24,7 @@ import {
     ModelWindowStats,
     RequestStatus,
 } from './types';
+import { MetricsStorage } from './metrics-storage';
 
 /** Duration of a single aggregation window. */
 const WINDOW_DURATION_MS = 5 * 60 * 1000; // 5 minutes
@@ -104,12 +105,105 @@ export class MetricsCollector {
     /** Count of requests skipped due to throttling, keyed by modelId. */
     private throttleSkipCounts = new Map<string, number>();
 
+    /** Optional SQLite persistence backend. */
+    private _storage: MetricsStorage | undefined;
+
+    /** Raw request entries for the current window (flushed on close). */
+    private currentRawEntries: MetricsRequestEntry[] = [];
+
+    // ─── Persistence ───────────────────────────────────────────────
+
+    /**
+     * Attach a SQLite storage backend for persistence.
+     * Call loadFromStorage() after setting to restore historical data.
+     */
+    setStorage(storage: MetricsStorage): void {
+        this._storage = storage;
+    }
+
+    /**
+     * Load recent windows from SQLite into the in-memory collector.
+     * Windows older than the in-memory retention (MAX_WINDOWS = 24h) are
+     * still available via storage.queryRequests() for historical queries.
+     */
+    loadFromStorage(): void {
+        if (!this._storage) return;
+
+        const since = new Date(Date.now() - MAX_WINDOWS * WINDOW_DURATION_MS).toISOString();
+        const stored = this._storage.loadWindows(since);
+
+        // Merge stored windows into in-memory state, avoiding duplicates
+        const existingStarts = new Set(this.windows.map(w => w.windowStart));
+        for (const win of stored) {
+            if (!existingStarts.has(win.windowStart)) {
+                this.windows.push(win);
+            }
+        }
+
+        // Keep sorted
+        this.windows.sort((a, b) => a.windowStart.localeCompare(b.windowStart));
+
+        // Evict if over limit
+        while (this.windows.length > MAX_WINDOWS) {
+            this.windows.shift();
+        }
+    }
+
+    /**
+     * Flush current window to storage and clear in-memory raw entries.
+     * Called automatically on window transitions.
+     */
+    private flushCurrentWindow(): void {
+        if (!this._storage || this.windows.length === 0) return;
+
+        const win = this.windows[this.windows.length - 1];
+
+        // Flush window stats
+        this._storage.flushWindow(win);
+
+        // Flush raw request entries
+        if (this.currentRawEntries.length > 0) {
+            this._storage.insertRequests(this.currentRawEntries);
+            this.currentRawEntries = [];
+        }
+
+        // Periodically prune old data (every 100 windows)
+        if (this.windows.length % 100 === 0) {
+            try {
+                this._storage.prune();
+            } catch {
+                // Pruning is best-effort
+            }
+        }
+    }
+
+    /**
+     * Force flush current window to storage (for shutdown).
+     */
+    forceFlush(): void {
+        if (!this._storage) return;
+        this.ensureCurrentWindow();
+        this.flushCurrentWindow();
+    }
+
+    /**
+     * Get the storage backend for direct historical queries.
+     */
+    getStorage(): MetricsStorage | undefined {
+        return this._storage;
+    }
+
+    // ─── Recording ─────────────────────────────────────────────────
+
     /**
      * Record a completed chat completion request (success or failure).
      */
     recordRequest(entry: MetricsRequestEntry): void {
         this.ensureCurrentWindow();
         const win = this.currentWindow();
+
+        // Track raw entry for later batch insert
+        this.currentRawEntries.push(entry);
 
         // Get or create per-model stats
         const modelKey = entry.modelId;
@@ -385,6 +479,9 @@ export class MetricsCollector {
         if (this.windows.length > 0) {
             const last = this.windows[this.windows.length - 1];
             if (new Date(last.windowStart).getTime() === windowStart) return;
+
+            // Window transition: flush the closing window to storage
+            this.flushCurrentWindow();
         }
 
         // Create new window
@@ -564,8 +661,12 @@ export class MetricsCollector {
 /** Global singleton instance. */
 let globalCollector: MetricsCollector | undefined;
 
-export function initMetricsCollector(): MetricsCollector {
+export function initMetricsCollector(storage?: MetricsStorage): MetricsCollector {
     globalCollector = new MetricsCollector();
+    if (storage) {
+        globalCollector.setStorage(storage);
+        globalCollector.loadFromStorage();
+    }
     return globalCollector;
 }
 
@@ -574,4 +675,15 @@ export function getMetricsCollector(): MetricsCollector {
         globalCollector = new MetricsCollector();
     }
     return globalCollector;
+}
+
+/**
+ * Flush the global collector's current window and close the storage backend.
+ * Call during extension deactivation.
+ */
+export function shutdownMetricsCollector(): void {
+    if (globalCollector) {
+        globalCollector.forceFlush();
+        globalCollector.getStorage()?.close();
+    }
 }

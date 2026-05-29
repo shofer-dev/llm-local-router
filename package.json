@@ -122,6 +122,11 @@
         "command": "shofer.llm.getCompositeDistribution",
         "title": "Shofer LLM Router: Show Composite Distribution",
         "description": "Show load-balancing distribution for a composite model"
+      },
+      {
+        "command": "shofer.llm.getCostHistory",
+        "title": "Shofer LLM Router: Show Cost History",
+        "description": "Show cost breakdown by model across a selected time range"
       }
     ]
   },
@@ -131,9 +136,13 @@
     "package": "npm run compile && npx @vscode/vsce package"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
     "@types/vscode": "^1.96.0",
-    "typescript": "^5.7.2",
-    "@vscode/vsce": "^3.2.2"
+    "@vscode/vsce": "^3.2.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0"
   }
 }
