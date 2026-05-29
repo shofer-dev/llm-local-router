@@ -6,14 +6,16 @@ interface Props {
 }
 
 /**
- * Status panel showing provider health, available models, and connection info.
+ * Status panel showing connection info and available models with search.
  *
  * Renders:
- *  - Connection status (connected / disabled / disconnected)
- *  - Provider list with configured/pending state and model count
+ *  - Status summary (enabled, connected, configured providers, model count)
+ *  - Search bar for filtering models by name, ID, or provider
  *  - Available models table with token limits, capabilities, and pricing
  */
 export default function StatusPanel({ status }: Props) {
+  const [search, setSearch] = React.useState('');
+
   if (!status) {
     return (
       <div style={styles.empty}>
@@ -23,6 +25,20 @@ export default function StatusPanel({ status }: Props) {
     );
   }
 
+  const configuredCount = status.providers.filter((p) => p.configured).length;
+  const totalProviderCount = status.providers.length;
+
+  const filteredModels = search.trim()
+    ? status.models.filter((m) => {
+        const q = search.toLowerCase();
+        return (
+          m.name.toLowerCase().includes(q) ||
+          m.id.toLowerCase().includes(q) ||
+          m.provider.toLowerCase().includes(q)
+        );
+      })
+    : status.models;
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -30,68 +46,102 @@ export default function StatusPanel({ status }: Props) {
         <ConnectionBadge connected={status.connected} enabled={status.enabled} />
       </div>
 
-      {/* Provider health */}
-      <h3 style={styles.sectionTitle}>Providers</h3>
-      <div style={styles.providerGrid}>
-        {status.providers.map((p) => (
-          <ProviderCard key={p.name} provider={p} />
-        ))}
+      {/* Status summary */}
+      <h3 style={styles.sectionTitle}>Status</h3>
+      <div style={styles.statusGrid}>
+        <StatusCard
+          label="Enabled"
+          value={status.enabled ? 'Yes' : 'No'}
+          icon={status.enabled ? '✅' : '⏸'}
+        />
+        <StatusCard
+          label="Connection"
+          value={status.connected ? 'Connected' : 'Disconnected'}
+          icon={status.connected ? '✅' : '⚠️'}
+        />
+        <StatusCard
+          label="Providers"
+          value={`${configuredCount} of ${totalProviderCount} configured`}
+          icon={configuredCount > 0 ? '🔑' : '🔒'}
+        />
+        <StatusCard
+          label="Models"
+          value={`${status.models.length} available`}
+          icon="📦"
+        />
       </div>
 
-      {/* Available models */}
+      {/* Available models with search */}
       <h3 style={styles.sectionTitle}>
         Available Models
-        <span style={styles.modelCount}>{status.models.length} total</span>
+        <span style={styles.modelCount}>
+          {filteredModels.length}{search.trim() && filteredModels.length !== status.models.length ? ` of ${status.models.length}` : ''} total
+        </span>
       </h3>
-      <div style={styles.tableWrapper}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Model</th>
-              <th style={styles.th}>ID</th>
-              <th style={styles.th}>Provider</th>
-              <th style={styles.th}>Input Tokens</th>
-              <th style={styles.th}>Output Tokens</th>
-              <th style={styles.th}>Capabilities</th>
-              <th style={styles.th}>Pricing (per 1M)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {status.models.map((m) => (
-              <tr key={m.id} style={m.isComposite ? styles.compositeRow : undefined}>
-                <td style={styles.td}>
-                  <span style={styles.modelName}>{m.name}</span>
-                  {m.isComposite && <span style={styles.compositeTag}>composite</span>}
-                </td>
-                <td style={styles.td}>
-                  <code style={styles.mono}>{m.id}</code>
-                </td>
-                <td style={styles.td}>
-                  <span style={styles.providerTag}>{m.provider}</span>
-                </td>
-                <td style={styles.td}>{m.maxInputTokens.toLocaleString()}</td>
-                <td style={styles.td}>{m.maxOutputTokens.toLocaleString()}</td>
-                <td style={styles.td}>
-                  <div style={styles.caps}>
-                    {m.toolCalling && <CapBadge label="tools" />}
-                    {m.imageInput && <CapBadge label="image" />}
-                    {m.promptCache && <CapBadge label="cache" />}
-                  </div>
-                </td>
-                <td style={styles.td}>
-                  {m.pricing ? (
-                    <span style={styles.mono}>
-                      ${m.pricing.inputPrice}/ ${m.pricing.outputPrice}
-                    </span>
-                  ) : (
-                    <span style={styles.na}>—</span>
-                  )}
-                </td>
+
+      <input
+        type="text"
+        placeholder="Search by name, ID, or provider..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={styles.searchInput}
+      />
+
+      {filteredModels.length === 0 ? (
+        <div style={styles.noResults}>
+          {search.trim() ? 'No models match your search.' : 'No models available.'}
+        </div>
+      ) : (
+        <div style={styles.tableWrapper}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Model</th>
+                <th style={styles.th}>ID</th>
+                <th style={styles.th}>Provider</th>
+                <th style={styles.th}>Input Tokens</th>
+                <th style={styles.th}>Output Tokens</th>
+                <th style={styles.th}>Capabilities</th>
+                <th style={styles.th}>Pricing (per 1M)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filteredModels.map((m) => (
+                <tr key={m.id} style={m.isComposite ? styles.compositeRow : undefined}>
+                  <td style={styles.td}>
+                    <span style={styles.modelName}>{m.name}</span>
+                    {m.isComposite && <span style={styles.compositeTag}>composite</span>}
+                  </td>
+                  <td style={styles.td}>
+                    <code style={styles.mono}>{m.id}</code>
+                  </td>
+                  <td style={styles.td}>
+                    <span style={styles.providerTag}>{m.provider}</span>
+                  </td>
+                  <td style={styles.td}>{m.maxInputTokens.toLocaleString()}</td>
+                  <td style={styles.td}>{m.maxOutputTokens.toLocaleString()}</td>
+                  <td style={styles.td}>
+                    <div style={styles.caps}>
+                      {m.toolCalling && <CapBadge label="tools" />}
+                      {m.imageInput && <CapBadge label="image" />}
+                      {m.promptCache && <CapBadge label="cache" />}
+                    </div>
+                  </td>
+                  <td style={styles.td}>
+                    {m.pricing ? (
+                      <span style={styles.mono}>
+                        ${m.pricing.inputPrice}/ ${m.pricing.outputPrice}
+                      </span>
+                    ) : (
+                      <span style={styles.na}>—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -136,47 +186,30 @@ function ConnectionBadge({ connected, enabled }: { connected: boolean; enabled: 
   );
 }
 
-interface ProviderInfo {
-  name: string;
-  configured: boolean;
-  modelCount: number;
+interface StatusCardProps {
+  label: string;
+  value: string;
+  icon: string;
 }
 
-function ProviderCard({ provider }: { provider: ProviderInfo }) {
-  const bgColor = provider.configured
-    ? 'var(--vscode-testing-iconPassed, rgba(115, 201, 145, 0.1))'
-    : 'var(--vscode-panel-border, rgba(128, 128, 128, 0.1))';
-  const borderColor = provider.configured
-    ? 'var(--vscode-testing-iconPassed, #73c991)'
-    : 'var(--vscode-panel-border, rgba(128, 128, 128, 0.2))';
-
+function StatusCard({ label, value, icon }: StatusCardProps) {
   return (
-    <div
-      style={{
-        padding: '10px 12px',
-        border: `1px solid ${borderColor}`,
-        borderRadius: '4px',
-        background: bgColor,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-      }}
-    >
+    <div style={{
+      padding: '10px 12px',
+      border: '1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.2))',
+      borderRadius: '4px',
+      background: 'var(--vscode-editor-background)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px',
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <span style={{ fontWeight: 600, fontSize: '13px' }}>{provider.name}</span>
-        {provider.configured ? (
-          <span style={{ color: 'var(--vscode-testing-iconPassed, #73c991)', fontSize: '11px' }}>
-            ● Configured
-          </span>
-        ) : (
-          <span style={{ color: 'var(--vscode-descriptionForeground, #999)', fontSize: '11px' }}>
-            ○ Not configured
-          </span>
-        )}
+        <span style={{ fontSize: '13px' }}>{icon}</span>
+        <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)', fontWeight: 500 }}>
+          {label}
+        </span>
       </div>
-      <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)' }}>
-        {provider.modelCount} model{provider.modelCount !== 1 ? 's' : ''} available
-      </span>
+      <span style={{ fontWeight: 600, fontSize: '13px' }}>{value}</span>
     </div>
   );
 }
@@ -236,10 +269,23 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 400,
     color: 'var(--vscode-descriptionForeground, #999)',
   },
-  providerGrid: {
+  statusGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
     gap: '8px',
+  },
+  searchInput: {
+    width: '100%',
+    padding: '6px 10px',
+    fontSize: '12px',
+    fontFamily: 'var(--vscode-font-family)',
+    color: 'var(--vscode-input-foreground)',
+    backgroundColor: 'var(--vscode-input-background)',
+    border: '1px solid var(--vscode-input-border, var(--vscode-panel-border))',
+    borderRadius: '3px',
+    marginBottom: '8px',
+    outline: 'none',
+    boxSizing: 'border-box' as const,
   },
   tableWrapper: {
     overflowX: 'auto',
@@ -293,6 +339,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   na: {
     color: 'var(--vscode-descriptionForeground, #999)',
+  },
+  noResults: {
+    padding: '20px',
+    textAlign: 'center' as const,
+    color: 'var(--vscode-descriptionForeground, #999)',
+    fontSize: '12px',
   },
   empty: {
     display: 'flex',
