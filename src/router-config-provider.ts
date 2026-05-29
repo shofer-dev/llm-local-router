@@ -25,7 +25,8 @@ import * as fs from 'fs';
 import { LanguageModelProvider } from './language-model-provider';
 import { ALL_MODELS } from './model-registry';
 import { getMetricsCollector } from './metrics-collector';
-import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution, ProviderModelInfo } from './types';
+import { storeApiKey, deleteApiKey } from './secret-storage';
+import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution, ProviderModelInfo, ProviderType } from './types';
 import {
   convertToHostConfig,
   convertFromHostConfigs,
@@ -33,8 +34,22 @@ import {
   type WebviewCompositeModel,
 } from './config-converter';
 
+// ─── Provider defaults ──────────────────────────────────────────────
+
+const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string }> = {
+  openai: { label: 'OpenAI', defaultEndpoint: 'https://api.openai.com/v1' },
+  anthropic: { label: 'Anthropic', defaultEndpoint: 'https://api.anthropic.com/v1' },
+  google: { label: 'Google Gemini', defaultEndpoint: 'https://generativelanguage.googleapis.com/v1beta' },
+  deepseek: { label: 'DeepSeek', defaultEndpoint: 'https://api.deepseek.com/v1' },
+  minimax: { label: 'MiniMax', defaultEndpoint: 'https://api.minimax.io/v1' },
+  moonshot: { label: 'Moonshot / Kimi', defaultEndpoint: 'https://api.moonshot.cn/v1' },
+  xiaomi: { label: 'Xiaomi MiMo', defaultEndpoint: 'https://api.xiaomimimo.com/v1' },
+  zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://open.bigmodel.cn/api/paas/v4' },
+  openrouter: { label: 'OpenRouter', defaultEndpoint: 'https://openrouter.ai/api/v1' },
+};
+
 /** The tab to show when opening the webview panel. */
-export type WebviewTab = 'status' | 'config' | 'metrics';
+export type WebviewTab = 'status' | 'config' | 'metrics' | 'providers';
 
 // ─── Webview message types (mirrors webview-ui/src/types.ts) ────────
 
@@ -74,6 +89,15 @@ interface StatusPayload {
   enabled: boolean;
   providers: ProviderStatus[];
   models: ModelInfo[];
+}
+
+interface ProviderConfigEntry {
+  id: string;
+  label: string;
+  hasApiKey: boolean;
+  endpointUrl: string;
+  defaultEndpoint: string;
+  modelCount: number;
 }
 
 interface MetricsPayload {
@@ -117,14 +141,17 @@ type HostMessage =
   | { type: 'validationError'; errors: string[] }
   | { type: 'configImported'; compositeModels: WebviewCompositeModel[] }
   | { type: 'metricsUpdate'; metrics: MetricsPayload }
-  | { type: 'statusUpdate'; status: StatusPayload };
+  | { type: 'statusUpdate'; status: StatusPayload }
+  | { type: 'providerConfigSaved'; provider: string }
+  | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] };
 
 type WebviewMessage =
   | { type: 'webviewReady' }
   | { type: 'saveConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'validateConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'exportConfig'; compositeModels: WebviewCompositeModel[] }
-  | { type: 'importConfig' };
+  | { type: 'importConfig' }
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string };
 
 // ─── Constants ─────────────────────────────────────────────────────
 
@@ -138,12 +165,14 @@ export class RouterConfigProvider {
   private panel: vscode.WebviewPanel | undefined;
   private disposables: vscode.Disposable[] = [];
   private languageModelProvider: LanguageModelProvider;
+  private context: vscode.ExtensionContext;
   private metricsInterval: ReturnType<typeof setInterval> | undefined;
   /** The activeTab requested when show() was called; used when webviewReady fires. */
   private pendingActiveTab: WebviewTab = 'status';
 
-  constructor(languageModelProvider: LanguageModelProvider) {
+  constructor(languageModelProvider: LanguageModelProvider, context: vscode.ExtensionContext) {
     this.languageModelProvider = languageModelProvider;
+    this.context = context;
   }
 
   /**
@@ -338,6 +367,10 @@ export class RouterConfigProvider {
       case 'importConfig':
         await this.handleImport();
         break;
+
+      case 'saveProvider':
+        await this.handleSaveProvider(message.provider, message.apiKey, message.endpointUrl);
+        break;
     }
   }
 
@@ -362,8 +395,9 @@ export class RouterConfigProvider {
 
     this.panel.webview.postMessage(msg);
 
-    // Also send status update as a separate message
+    // Also send status update and provider config as separate messages
     this.panel.webview.postMessage({ type: 'statusUpdate', status });
+    this.sendProviderConfig();
   }
 
   /**
@@ -503,6 +537,95 @@ export class RouterConfigProvider {
   private async sendToWebview(msg: HostMessage): Promise<void> {
     this.panel?.webview.postMessage(msg);
   }
+
+  // ─── Provider config ─────────────────────────────────────────────
+
+  /**
+   * Build and send provider configuration to the webview.
+   */
+  private async sendProviderConfig(): Promise<void> {
+    if (!this.panel) return;
+
+    const providerIds = Object.keys(PROVIDER_DEFAULTS);
+    const models = this.languageModelProvider.getAvailableModels();
+    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const customEndpoints = wsConfig.get<Record<string, string>>('providerEndpoints', {});
+
+    const providers: ProviderConfigEntry[] = [];
+    for (const id of providerIds) {
+      const def = PROVIDER_DEFAULTS[id];
+      try {
+        const key = await this.context.secrets.get(`shofer-router.provider.${id}`);
+        const modelCount = models.filter((m) => {
+          for (const entry of ALL_MODELS) {
+            if (entry.id === m.id) return entry.provider === id;
+          }
+          return false;
+        }).length;
+
+        providers.push({
+          id,
+          label: def.label,
+          hasApiKey: !!key,
+          endpointUrl: customEndpoints[id] || def.defaultEndpoint,
+          defaultEndpoint: def.defaultEndpoint,
+          modelCount,
+        });
+      } catch {
+        providers.push({
+          id,
+          label: def.label,
+          hasApiKey: false,
+          endpointUrl: customEndpoints[id] || def.defaultEndpoint,
+          defaultEndpoint: def.defaultEndpoint,
+          modelCount: 0,
+        });
+      }
+    }
+
+    this.panel.webview.postMessage({ type: 'initProviderConfig', providers });
+  }
+
+  /**
+   * Handle saving a provider's API key and endpoint URL.
+   */
+  private async handleSaveProvider(provider: string, apiKey: string, endpointUrl: string): Promise<void> {
+    const logger = (await import('./logger')).getLogger();
+
+    try {
+      if (apiKey.trim()) {
+        await storeApiKey(this.context, provider, apiKey.trim());
+        logger.info(`Saved API key for ${provider}`);
+      } else {
+        await deleteApiKey(this.context, provider);
+        logger.info(`Deleted API key for ${provider}`);
+      }
+
+      const def = PROVIDER_DEFAULTS[provider];
+      const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+      const endpoints = { ...wsConfig.get<Record<string, string>>('providerEndpoints', {}) };
+
+      if (endpointUrl.trim() && endpointUrl !== def?.defaultEndpoint) {
+        endpoints[provider] = endpointUrl;
+      } else {
+        delete endpoints[provider];
+      }
+
+      await wsConfig.update('providerEndpoints', endpoints, vscode.ConfigurationTarget.Global);
+
+      const { loadApiKeys } = await import('./secret-storage');
+      const keys = await loadApiKeys(this.context);
+      this.languageModelProvider.updateApiKeys(keys as Record<string, string | undefined>);
+
+      this.panel?.webview.postMessage({ type: 'providerConfigSaved', provider });
+      logger.info(`Provider config saved for ${provider}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to save provider config for ${provider}: ${message}`);
+      vscode.window.showErrorMessage(`Failed to save ${provider} configuration: ${message}`);
+    }
+  }
+
 
   // ─── Save ────────────────────────────────────────────────────────
 

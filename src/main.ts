@@ -595,7 +595,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     // Create the webview config provider
-    routerConfigProvider = new RouterConfigProvider(languageModelProvider);
+    routerConfigProvider = new RouterConfigProvider(languageModelProvider, context);
 
     // Register language model chat provider
     const providerDisposable = vscode.lm.registerLanguageModelChatProvider(

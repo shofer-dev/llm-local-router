@@ -3,10 +3,11 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ConfigEditor from './components/ConfigEditor';
 import MetricsPanel from './components/MetricsPanel';
 import StatusPanel from './components/StatusPanel';
-import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, MetricsPayload, StatusPayload } from './types';
+import ProvidersPanel from './components/ProvidersPanel';
+import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, MetricsPayload, StatusPayload, ProviderConfigEntry } from './types';
 import { onMessage, postMessage } from './utils/vscode';
 
-type Tab = 'status' | 'config' | 'metrics';
+type Tab = 'status' | 'config' | 'metrics' | 'providers';
 
 /**
  * Root application component with tab navigation.
@@ -26,6 +27,7 @@ export default function App() {
   const [modelRegistry, setModelRegistry] = React.useState<ModelRegistrySummary[]>([]);
   const [metrics, setMetrics] = React.useState<MetricsPayload | null>(null);
   const [status, setStatus] = React.useState<StatusPayload | null>(null);
+  const [providers, setProviders] = React.useState<ProviderConfigEntry[]>([]);
 
   React.useEffect(() => {
     // Signal that the webview is ready to receive data
@@ -43,6 +45,8 @@ export default function App() {
         setMetrics(msg.metrics);
       } else if (msg.type === 'statusUpdate') {
         setStatus(msg.status);
+      } else if (msg.type === 'initProviderConfig') {
+        setProviders(msg.providers);
       }
     });
 
@@ -79,6 +83,12 @@ export default function App() {
           >
             📊 Metrics
           </button>
+          <button
+            style={activeTab === 'providers' ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab('providers')}
+          >
+            🔑 Providers
+          </button>
         </div>
 
         <div style={styles.content}>
@@ -87,6 +97,7 @@ export default function App() {
             <ConfigEditor initialModels={compositeModels} modelRegistry={modelRegistry} />
           )}
           {activeTab === 'metrics' && <MetricsPanel metrics={metrics} />}
+          {activeTab === 'providers' && <ProvidersPanel providers={providers} />}
         </div>
       </div>
     </ErrorBoundary>

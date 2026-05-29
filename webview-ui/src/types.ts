@@ -131,6 +131,17 @@ export interface StatusPayload {
   models: ModelInfo[];
 }
 
+// ─── Provider config ────────────────────────────────────────────
+
+export interface ProviderConfigEntry {
+  id: string;
+  label: string;
+  hasApiKey: boolean;
+  endpointUrl: string;
+  defaultEndpoint: string;
+  modelCount: number;
+}
+
 // ─── Host → Webview messages ────────────────────────────────────
 
 export type HostMessage =
@@ -138,13 +149,15 @@ export type HostMessage =
       type: 'initConfig';
       compositeModels: CompositeModelConfig[];
       modelRegistry: ModelRegistrySummary[];
-      activeTab?: 'status' | 'config' | 'metrics';
+      activeTab?: 'status' | 'config' | 'metrics' | 'providers';
     }
   | { type: 'configSaved' }
   | { type: 'validationError'; errors: string[] }
   | { type: 'configImported'; compositeModels: CompositeModelConfig[] }
   | { type: 'metricsUpdate'; metrics: MetricsPayload }
-  | { type: 'statusUpdate'; status: StatusPayload };
+  | { type: 'statusUpdate'; status: StatusPayload }
+  | { type: 'providerConfigSaved'; provider: string }
+  | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] };
 
 // ─── Webview → Host messages ────────────────────────────────────
 
@@ -154,4 +167,5 @@ export type WebviewMessage =
   | { type: 'validateConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'exportConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'importConfig' }
-  | { type: 'testModel'; modelId: string };
+  | { type: 'testModel'; modelId: string }
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string };
