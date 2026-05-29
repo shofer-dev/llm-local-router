@@ -220,6 +220,8 @@ export interface RouterConfig {
     defaultModel: string;
     timeout: number;
     compositeModelsFile: string;
+    /** Inline JSON configuration for composite models. Parsed when compositeModelsFile is not set. */
+    compositeModelsConfig: string;
     debug: boolean;
 }
 
@@ -256,4 +258,145 @@ export interface ConnectionStatus {
     isConnected: boolean;
     lastChecked: Date;
     error?: string;
+}
+
+// ─── Metrics & observability ────────────────────────────────────────
+
+/** Status of a single request for metrics aggregation. */
+export type RequestStatus = 'success' | 'error' | 'timeout' | 'cancelled';
+
+/** Classification of an error for metrics breakdown. */
+export type ErrorType =
+    | 'http_4xx'
+    | 'http_5xx'
+    | 'http_429'
+    | 'timeout'
+    | 'cancelled'
+    | 'network_error'
+    | 'parse_error'
+    | 'unknown';
+
+/**
+ * Per-request metrics entry recorded by the MetricsCollector after every
+ * chat completion attempt (success or failure).
+ */
+export interface MetricsRequestEntry {
+    /** ISO timestamp of when the request was initiated. */
+    timestamp: string;
+    /** The model ID that was requested (may be composite, e.g. "shofer/code"). */
+    modelId: string;
+    /** The provider type (openai, anthropic, etc.) of the model that served. */
+    provider: string;
+    /** Whether the requested model was a composite model. */
+    isComposite: boolean;
+    /** For composite models, the composite model ID (same as modelId). */
+    compositeModelId?: string;
+    /** The underlying model that actually served the request. */
+    servedByModel: string;
+    /** Outcome. */
+    status: RequestStatus;
+    /** Error classification (only set when status !== 'success'). */
+    errorType?: ErrorType;
+    /** Human-readable error message (only set when status !== 'success'). */
+    errorMessage?: string;
+    /** Time to first byte in milliseconds. */
+    ttfbMs: number;
+    /** Time to last byte in milliseconds. */
+    ttlbMs: number;
+    /** Token usage (from the provider response). */
+    promptTokens: number;
+    completionTokens: number;
+    cachedTokens: number;
+    cacheCreationTokens: number;
+    /** USD cost computed from registry pricing × token usage. */
+    costUsd: number;
+    /** Whether failover occurred during composite routing. */
+    failoverOccurred: boolean;
+    /** Number of attempts before success (1 = first attempt succeeded). */
+    attempts: number;
+}
+
+/** Per-model statistics aggregated over a 5-minute window. */
+export interface ModelWindowStats {
+    modelId: string;
+    provider: string;
+    isComposite: boolean;
+    /** Total requests (all statuses). */
+    requestCount: number;
+    successCount: number;
+    errorCount: number;
+    timeoutCount: number;
+    cancelledCount: number;
+    /** Availability: successCount / (successCount + errorCount + timeoutCount). */
+    availability: number;
+    /** Latency samples for percentile computation (TTFB). */
+    ttfbSamples: number[];
+    /** Latency samples for percentile computation (TTLB). */
+    ttlbSamples: number[];
+    /** Precomputed percentiles. */
+    ttfbP50: number;
+    ttfbP90: number;
+    ttfbP99: number;
+    ttlbP50: number;
+    ttlbP90: number;
+    ttlbP99: number;
+    /** Token aggregates. */
+    totalPromptTokens: number;
+    totalCompletionTokens: number;
+    totalCachedTokens: number;
+    totalCacheCreationTokens: number;
+    /** USD cost aggregate. */
+    totalCostUsd: number;
+    /** Cache hit ratio: cachedTokens / (uncached + cached). */
+    cacheHitRatio: number;
+    /** Error type breakdown. */
+    errorTypes: Record<string, number>;
+}
+
+/**
+ * Routing distribution for a composite model: which underlying models
+ * received how many requests.
+ */
+export interface CompositeDistribution {
+    compositeModelId: string;
+    /** underlyingModelId → request count. */
+    modelCounts: Record<string, number>;
+    /** Total failover events (requests where at least one failover happened). */
+    failoverCount: number;
+    /** Total mid-stream failures. */
+    midstreamFailureCount: number;
+    /** Total attempts across all requests. */
+    totalAttempts: number;
+}
+
+/** A 5-minute time window of aggregated metrics. */
+export interface MetricsWindow {
+    /** Window start as ISO timestamp (aligned to 5-min boundary). */
+    windowStart: string;
+    /** Window end as ISO timestamp. */
+    windowEnd: string;
+    /** Per-model stats keyed by modelId. */
+    models: Record<string, ModelWindowStats>;
+    /** Composite routing distribution keyed by compositeModelId. */
+    compositeRouting: Record<string, CompositeDistribution>;
+}
+
+/** Cross-window summary for a single model. */
+export interface ModelSummary {
+    modelId: string;
+    provider: string;
+    windowCount: number;
+    totalRequests: number;
+    totalSuccess: number;
+    totalErrors: number;
+    totalTimeouts: number;
+    totalCancelled: number;
+    availability: number;
+    totalCostUsd: number;
+    totalPromptTokens: number;
+    totalCompletionTokens: number;
+    avgTtfbMs: number;
+    avgTtlbMs: number;
+    p90TtlbMs: number;
+    cacheHitRatio: number;
 }

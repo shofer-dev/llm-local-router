@@ -27,6 +27,7 @@ let config: RouterConfig = {
     defaultModel: 'deepseek-v4-pro',
     timeout: 300000,
     compositeModelsFile: '',
+    compositeModelsConfig: '',
     debug: false,
 };
 
@@ -44,6 +45,7 @@ function getConfiguration(): RouterConfig {
         defaultModel: wsConfig.get('defaultModel', 'deepseek-v4-pro'),
         timeout: wsConfig.get('timeout', 300000),
         compositeModelsFile: wsConfig.get('compositeModelsFile', ''),
+        compositeModelsConfig: wsConfig.get('compositeModelsConfig', ''),
         debug: wsConfig.get('debug', false),
     };
 }
@@ -305,21 +307,43 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void
 }
 
 /**
- * Load composite model configurations from a file if specified.
+ * Load composite model configurations from settings or a file.
+ *
+ * Priority:
+ *   1. compositeModelsFile (path to a JSON file) if set and readable
+ *   2. compositeModelsConfig (inline JSON string) if set and parseable
  */
 async function loadCompositeModels(context: vscode.ExtensionContext): Promise<void> {
-    const filePath = config.compositeModelsFile;
-    if (!filePath || !languageModelProvider) return;
+    if (!languageModelProvider) return;
 
-    try {
-        // Try to read the file via workspace FS
-        const uri = vscode.Uri.file(filePath);
-        const content = await vscode.workspace.fs.readFile(uri);
-        const models = JSON.parse(Buffer.from(content).toString('utf-8'));
-        languageModelProvider.updateCompositeModels(models);
-        getLogger().info(`Loaded composite models from ${filePath}`);
-    } catch (error) {
-        getLogger().warning(`Failed to load composite models from ${filePath}: ${error}`);
+    const filePath = config.compositeModelsFile;
+    const inlineConfig = config.compositeModelsConfig;
+
+    // Priority 1: file path
+    if (filePath) {
+        try {
+            const uri = vscode.Uri.file(filePath);
+            const content = await vscode.workspace.fs.readFile(uri);
+            const models = JSON.parse(Buffer.from(content).toString('utf-8'));
+            languageModelProvider.updateCompositeModels(models);
+            getLogger().info(`Loaded composite models from ${filePath}`);
+            return;
+        } catch (error) {
+            getLogger().warning(`Failed to load composite models from ${filePath}: ${error}. Falling back to inline config.`);
+        }
+    }
+
+    // Priority 2: inline JSON in settings
+    if (inlineConfig && inlineConfig.trim()) {
+        try {
+            const models = JSON.parse(inlineConfig);
+            if (Object.keys(models).length > 0) {
+                languageModelProvider.updateCompositeModels(models);
+                getLogger().info('Loaded composite models from inline settings (shofer.router.compositeModelsConfig)');
+            }
+        } catch (error) {
+            getLogger().warning(`Failed to parse inline composite models JSON: ${error}`);
+        }
     }
 }
 

@@ -2,7 +2,7 @@
   "name": "shofer-router",
   "displayName": "Shofer LLM Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "arkware",
   "repository": "https://github.com/arkware/arkware.ai",
   "engines": {
@@ -73,6 +73,12 @@
           "type": "string",
           "default": "",
           "description": "Path to a composite-models.json file defining arkware/* composite models"
+        },
+        "shofer.router.compositeModelsConfig": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "description": "Inline JSON configuration for composite models (arkware/*). Alternative to compositeModelsFile — paste your composite-models.json content here directly. compositeModelsFile takes precedence if both are set."
         }
       }
     },
