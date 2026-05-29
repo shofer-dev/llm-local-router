@@ -73,13 +73,13 @@
         "shofer.router.compositeModelsFile": {
           "type": "string",
           "default": "",
-          "description": "Path to a composite-models.json file defining arkware/* composite models"
+          "description": "Path to a composite-models.json file defining shofer/* composite models"
         },
         "shofer.router.compositeModelsConfig": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "description": "Inline JSON configuration for composite models (arkware/*). Alternative to compositeModelsFile — paste your composite-models.json content here directly. compositeModelsFile takes precedence if both are set."
+          "description": "Inline JSON configuration for composite models (shofer/*). Alternative to compositeModelsFile — paste your composite-models.json content here directly. compositeModelsFile takes precedence if both are set."
         },
         "shofer.router.webviewDevMode": {
           "type": "boolean",

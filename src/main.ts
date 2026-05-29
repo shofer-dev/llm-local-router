@@ -65,7 +65,7 @@ async function handleStatusBarMenu(): Promise<void> {
             },
             {
                 label: '$(gear) Configure',
-                description: 'Composite models, API keys, settings',
+                description: 'API keys, model settings, composite models',
                 action: 'configure',
             },
             {
@@ -215,7 +215,7 @@ async function connectWithRetry(): Promise<void> {
 
 async function handleConfigure(): Promise<void> {
     getLogger().info('Opening extension settings');
-    await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:arkware.shofer-router');
+    await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:Shoferdev.shofer-router');
 }
 
 async function handleConfigureWebview(): Promise<void> {
