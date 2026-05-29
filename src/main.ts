@@ -82,12 +82,18 @@ function updateStatusBar(): void {
     }
 
     const providerCount = languageModelProvider?.getConfiguredProviderCount() ?? 0;
+    const hasAnyApiKey = providerCount > 0;
     let statusText: string;
 
     if (!config.enabled) {
         statusText = '$(circle-slash) Shofer Router';
         statusBarItem.tooltip = 'Shofer Router — disabled. Click to open settings.';
         statusBarItem.backgroundColor = undefined;
+    } else if (!hasAnyApiKey) {
+        // No API keys configured — distinct state from connection failure, no retry loop
+        statusText = '$(warning) Shofer Router';
+        statusBarItem.tooltip = 'Shofer Router — no API keys configured. Click to set up providers.';
+        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else if (isConnecting) {
         statusText = '$(sync~spin) Shofer Router';
         statusBarItem.tooltip = 'Shofer Router — connecting...';
@@ -155,6 +161,25 @@ function stopConnectionRetry(): void {
 
 async function connectWithRetry(): Promise<void> {
     const logger = getLogger();
+
+    // If no API keys are configured at all, skip the retry loop entirely.
+    // Show the warning status bar icon and wait for keys to be configured
+    // via the webview or SecretStorage change listener.
+    if (!languageModelProvider || !config.enabled) {
+        isConnecting = false;
+        isConnected = false;
+        updateStatusBar();
+        return;
+    }
+
+    if (languageModelProvider.getConfiguredProviderCount() === 0) {
+        isConnecting = false;
+        isConnected = false;
+        updateStatusBar();
+        logger.info('No API keys configured — waiting for provider setup');
+        return;
+    }
+
     let currentDelay = RETRY_INITIAL_DELAY_MS;
     isConnecting = true;
     updateStatusBar();
