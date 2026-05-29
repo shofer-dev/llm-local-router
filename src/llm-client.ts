@@ -32,7 +32,6 @@ export class LLMClientError extends Error {
 
 /**
  * Compute USD cost for a response from registry pricing and token usage.
- * Mirrors llm-router's cost_stamper.go logic.
  */
 export function computeCost(
     modelId: string,

@@ -8,7 +8,6 @@
  * - reasoning_details → reasoning_content conversion for multi-turn
  *   (RooCode stores accumulated reasoning as reasoning_details)
  *
- * Ported from llm-router/internal/services/xiaomi.go.
  */
 
 import { ChatCompletionRequest, MessageRole } from '../types';

@@ -4,7 +4,6 @@
  * Zhipu uses an OpenAI-compatible API. Thinking mode is controlled via
  * extra_body.thinking toggle, and reasoning_content is natively supported.
  *
- * Ported from llm-router/internal/services/zhipu.go.
  */
 
 import { ChatCompletionRequest } from '../types';

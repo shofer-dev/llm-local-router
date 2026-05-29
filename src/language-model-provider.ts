@@ -6,8 +6,6 @@
  * integration point that makes models available to VS Code Copilot and
  * Shofer's vscode-lm handler.
  *
- * Ported from llm-provider/src/language-model-provider.ts and
- * llm-provider/src/main.ts, with the HTTP client replaced by the
  * internal ProviderRouter + CompositeService.
  */
 

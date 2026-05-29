@@ -1,7 +1,6 @@
 /**
  * Model registry — single source of truth for all model metadata.
  *
- * Ported from llm-router/internal/types/model_registry.go.
  * Prices are stored as USD per 1K tokens (matching the Go source);
  * the llm-client converts to per-1M-token form for Shofer compatibility.
  */

@@ -2,12 +2,7 @@
 
 ## Overview
 
-Shofer LLM Router is a VS Code extension that consolidates the functionality previously split across two components:
-
-1. **llm-router** (Go microservice) — Provider abstraction, protocol translation, composite model failover, Redis caching
-2. **llm-provider** (VS Code extension) — VS Code LM API bridge, side-channel commands, cost ledger
-
-The new extension eliminates the need for a separate running service by embedding all routing logic directly in the VS Code extension host, talking to each provider's API via HTTP.
+Shofer LLM Router is a self-contained VS Code extension that embeds all LLM routing logic directly in the extension host, talking to each provider's API via HTTP — no external services required.
 
 ## Architecture
 
@@ -189,7 +184,7 @@ Unhealthy models are probed after `cooldownMs` (configurable, default: 30s) by t
 
 ### 5. Model Registry (`model-registry.ts`)
 
-Single source of truth for all model metadata, ported from `llm-router/internal/types/model_registry.go`.
+Single source of truth for all model metadata.
 
 Each entry includes:
 - Model ID, name, description
@@ -294,23 +289,9 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 - Orphaned tool messages → Dropped with warning
 - Out-of-order tool messages → Reordered automatically
 
-## Differences from llm-router
-
-| Feature | llm-router Approach | shofer-router Approach |
-|---------|--------------------|----------------------|
-| Provider communication | Go HTTP client with custom transport tuning, connection pooling, HTTP/2 multiplexing, 64KB buffer pools | Node.js `fetch()` API (built into VS Code runtime) |
-| Caching | Redis-backed prompt cache + reasoning cache | No caching (direct API calls) |
-| Rate limiting | Redis-backed distributed rate limiting | In-process per-instance throttling |
-| Health monitoring | Ring buffer, Prometheus metrics, per-replica | Three-state (healthy/degraded/unhealthy) with configurable thresholds and cooldown |
-| Multi-tenancy | Designed for multiple concurrent clients | Single user (per VS Code instance) |
-| Deployment | Docker container + Redis + Kubernetes | VS Code extension (.vsix) |
-| Configuration | Environment variables in `.env` | VS Code settings + SecretStorage |
-| Observability | Prometheus metrics + OpenTelemetry tracing | VS Code output channel logging |
-| Reasoning cache | Redis-backed DeepSeek/Moonshot reasoning store | Placeholder injection ("•") for missing reasoning_content |
-
 ### 8. Metrics Collector (`metrics-collector.ts`)
 
-In-process, in-memory metrics aggregation with 5-minute aligned time windows. Replaces the Prometheus metrics subsystem from the Go `llm-router` service (which exported ~16 counters/histograms/gauges) with an equivalent in-process collector suitable for a VS Code extension.
+In-process, in-memory metrics aggregation with 5-minute aligned time windows, suitable for a VS Code extension.
 
 **Design rationale**: VS Code extensions cannot expose HTTP endpoints, so a Prometheus scrape endpoint is not feasible. Instead, metrics are aggregated in-memory and exposed via:
 - Side-channel commands (`shofer.llm.getMetrics`, `shofer.llm.exportMetrics`, etc.)

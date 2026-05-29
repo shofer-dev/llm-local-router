@@ -1,7 +1,6 @@
 /**
  * Shared types for the Shofer LLM Router extension.
  *
- * These types mirror the llm-router Go types but in idiomatic TypeScript
  * for direct use within the VSCode extension host.
  */
 

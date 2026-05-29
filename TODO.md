@@ -2,7 +2,7 @@
 - webview dashboard / cost (integrate with metrics-collector data)
 - more flexibility in failover/load-balancing/cost-control
 - can we pass an annotation back to the caller with the model actually used
-- ✅ ~~Metrics/observability ported from Go llm-router~~ — in-memory 5-min windowed metrics collector with Prometheus text export
+- ✅ ~~Metrics/observability~~ — in-memory 5-min windowed metrics collector with Prometheus text export
 - ✅ ~~Cost & token tracking by model per 5m window~~
 - ✅ ~~Reliability metrics (latency percentiles, availability, error breakdown)~~
 - ✅ ~~Composite load-balancing distribution tracking~~

@@ -25,7 +25,6 @@
  *   - Tool-call opening delta on content_block_start
  *   - Thinking blocks forwarded as reasoning_content
  *
- * Ported from llm-router/internal/services/anthropic.go.
  */
 
 import {

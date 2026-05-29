@@ -1,7 +1,6 @@
 /**
  * In-memory metrics collector with 5-minute windowed aggregation.
  *
- * Replaces the Prometheus metrics subsystem from llm-router (Go) with an
  * in-process collector suitable for a VS Code extension. Aggregates every
  * chat completion request into 5-minute aligned windows, tracking:
  *

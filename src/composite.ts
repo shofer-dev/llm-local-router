@@ -10,7 +10,6 @@
  * sent to the client, failover to a different model is not possible.
  * Only pre-first-byte failures trigger failover.
  *
- * Ported from llm-router/internal/services/composite.go.
  * Simplified: no Redis, no per-replica metrics.
  * Enhanced: smooth WRR, configurable health cooldown, degraded state.
  */

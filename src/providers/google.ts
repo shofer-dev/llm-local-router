@@ -5,7 +5,6 @@
  * a passthrough. The only transformation is forwarding reasoning_effort
  * and thinking_config parameters.
  *
- * Ported from llm-router/internal/services/google.go.
  */
 
 import { ChatCompletionRequest } from '../types';

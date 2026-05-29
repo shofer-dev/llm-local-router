@@ -6,7 +6,6 @@
  * messages (similar to DeepSeek). Without the Redis reasoning cache, we
  * inject a placeholder "•" for missing reasoning_content.
  *
- * Ported from llm-router/internal/services/moonshot.go.
  */
 
 import { ChatCompletionRequest, MessageRole } from '../types';

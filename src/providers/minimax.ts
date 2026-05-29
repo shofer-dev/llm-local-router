@@ -11,7 +11,6 @@
  *   Request:  reasoning_content → reasoning_details (what MiniMax expects)
  *   Response: reasoning_details → reasoning_content (standard format)
  *
- * Ported from llm-router/internal/services/minimax.go.
  */
 
 import { ChatCompletionRequest, ChatCompletionResponse, MessageRole } from '../types';

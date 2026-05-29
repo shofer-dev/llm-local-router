@@ -1,20 +1,6 @@
 # Shofer LLM Router
 
-A VS Code extension that provides **direct access to multiple LLM providers** with **composite model failover** — no external router service required. This extension consolidates the functionality previously split across `llm-router` (Go microservice) and `llm-provider` (VS Code extension bridge) into a single self-contained extension.
-
-## What It Does
-
-llm-provider required a running llm-router server (`localhost:30081`) to function. Shofer LLM Router eliminates that dependency by talking directly to each provider's API from within the VS Code extension host.
-
-| Concern | Previously | Now |
-|---------|-----------|-----|
-| Provider API access | llm-router (Go service) | Direct from extension |
-| VS Code LM integration | llm-provider bridge | Built-in |
-| Composite model failover | llm-router | Built-in (in-process) |
-| API key storage | llm-router `.env` file | VS Code SecretStorage |
-| Redis caching | Required (llm-router) | None needed |
-| Prompt caching | Redis-backed | N/A (direct API calls) |
-| Reasoning cache | Redis-backed | Placeholder-based fallback |
+A VS Code extension that provides **direct access to multiple LLM providers** with **composite model failover** — self-contained, no external router service required.
 
 ## Features
 
@@ -213,19 +199,6 @@ Shofer (vscode-lm handler)
          shofer.llm.getRequestCost(conversationId) → Per-conversation cost ledger
 ```
 
-## Differences from llm-provider + llm-router
-
-| Aspect | Old (llm-provider + llm-router) | New (shofer-router) |
-|--------|----------------------------------|---------------------|
-| **Dependencies** | Requires running llm-router Go service + Redis | Self-contained VS Code extension |
-| **API keys** | Centralized in llm-router `.env` | Per-user in VS Code SecretStorage |
-| **Prompt caching** | Redis-backed | Not needed (direct API calls) |
-| **Rate limiting** | Redis-backed distributed | In-process per-instance throttling |
-| **Reasoning cache** | Redis-backed | Placeholder injection fallback |
-| **Metrics** | Prometheus + OpenTelemetry | VS Code output channel logging |
-| **Multi-tenant** | Yes (shared service) | No (per-user extension) |
-| **Model registry** | Go source in llm-router | TypeScript source in extension |
-
 ## License
 
-MIT
+AGPL-3.0 — see [LICENSE](LICENSE) for the full text.

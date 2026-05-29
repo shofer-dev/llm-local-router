@@ -5,7 +5,6 @@
  * request transformations, and routes to the correct API endpoint with the
  * correct API key.
  *
- * Ported from llm-router/internal/services/provider.go, router.go, and
  * the per-provider service files.
  */
 

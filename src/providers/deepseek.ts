@@ -8,7 +8,6 @@
  *   reasoning_content to satisfy the round-trip requirement.
  * - prompt_cache_hit_tokens is mapped to the canonical cached_tokens slot.
  *
- * Ported from llm-router/internal/services/deepseek.go.
  */
 
 import { ChatCompletionRequest, ChatCompletionResponse, MessageRole } from '../types';

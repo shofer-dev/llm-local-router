@@ -5,7 +5,6 @@
  * - o-series and GPT-5.x models: remap max_tokens → max_completion_tokens
  * - Forward reasoning_effort via the request body (native OpenAI parameter)
  *
- * Ported from llm-router/internal/services/openai.go.
  */
 
 import { ChatCompletionRequest } from '../types';

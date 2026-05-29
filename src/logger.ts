@@ -3,7 +3,6 @@
  *
  * Writes to a VSCode output channel with timestamps and log levels.
  * When running outside of VS Code (e.g., unit tests), falls back to console.
- * Mirrors the llm-provider logger design.
  */
 
 export enum LogLevel {

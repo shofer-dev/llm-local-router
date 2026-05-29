@@ -2,8 +2,6 @@
  * Shofer LLM Router — Extension Entry Point
  *
  * A VS Code extension that provides direct access to multiple LLM providers
- * with composite model failover. Unlike llm-provider, this extension does
- * NOT require a separate llm-router service — it talks directly to each
  * provider's API from within the VS Code extension host.
  *
  * API keys are stored securely using VS Code's SecretStorage API.
