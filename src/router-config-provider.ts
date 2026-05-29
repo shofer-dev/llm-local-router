@@ -303,6 +303,12 @@ export class RouterConfigProvider {
       `$1${webview.asWebviewUri(vscode.Uri.file(path.join(WEBVIEW_BUILD_DIR, 'assets')))}/`,
     );
 
+    // Inject nonce attribute into <script> and <link> tags so they pass CSP.
+    // Vite's build strips nonce from the source index.html; we add it back here.
+    html = html.replace(/<script(\s)/g, `<script nonce="${nonce}"$1`);
+    html = html.replace(/<link(\s[^>]*rel=["']stylesheet["'][^>]*)>/g,
+      `<link nonce="${nonce}"$1>`);
+
     return html;
   }
 
