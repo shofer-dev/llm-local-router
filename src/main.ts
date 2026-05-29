@@ -673,9 +673,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const logger = getLogger();
     logger.info('Shofer LLM Router activating...');
 
-    // Load configuration
-    config = getConfiguration();
-
     // Load API keys from SecretStorage
     const apiKeys = await loadApiKeys(context);
 
