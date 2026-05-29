@@ -2,7 +2,7 @@
   "name": "shofer-router",
   "displayName": "Shofer LLM Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "arkware",
   "repository": "https://github.com/arkware/arkware.ai",
   "engines": {
@@ -78,7 +78,12 @@
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "description": "Inline JSON configuration for composite models (arkware/*). Alternative to compositeModelsFile — paste your composite-models.json content here directly. compositeModelsFile takes precedence if both are set."
+          "description": "Inline JSON configuration for composite models (shofer/*). Alternative to compositeModelsFile — paste your composite-models.json content here directly. compositeModelsFile takes precedence if both are set."
+        },
+        "shofer.router.webviewDevServer": {
+          "type": "string",
+          "default": "",
+          "description": "Vite dev server URL for the webview UI development (e.g., http://localhost:5173). When set, the webview proxies to this URL for HMR. Leave empty to use the built assets."
         }
       }
     },
@@ -102,6 +107,11 @@
         "command": "shofer.llm.testConnection",
         "title": "Shofer LLM Router: Test Connection",
         "description": "Test connectivity to LLM providers"
+      },
+      {
+        "command": "shofer.llm.configureWebview",
+        "title": "Shofer LLM Router: Configure Composite Models",
+        "description": "Configure composite (shofer/*) models with a visual editor"
       }
     ]
   },

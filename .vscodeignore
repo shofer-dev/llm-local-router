@@ -1,8 +1,13 @@
 .vscodeignore
 node_modules/
 src/
+webview-ui/src/
+webview-ui/node_modules/
+webview-ui/.gitignore
+webview-ui/tsconfig.json
+webview-ui/vite.config.ts
+webview-ui/package.json
 .gitignore
-*.md
 BUILD.bazel
 tsconfig.json
 *.vsix
