@@ -50,16 +50,6 @@
     "configuration": {
       "title": "Shofer LLM Router",
       "properties": {
-        "shofer.router.defaultModel": {
-          "type": "string",
-          "default": "deepseek-v4-pro",
-          "description": "Default model to use for completions"
-        },
-        "shofer.router.timeout": {
-          "type": "number",
-          "default": 300000,
-          "description": "Request timeout in milliseconds (default 5 min for long LLM responses)"
-        },
         "shofer.router.enabled": {
           "type": "boolean",
           "default": true,

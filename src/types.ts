@@ -216,8 +216,6 @@ export interface ProviderApiKeys {
 
 export interface RouterConfig {
     enabled: boolean;
-    defaultModel: string;
-    timeout: number;
     compositeModelsFile: string;
     /** Inline JSON configuration for composite models. Parsed when compositeModelsFile is not set. */
     compositeModelsConfig: string;

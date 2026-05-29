@@ -27,8 +27,6 @@ let isConnected: boolean = false;
 let isConnecting: boolean = false;
 let config: RouterConfig = {
     enabled: true,
-    defaultModel: 'deepseek-v4-pro',
-    timeout: 300000,
     compositeModelsFile: '',
     compositeModelsConfig: '',
     debug: false,
@@ -45,8 +43,6 @@ function getConfiguration(): RouterConfig {
     const wsConfig = vscode.workspace.getConfiguration('shofer.router');
     return {
         enabled: wsConfig.get('enabled', true),
-        defaultModel: wsConfig.get('defaultModel', 'deepseek-v4-pro'),
-        timeout: wsConfig.get('timeout', 300000),
         compositeModelsFile: wsConfig.get('compositeModelsFile', ''),
         compositeModelsConfig: wsConfig.get('compositeModelsConfig', ''),
         debug: wsConfig.get('debug', false),
