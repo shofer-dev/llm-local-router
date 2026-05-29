@@ -64,7 +64,12 @@ export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
   };
 
   const handleUpdateSelected = (updated: CompositeModelConfig) => {
-    setCompositeModels(compositeModels.map((m) => (m.modelId === updated.modelId ? updated : m)));
+    // Match by selectedId (the old ID), not updated.modelId (which may have changed).
+    setCompositeModels(compositeModels.map((m) => (m.modelId === selectedId ? updated : m)));
+    // If the model ID was renamed, update the selection to track the new ID.
+    if (updated.modelId !== selectedId) {
+      setSelectedId(updated.modelId);
+    }
   };
 
   const handleSave = () => {
