@@ -587,18 +587,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const testConnectionCommand = vscode.commands.registerCommand('shofer.router.testConnection', handleTestConnection);
 
     // Side-channel commands for downstream consumers (Shofer's vscode-lm provider).
-    // IMPORTANT: These command IDs are consumed by extensions/shofer and MUST
-    // stay as shofer.llm.* to avoid breaking the vscode-lm provider integration.
     const getModelPricingCommand = vscode.commands.registerCommand(
-        'shofer.llm.getModelPricing',
+        'shofer.router.getModelPricing',
         (modelId: string) => languageModelProvider?.getPricing(modelId),
     );
     const getModelCapabilitiesCommand = vscode.commands.registerCommand(
-        'shofer.llm.getModelCapabilities',
+        'shofer.router.getModelCapabilities',
         (modelId: string) => languageModelProvider?.getCapabilities(modelId),
     );
     const getRequestCostCommand = vscode.commands.registerCommand(
-        'shofer.llm.getRequestCost',
+        'shofer.router.getRequestCost',
         (conversationId: string) => languageModelProvider?.getRequestCost(conversationId),
     );
 
