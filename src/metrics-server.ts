@@ -1,5 +1,5 @@
 /**
- * Prometheus metrics HTTP server for the Shofer LLM Router extension.
+ * Prometheus metrics HTTP server for the Shofer Router extension.
  *
  * Exposes the in-memory metrics collector's `toPrometheusText()` output
  * via a minimal HTTP server on `127.0.0.1:<SHOFER_ROUTER_METRICS_PORT>`

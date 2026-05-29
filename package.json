@@ -1,6 +1,6 @@
 {
   "name": "shofer-router",
-  "displayName": "Shofer LLM Router",
+  "displayName": "Shofer Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
   "version": "0.2.2",
   "license": "AGPL-3.0-only",
@@ -33,7 +33,7 @@
     "languageModelChatProviders": [
       {
         "vendor": "shofer",
-        "displayName": "Shofer LLM Router",
+        "displayName": "Shofer Router",
         "configurationSchema": {
           "type": "object",
           "properties": {
@@ -48,7 +48,7 @@
       }
     ],
     "configuration": {
-      "title": "Shofer LLM Router",
+      "title": "Shofer Router",
       "properties": {
         "shofer.router.enabled": {
           "type": "boolean",
@@ -86,52 +86,52 @@
     "commands": [
       {
         "command": "shofer.router.configure",
-        "title": "Shofer LLM Router: Configure",
-        "description": "Configure the Shofer LLM Router settings"
+        "title": "Shofer Router: Configure",
+        "description": "Configure the Shofer Router settings"
       },
       {
         "command": "shofer.router.showModels",
-        "title": "Shofer LLM Router: Show Models",
+        "title": "Shofer Router: Show Models",
         "description": "Show available models"
       },
       {
         "command": "shofer.router.refreshModels",
-        "title": "Shofer LLM Router: Refresh Models",
+        "title": "Shofer Router: Refresh Models",
         "description": "Refresh the list of available models"
       },
       {
         "command": "shofer.router.testConnection",
-        "title": "Shofer LLM Router: Test Connection",
+        "title": "Shofer Router: Test Connection",
         "description": "Test connectivity to LLM providers"
       },
       {
         "command": "shofer.router.getMetrics",
-        "title": "Shofer LLM Router: Show Metrics",
+        "title": "Shofer Router: Show Metrics",
         "description": "Show per-model cost, latency, and reliability metrics"
       },
       {
         "command": "shofer.router.getModelStats",
-        "title": "Shofer LLM Router: Show Model Stats",
+        "title": "Shofer Router: Show Model Stats",
         "description": "Show detailed statistics for a specific model"
       },
       {
         "command": "shofer.router.exportMetrics",
-        "title": "Shofer LLM Router: Export Metrics (Prometheus)",
+        "title": "Shofer Router: Export Metrics (Prometheus)",
         "description": "Export current metrics in Prometheus text format"
       },
       {
         "command": "shofer.router.getCompositeDistribution",
-        "title": "Shofer LLM Router: Show Composite Distribution",
+        "title": "Shofer Router: Show Composite Distribution",
         "description": "Show load-balancing distribution for a composite model"
       },
       {
         "command": "shofer.router.getCostHistory",
-        "title": "Shofer LLM Router: Show Cost History",
+        "title": "Shofer Router: Show Cost History",
         "description": "Show cost breakdown by model across a selected time range"
       },
       {
         "command": "shofer.router.configureWebview",
-        "title": "Shofer LLM Router: Configure Composite Models",
+        "title": "Shofer Router: Configure Composite Models",
         "description": "Configure composite (shofer/*) models with a visual editor"
       }
     ]

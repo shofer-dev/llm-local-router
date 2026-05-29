@@ -1,5 +1,5 @@
 /**
- * Shared types for the Shofer LLM Router extension.
+ * Shared types for the Shofer Router extension.
  *
  * for direct use within the VSCode extension host.
  */

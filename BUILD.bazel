@@ -1,4 +1,4 @@
-"""Bazel build rules for Shofer LLM Router VSCode extension."""
+"""Bazel build rules for Shofer Router VSCode extension."""
 
 load("@aspect_rules_js//js:defs.bzl", "js_run_devserver")
 

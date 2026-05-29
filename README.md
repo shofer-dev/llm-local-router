@@ -1,4 +1,4 @@
-# Shofer LLM Router
+# Shofer Router
 
 A VS Code extension that provides **direct access to multiple LLM providers** with **composite model failover** — self-contained, no external router service required.
 
@@ -39,7 +39,7 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 API keys are stored securely using VS Code's `SecretStorage`. Use the VS Code command palette to set them:
 
 1. Open Command Palette (`Ctrl+Shift+P`)
-2. Run `Shofer LLM Router: Configure`
+2. Run `Shofer Router: Configure`
 3. Set API keys in VS Code settings under `shofer.router.*`
 
 The extension reads keys from SecretStorage under the keys `shofer-router.provider.{name}` (e.g., `shofer-router.provider.openai`).
@@ -123,14 +123,14 @@ Shofer's `vscode-lm` provider consumes this extension. Enable it in Shofer:
 
 ## Commands
 
-- `Shofer LLM Router: Configure` — Open extension settings
-- `Shofer LLM Router: Show Models` — Display all available models
-- `Shofer LLM Router: Refresh Models` — Refresh the model list
-- `Shofer LLM Router: Test Connection` — Test API key configuration
-- `Shofer LLM Router: Show Metrics` — Per-model cost, latency, availability metrics
-- `Shofer LLM Router: Show Model Stats` — Detailed statistics for a specific model
-- `Shofer LLM Router: Export Metrics (Prometheus)` — Export in Prometheus text format
-- `Shofer LLM Router: Show Composite Distribution` — Load-balancing distribution for composite models
+- `Shofer Router: Configure` — Open extension settings
+- `Shofer Router: Show Models` — Display all available models
+- `Shofer Router: Refresh Models` — Refresh the model list
+- `Shofer Router: Test Connection` — Test API key configuration
+- `Shofer Router: Show Metrics` — Per-model cost, latency, availability metrics
+- `Shofer Router: Show Model Stats` — Detailed statistics for a specific model
+- `Shofer Router: Export Metrics (Prometheus)` — Export in Prometheus text format
+- `Shofer Router: Show Composite Distribution` — Load-balancing distribution for composite models
 
 ## Metrics & Observability
 

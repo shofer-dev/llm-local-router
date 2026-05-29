@@ -1,5 +1,5 @@
 /**
- * Shofer LLM Router — Extension Entry Point
+ * Shofer Router — Extension Entry Point
  *
  * A VS Code extension that provides direct access to multiple LLM providers
  * provider's API from within the VS Code extension host.
@@ -62,7 +62,7 @@ function getConfiguration(): RouterConfig {
 
 async function handleStatusBarClick(): Promise<void> {
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('status');
@@ -72,7 +72,7 @@ function updateStatusBar(): void {
     if (!statusBarItem) {
         statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1);
         statusBarItem.command = 'shofer.router.statusBarClick';
-        statusBarItem.name = 'Shofer LLM Router';
+        statusBarItem.name = 'Shofer Router';
     }
 
     const providerCount = languageModelProvider?.getConfiguredProviderCount() ?? 0;
@@ -80,19 +80,19 @@ function updateStatusBar(): void {
 
     if (!config.enabled) {
         statusText = '$(circle-slash) Shofer Router';
-        statusBarItem.tooltip = 'Shofer LLM Router — disabled. Click to open settings.';
+        statusBarItem.tooltip = 'Shofer Router — disabled. Click to open settings.';
         statusBarItem.backgroundColor = undefined;
     } else if (isConnecting) {
         statusText = '$(sync~spin) Shofer Router';
-        statusBarItem.tooltip = 'Shofer LLM Router — connecting...';
+        statusBarItem.tooltip = 'Shofer Router — connecting...';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else if (!isConnected) {
         statusText = '$(warning) Shofer Router';
-        statusBarItem.tooltip = 'Shofer LLM Router — disconnected. Click for status.';
+        statusBarItem.tooltip = 'Shofer Router — disconnected. Click for status.';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else {
         statusText = `$(rocket) Shofer Router`;
-        statusBarItem.tooltip = `Shofer LLM Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured. Click for status.`;
+        statusBarItem.tooltip = `Shofer Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured. Click for status.`;
         statusBarItem.backgroundColor = undefined;
     }
 
@@ -193,7 +193,7 @@ async function connectWithRetry(): Promise<void> {
 async function handleConfigure(): Promise<void> {
     getLogger().info('Opening webview configuration panel');
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('config');
@@ -207,7 +207,7 @@ async function handleConfigureWebview(): Promise<void> {
 async function handleShowModels(): Promise<void> {
     getLogger().info('Opening webview status panel');
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('status');
@@ -216,7 +216,7 @@ async function handleShowModels(): Promise<void> {
 async function handleRefreshModels(): Promise<void> {
     const logger = getLogger();
     if (!languageModelProvider) {
-        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
         return;
     }
 
@@ -226,7 +226,7 @@ async function handleRefreshModels(): Promise<void> {
         languageModelProvider.updateConfig(config);
         const models = await languageModelProvider.fetchModels();
         updateStatusBar();
-        vscode.window.showInformationMessage(`Shofer LLM Router: ${models.length} models available`);
+        vscode.window.showInformationMessage(`Shofer Router: ${models.length} models available`);
         logger.info(`Refreshed ${models.length} models`);
     } catch (error) {
         const message = `Failed to refresh models: ${error}`;
@@ -238,7 +238,7 @@ async function handleRefreshModels(): Promise<void> {
 async function handleTestConnection(): Promise<void> {
     const logger = getLogger();
     if (!languageModelProvider) {
-        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
         return;
     }
 
@@ -250,11 +250,11 @@ async function handleTestConnection(): Promise<void> {
         if (connected) {
             const modelCount = languageModelProvider.getAvailableModels().length;
             vscode.window.showInformationMessage(
-                `Shofer LLM Router: Connected — ${modelCount} models available`
+                `Shofer Router: Connected — ${modelCount} models available`
             );
         } else {
             vscode.window.showWarningMessage(
-                'Shofer LLM Router: No API keys configured. Use "Shofer LLM Router: Configure" to set up provider API keys.'
+                'Shofer Router: No API keys configured. Use "Shofer Router: Configure" to set up provider API keys.'
             );
         }
     } catch (error) {
@@ -265,7 +265,7 @@ async function handleTestConnection(): Promise<void> {
 async function handleGetMetrics(): Promise<void> {
     getLogger().info('Opening webview metrics panel');
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('metrics');
@@ -544,7 +544,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     initMetricsCollector(storage);
 
     const logger = getLogger();
-    logger.info('Shofer LLM Router activating...');
+    logger.info('Shofer Router activating...');
 
     // Load API keys from SecretStorage
     const apiKeys = await loadApiKeys(context);
@@ -665,16 +665,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }, 5000);
     } else {
-        logger.info('Shofer LLM Router is disabled');
+        logger.info('Shofer Router is disabled');
         updateStatusBar();
     }
 
-    logger.info('Shofer LLM Router activated');
+    logger.info('Shofer Router activated');
 }
 
 export function deactivate(): void {
     const logger = getLogger();
-    logger.info('Shofer LLM Router deactivating...');
+    logger.info('Shofer Router deactivating...');
 
     stopHealthCheck();
     stopConnectionRetry();
@@ -695,5 +695,5 @@ export function deactivate(): void {
         statusBarItem.dispose();
     }
 
-    logger.info('Shofer LLM Router deactivated');
+    logger.info('Shofer Router deactivated');
 }

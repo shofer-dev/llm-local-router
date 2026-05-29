@@ -6,7 +6,7 @@
  * webview and the extension host.
  *
  * Lifecycle:
- *   1. User runs "Shofer LLM Router: Configure Webview" command
+ *   1. User runs "Shofer Router: Configure Webview" command
  *   2. Panel is created (or revealed if already open)
  *   3. Host sends initConfig with current composite models + model registry
  *   4. Webview renders the editor UI
@@ -163,7 +163,7 @@ export class RouterConfigProvider {
 
     this.panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
-      'Shofer LLM Router',
+      'Shofer Router',
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -249,7 +249,7 @@ export class RouterConfigProvider {
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'nonce-${nonce}' ${devServer} 'unsafe-inline'; style-src 'nonce-${nonce}' ${devServer} 'unsafe-inline'; font-src 'nonce-${nonce}' ${devServer} data:; img-src 'nonce-${nonce}' ${devServer} data:; connect-src ${devServer} ws://localhost:* wss://localhost:*;"
     />
-    <title>Shofer LLM Router</title>
+    <title>Shofer Router</title>
   </head>
   <body>
     <div id="root"></div>

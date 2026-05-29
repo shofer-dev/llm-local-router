@@ -204,7 +204,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         token: vscode.CancellationToken,
     ): Promise<void> {
         if (!this.config.enabled) {
-            throw new Error('Shofer LLM Router is disabled');
+            throw new Error('Shofer Router is disabled');
         }
 
         const modelId = model.id;

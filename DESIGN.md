@@ -1,8 +1,8 @@
-# Shofer LLM Router — Design Document
+# Shofer Router — Design Document
 
 ## Overview
 
-Shofer LLM Router is a self-contained VS Code extension that embeds all LLM routing logic directly in the extension host, talking to each provider's API via HTTP — no external services required.
+Shofer Router is a self-contained VS Code extension that embeds all LLM routing logic directly in the extension host, talking to each provider's API via HTTP — no external services required.
 
 ## Architecture
 
@@ -407,10 +407,10 @@ Both primary models (e.g., `deepseek-v4-pro`) and composite models (e.g., `shofe
 
 | Command | Description |
 |---------|-------------|
-| `Shofer LLM Router: Show Metrics` | Interactive model selection with current window stats |
-| `Shofer LLM Router: Show Model Stats` | Detailed stats for a specific model |
-| `Shofer LLM Router: Export Metrics (Prometheus)` | Prometheus text format export |
-| `Shofer LLM Router: Show Composite Distribution` | Load-balancing distribution for composite models |
+| `Shofer Router: Show Metrics` | Interactive model selection with current window stats |
+| `Shofer Router: Show Model Stats` | Detailed stats for a specific model |
+| `Shofer Router: Export Metrics (Prometheus)` | Prometheus text format export |
+| `Shofer Router: Show Composite Distribution` | Load-balancing distribution for composite models |
 
 ### Export Format
 

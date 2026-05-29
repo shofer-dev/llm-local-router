@@ -1,4 +1,4 @@
-- let's make configuration easier using UI `Shofer LLM Router: Configure`
+- let's make configuration easier using UI `Shofer Router: Configure`
 - webview dashboard / cost (integrate with metrics-collector data)
 - more flexibility in failover/load-balancing/cost-control
 - can we pass an annotation back to the caller with the model actually used
@@ -8,4 +8,4 @@
 - ✅ ~~Composite load-balancing distribution tracking~~
 - ✅ ~~SQLite persistence~~ — sql.js (WebAssembly), automatic window flushes, 30-day retention, cost history command
 - Add VS Code Marketplace metadata to package.json: `repository` as object with `type`, `icon` (128×128 PNG), `galleryBanner`, `homepage`, `bugs`, `pricing`, `author`, `keywords`
-- Prometheus endpoint for metrics (text export exists, needs HTTP endpoint or file write)
+66ookg, 6

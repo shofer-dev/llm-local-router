@@ -1,5 +1,5 @@
 /**
- * Webview-specific types for the Shofer LLM Router configuration UI.
+ * Webview-specific types for the Shofer Router configuration UI.
  *
  * These mirror the host-side types from ../src/types.ts but are
  * self-contained for the webview build (which does not have access
