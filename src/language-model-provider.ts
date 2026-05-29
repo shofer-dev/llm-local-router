@@ -181,9 +181,18 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
     ): Promise<vscode.LanguageModelChatInformation[]> {
         if (!this.config.enabled) return [];
 
-        const models = this.availableModels.length > 0
+        const allModels = this.availableModels.length > 0
             ? this.availableModels
             : await this.fetchModels();
+
+        // Only expose models from providers with API keys configured.
+        // Composite models (shofer/*) are always included since they
+        // route through configured underlying providers.
+        const models = allModels.filter(m => {
+            if (m.id.startsWith('shofer/')) return true;
+            const provider = getProviderForModel(m.id);
+            return provider ? this.router.hasApiKeyForProvider(provider) : false;
+        });
 
         return models.map((model, index) => ({
             id: model.id,

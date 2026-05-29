@@ -293,6 +293,14 @@ export class ProviderRouter {
     }
 
     /**
+     * Check if a specific provider has an API key configured.
+     */
+    hasApiKeyForProvider(provider: string): boolean {
+        const key = (this.apiKeys as Record<string, string | undefined>)[provider];
+        return !!key && key.length > 0;
+    }
+
+    /**
      * Count how many providers have API keys configured.
      */
     getConfiguredProviderCount(): number {
