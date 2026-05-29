@@ -17,7 +17,7 @@ type ConfigSubTab = 'composite' | 'providers';
  * Both are configuration, so they share the same top-level tab.
  */
 export default function ConfigPanel({ initialModels, modelRegistry, providers }: Props) {
-  const [subTab, setSubTab] = React.useState<ConfigSubTab>('composite');
+  const [subTab, setSubTab] = React.useState<ConfigSubTab>('providers');
 
   // Filter model registry to only show models from providers with API keys configured.
   // If no providers are configured at all, show all models (so user can build composites
@@ -35,16 +35,16 @@ export default function ConfigPanel({ initialModels, modelRegistry, providers }:
       {/* Sub-tab bar */}
       <div style={styles.subTabBar}>
         <button
-          style={subTab === 'composite' ? styles.subTabActive : styles.subTab}
-          onClick={() => setSubTab('composite')}
-        >
-          Composite Models
-        </button>
-        <button
           style={subTab === 'providers' ? styles.subTabActive : styles.subTab}
           onClick={() => setSubTab('providers')}
         >
           Primary Providers
+        </button>
+        <button
+          style={subTab === 'composite' ? styles.subTabActive : styles.subTab}
+          onClick={() => setSubTab('composite')}
+        >
+          Composite Models
         </button>
       </div>
 

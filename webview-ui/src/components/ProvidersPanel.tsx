@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ProviderConfigEntry } from '../types';
+import type { ProviderConfigEntry, ProviderPricing } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
 
 interface Props {
@@ -7,33 +7,45 @@ interface Props {
 }
 
 /**
- * Providers panel for configuring API keys and endpoint URLs per provider.
- * Compact table layout with a single "Save All" button.
+ * Two-panel provider configuration: left list of providers, right settings editor.
+ * Same layout pattern as ConfigEditor (Composite Models).
  */
 export default function ProvidersPanel({ providers }: Props) {
-  type FormState = Record<string, { apiKey: string; endpointUrl: string }>;
-
-  const [forms, setForms] = React.useState<FormState>({});
+  const [selectedId, setSelectedId] = React.useState<string | null>(
+    providers.length > 0 ? providers[0].id : null,
+  );
+  const [forms, setForms] = React.useState<Record<string, ProviderForm>>({});
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+
+  type ProviderForm = {
+    apiKey: string;
+    endpointUrl: string;
+    promptPrice: string;
+    completionPrice: string;
+    cacheReadPrice: string;
+  };
 
   // Initialize forms from provider config
   React.useEffect(() => {
-    const init: FormState = {};
+    const init: Record<string, ProviderForm> = {};
     for (const p of providers) {
-      init[p.id] = { apiKey: '', endpointUrl: p.endpointUrl };
+      init[p.id] = {
+        apiKey: '',
+        endpointUrl: p.endpointUrl,
+        promptPrice: p.pricing?.prompt?.toString() ?? '',
+        completionPrice: p.pricing?.completion?.toString() ?? '',
+        cacheReadPrice: p.pricing?.cacheRead?.toString() ?? '',
+      };
     }
     setForms(init);
   }, [providers]);
 
-  // Listen for save confirmation
   React.useEffect(() => {
     const unsub = onMessage((msg) => {
       if (msg.type === 'providerConfigSaved') {
         setSaving(false);
         setSaved(true);
-        // Clear API key fields since they were saved
         setForms((prev) => ({
           ...prev,
           [msg.provider]: { ...prev[msg.provider], apiKey: '' },
@@ -44,263 +56,262 @@ export default function ProvidersPanel({ providers }: Props) {
     return unsub;
   }, []);
 
-  const updateForm = (provId: string, field: 'apiKey' | 'endpointUrl', value: string) => {
+  const selected = providers.find((p) => p.id === selectedId) ?? null;
+  const form = selectedId ? forms[selectedId] : null;
+
+  const updateForm = (field: string, value: string) => {
+    if (!selectedId) return;
     setForms((prev) => ({
       ...prev,
-      [provId]: { ...prev[provId], [field]: value },
+      [selectedId]: { ...prev[selectedId], [field]: value },
     }));
     setSaved(false);
-    setError(null);
   };
 
-  const handleSaveAll = async () => {
-    // Collect all providers that have changed
-    const changed: Array<{ provider: string; apiKey: string; endpointUrl: string }> = [];
-    for (const p of providers) {
-      const form = forms[p.id];
-      if (!form) continue;
-      const hasApiKey = form.apiKey.trim() !== '';
-      const hasEndpointChange = form.endpointUrl !== p.endpointUrl;
-      if (hasApiKey || hasEndpointChange) {
-        changed.push({ provider: p.id, apiKey: form.apiKey, endpointUrl: form.endpointUrl });
-      }
-    }
-
-    if (changed.length === 0) {
-      setError('No changes to save.');
-      return;
-    }
-
+  const handleSave = () => {
+    if (!selectedId || !form) return;
     setSaving(true);
-    setError(null);
 
-    // Save sequentially
-    for (const c of changed) {
-      postMessage({
-        type: 'saveProvider',
-        provider: c.provider,
-        apiKey: c.apiKey,
-        endpointUrl: c.endpointUrl,
-      });
-      // Small delay between messages to avoid flooding
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    // The last providerConfigSaved message will set saving=false
+    const pricing: ProviderPricing | undefined =
+      form.promptPrice || form.completionPrice || form.cacheReadPrice
+        ? {
+            prompt: form.promptPrice ? parseFloat(form.promptPrice) : undefined,
+            completion: form.completionPrice ? parseFloat(form.completionPrice) : undefined,
+            cacheRead: form.cacheReadPrice ? parseFloat(form.cacheReadPrice) : undefined,
+          }
+        : undefined;
+
+    postMessage({
+      type: 'saveProvider',
+      provider: selectedId,
+      apiKey: form.apiKey,
+      endpointUrl: form.endpointUrl,
+      pricing,
+    });
   };
 
   if (providers.length === 0) {
     return (
       <div style={styles.empty}>
         <p style={styles.emptyIcon}>🔑</p>
-        <p>No provider configuration available.</p>
+        <p>No providers available. Add API keys in the Settings tab.</p>
       </div>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <div>
-          <h2 style={styles.title}>Provider API Keys & Endpoints</h2>
-          <p style={styles.subtitle}>
-            Keys are stored securely via the VS Code Secret Storage API (OS keychain).
-          </p>
+    <div style={{ display: 'flex', height: '100%' }}>
+      {/* Left panel: provider list */}
+      <div style={{
+        width: '260px',
+        minWidth: '200px',
+        borderRight: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
+        overflowY: 'auto',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        <div style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
+          fontSize: '11px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          color: 'var(--vscode-descriptionForeground, #999)',
+        }}>
+          Providers
         </div>
-        <div style={styles.headerActions}>
-          {error && <span style={styles.errorText}>{error}</span>}
-          <button
-            className="vscode-button"
-            onClick={handleSaveAll}
-            disabled={saving}
-            style={styles.saveAllButton}
-          >
-            {saving ? 'Saving...' : saved ? '✓ Saved' : '💾 Save All'}
-          </button>
-        </div>
+
+        {providers.map((p) => {
+          const isSelected = p.id === selectedId;
+          return (
+            <div
+              key={p.id}
+              onClick={() => setSelectedId(p.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                background: isSelected ? 'var(--vscode-list-activeSelectionBackground)' : 'transparent',
+                borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.1))',
+              }}
+            >
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.label}
+                  {p.hasApiKey && (
+                    <span style={{ color: 'var(--vscode-testing-iconPassed, #73c991)', marginLeft: '6px', fontSize: '10px' }}>●</span>
+                  )}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
+                  {p.modelCount} model{p.modelCount !== 1 ? 's' : ''}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div style={styles.tableWrapper}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Provider</th>
-              <th style={styles.th}>API Key</th>
-              <th style={styles.th}>Endpoint URL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {providers.map((p) => {
-              const form = forms[p.id] || { apiKey: '', endpointUrl: p.endpointUrl };
-              const hasCustomEndpoint = form.endpointUrl !== p.defaultEndpoint;
+      {/* Right panel: provider settings editor */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {/* Save button at top */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
+          background: 'var(--vscode-titleBar-activeBackground, rgba(0,0,0,0.1))',
+          flexShrink: 0,
+        }}>
+          <button className="vscode-button" onClick={handleSave} disabled={saving || !selected}>
+            {saving ? 'Saving...' : saved ? '✓ Saved' : '💾 Save'}
+          </button>
+        </div>
 
-              return (
-                <tr key={p.id}>
-                  <td style={styles.td}>
-                    <div style={styles.providerCell}>
-                      <span style={styles.providerName}>{p.label}</span>
-                      {p.hasApiKey && !form.apiKey && (
-                        <span style={styles.configuredBadge}>●</span>
-                      )}
-                      <span style={styles.modelCount}>
-                        {p.modelCount} model{p.modelCount !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <input
-                      type="password"
-                      style={styles.input}
-                      value={form.apiKey}
-                      onChange={(e) => updateForm(p.id, 'apiKey', e.target.value)}
-                      placeholder={p.hasApiKey ? '(stored)' : 'sk-...'}
-                    />
-                  </td>
-                  <td style={styles.td}>
-                    <div style={styles.endpointCell}>
-                      <input
-                        type="text"
-                        style={{
-                          ...styles.input,
-                          borderColor: hasCustomEndpoint
-                            ? 'var(--vscode-focusBorder, #007acc)'
-                            : undefined,
-                        }}
-                        value={form.endpointUrl}
-                        onChange={(e) => updateForm(p.id, 'endpointUrl', e.target.value)}
-                        placeholder={p.defaultEndpoint}
-                      />
-                      {hasCustomEndpoint && (
-                        <button
-                          style={styles.resetBtn}
-                          onClick={() => updateForm(p.id, 'endpointUrl', p.defaultEndpoint)}
-                          title="Reset to default"
-                        >
-                          ↺
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* Settings form */}
+        {selected && form ? (
+          <div style={{ padding: '12px', overflowY: 'auto' }}>
+            {/* API Key */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={styles.fieldLabel}>API Key</label>
+              <input
+                type="password"
+                className="vscode-input"
+                style={{ width: '100%' }}
+                value={form.apiKey}
+                onChange={(e) => updateForm('apiKey', e.target.value)}
+                placeholder={selected.hasApiKey ? '(stored — enter to change)' : 'sk-...'}
+              />
+            </div>
+
+            {/* Endpoint URL */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={styles.fieldLabel}>Endpoint URL</label>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input
+                  type="text"
+                  className="vscode-input"
+                  style={{ flex: 1 }}
+                  value={form.endpointUrl}
+                  onChange={(e) => updateForm('endpointUrl', e.target.value)}
+                  placeholder={selected.defaultEndpoint}
+                />
+                {form.endpointUrl !== selected.defaultEndpoint && (
+                  <button
+                    className="vscode-button"
+                    style={{ fontSize: '11px', padding: '2px 6px' }}
+                    onClick={() => updateForm('endpointUrl', selected.defaultEndpoint)}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Pricing overrides */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ ...styles.fieldLabel, marginBottom: '6px' }}>
+                Pricing Overrides (USD per 1M tokens)
+              </label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 120px' }}>
+                  <label style={styles.subLabel}>Prompt ($/1M)</label>
+                  <input
+                    type="number"
+                    className="vscode-input"
+                    style={{ width: '100%' }}
+                    value={form.promptPrice}
+                    onChange={(e) => updateForm('promptPrice', e.target.value)}
+                    placeholder={selected.defaultPricing?.prompt?.toString() ?? '—'}
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+                <div style={{ flex: '1 1 120px' }}>
+                  <label style={styles.subLabel}>Completion ($/1M)</label>
+                  <input
+                    type="number"
+                    className="vscode-input"
+                    style={{ width: '100%' }}
+                    value={form.completionPrice}
+                    onChange={(e) => updateForm('completionPrice', e.target.value)}
+                    placeholder={selected.defaultPricing?.completion?.toString() ?? '—'}
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+                <div style={{ flex: '1 1 120px' }}>
+                  <label style={styles.subLabel}>Cache Read ($/1M)</label>
+                  <input
+                    type="number"
+                    className="vscode-input"
+                    style={{ width: '100%' }}
+                    value={form.cacheReadPrice}
+                    onChange={(e) => updateForm('cacheReadPrice', e.target.value)}
+                    placeholder={selected.defaultPricing?.cacheRead?.toString() ?? '—'}
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '4px' }}>
+                Leave blank to use default pricing from the model registry.
+              </div>
+            </div>
+
+            {/* Provider models info */}
+            <div style={{
+              padding: '8px',
+              border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
+              borderRadius: '2px',
+              fontSize: '11px',
+              color: 'var(--vscode-descriptionForeground, #999)',
+            }}>
+              <strong>{selected.label}</strong> — {selected.modelCount} model{selected.modelCount !== 1 ? 's' : ''} available.
+              Keys are stored via VS Code SecretStorage (OS keychain).
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: 'var(--vscode-descriptionForeground, #999)',
+            fontSize: '13px',
+          }}>
+            Select a provider from the list.
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    padding: '16px',
-    fontFamily: 'var(--vscode-font-family)',
-    fontSize: '12px',
-    color: 'var(--vscode-foreground)',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px',
-  },
-  headerActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    flexShrink: 0,
-    marginTop: '2px',
-  },
-  title: {
-    margin: '0 0 2px',
-    fontSize: '16px',
-    fontWeight: 600,
-  },
-  subtitle: {
-    margin: 0,
+  fieldLabel: {
+    display: 'block',
+    marginBottom: '4px',
     fontSize: '11px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
     color: 'var(--vscode-descriptionForeground, #999)',
   },
-  saveAllButton: {
-    padding: '6px 16px',
-    fontSize: '12px',
-    fontWeight: 600,
-  },
-  errorText: {
-    fontSize: '11px',
-    color: 'var(--vscode-inputValidation-errorForeground, #f48771)',
-  },
-  tableWrapper: {
-    overflowX: 'auto',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse' as const,
-    fontSize: '12px',
-  },
-  th: {
-    textAlign: 'left' as const,
-    padding: '6px 8px',
-    borderBottom: '1px solid var(--vscode-panel-border)',
-    fontWeight: 600,
-    whiteSpace: 'nowrap' as const,
-    color: 'var(--vscode-descriptionForeground)',
-    fontSize: '11px',
-  },
-  td: {
-    padding: '4px 8px',
-    borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.15))',
-    verticalAlign: 'middle' as const,
-  },
-  providerCell: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    whiteSpace: 'nowrap' as const,
-  },
-  providerName: {
-    fontWeight: 600,
-    fontSize: '13px',
-  },
-  configuredBadge: {
-    color: 'var(--vscode-testing-iconPassed, #73c991)',
-    fontSize: '10px',
-  },
-  modelCount: {
+  subLabel: {
+    display: 'block',
+    marginBottom: '2px',
     fontSize: '10px',
     color: 'var(--vscode-descriptionForeground, #999)',
-  },
-  input: {
-    width: '100%',
-    padding: '3px 6px',
-    fontSize: '12px',
-    fontFamily: 'var(--vscode-editor-font-family, monospace)',
-    color: 'var(--vscode-input-foreground)',
-    backgroundColor: 'var(--vscode-input-background)',
-    border: '1px solid var(--vscode-input-border, var(--vscode-panel-border))',
-    borderRadius: '3px',
-    outline: 'none',
-    boxSizing: 'border-box' as const,
-  },
-  endpointCell: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  resetBtn: {
-    background: 'none',
-    border: 'none',
-    color: 'var(--vscode-descriptionForeground, #999)',
-    cursor: 'pointer',
-    fontSize: '14px',
-    padding: '0 2px',
-    flexShrink: 0,
   },
   empty: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100vh',
+    height: '100%',
     color: 'var(--vscode-descriptionForeground)',
     textAlign: 'center',
   },

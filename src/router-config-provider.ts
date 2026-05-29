@@ -98,6 +98,8 @@ interface ProviderConfigEntry {
   endpointUrl: string;
   defaultEndpoint: string;
   modelCount: number;
+  pricing?: { prompt?: number; completion?: number; cacheRead?: number };
+  defaultPricing?: { prompt?: number; completion?: number; cacheRead?: number };
 }
 
 interface MetricsPayload {
@@ -151,7 +153,7 @@ type WebviewMessage =
   | { type: 'validateConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'exportConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'importConfig' }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string };
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number } };
 
 // ─── Constants ─────────────────────────────────────────────────────
 
@@ -574,12 +576,22 @@ export class RouterConfigProvider {
       try {
         const key = await this.context.secrets.get(`shofer-router.provider.${id}`);
         const ep = await this.context.secrets.get(`shofer-router.provider.${id}.endpoint`);
+        const pricingRaw = await this.context.secrets.get(`shofer-router.provider.${id}.pricing`);
+        const pricing = pricingRaw ? JSON.parse(pricingRaw) : undefined;
         const modelCount = models.filter((m) => {
           for (const entry of ALL_MODELS) {
             if (entry.id === m.id) return entry.provider === id;
           }
           return false;
         }).length;
+
+        // Get default pricing from registry
+        const registryEntry = ALL_MODELS.find(e => e.provider === id);
+        const defaultPricing = registryEntry?.pricing ? {
+          prompt: (registryEntry.pricing.prompt ?? 0) * 1000,
+          completion: (registryEntry.pricing.completion ?? 0) * 1000,
+          cacheRead: (registryEntry.pricing.contextCacheRead ?? 0) * 1000,
+        } : undefined;
 
         providers.push({
           id,
@@ -588,6 +600,8 @@ export class RouterConfigProvider {
           endpointUrl: ep || def.defaultEndpoint,
           defaultEndpoint: def.defaultEndpoint,
           modelCount,
+          pricing,
+          defaultPricing,
         });
       } catch {
         providers.push({
@@ -608,7 +622,7 @@ export class RouterConfigProvider {
    * Handle saving a provider's API key and endpoint URL.
    * Both are stored in VS Code SecretStorage (OS keychain).
    */
-  private async handleSaveProvider(provider: string, apiKey: string, endpointUrl: string): Promise<void> {
+  private async handleSaveProvider(provider: string, apiKey: string, endpointUrl: string, pricing?: { prompt?: number; completion?: number; cacheRead?: number }): Promise<void> {
     const logger = (await import('./logger')).getLogger();
 
     try {
@@ -629,6 +643,15 @@ export class RouterConfigProvider {
         logger.info(`Saved custom endpoint for ${provider}: ${endpointUrl}`);
       } else {
         await this.context.secrets.delete(endpointSecretKey);
+      }
+
+      // Store or delete pricing overrides in SecretStorage
+      const pricingSecretKey = `shofer-router.provider.${provider}.pricing`;
+      if (pricing && (pricing.prompt || pricing.completion || pricing.cacheRead)) {
+        await this.context.secrets.store(pricingSecretKey, JSON.stringify(pricing));
+        logger.info(`Saved pricing overrides for ${provider}`);
+      } else {
+        await this.context.secrets.delete(pricingSecretKey);
       }
 
       // Reload API keys and endpoint URLs in the language model provider

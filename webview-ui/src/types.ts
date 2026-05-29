@@ -133,6 +133,15 @@ export interface StatusPayload {
 
 // ─── Provider config ────────────────────────────────────────────
 
+export interface ProviderPricing {
+  /** USD per 1M prompt tokens */
+  prompt?: number;
+  /** USD per 1M completion tokens */
+  completion?: number;
+  /** USD per 1M cache read tokens */
+  cacheRead?: number;
+}
+
 export interface ProviderConfigEntry {
   id: string;
   label: string;
@@ -140,6 +149,10 @@ export interface ProviderConfigEntry {
   endpointUrl: string;
   defaultEndpoint: string;
   modelCount: number;
+  /** Manual pricing overrides (USD per 1M tokens) */
+  pricing?: ProviderPricing;
+  /** Default pricing from the registry (USD per 1M tokens) */
+  defaultPricing?: ProviderPricing;
 }
 
 // ─── Host → Webview messages ────────────────────────────────────
@@ -168,4 +181,4 @@ export type WebviewMessage =
   | { type: 'exportConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'importConfig' }
   | { type: 'testModel'; modelId: string }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string };
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing };
