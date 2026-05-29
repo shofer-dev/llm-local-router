@@ -15,6 +15,7 @@ import { loadApiKeys, loadEndpointUrls, onApiKeysChanged } from './secret-storag
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
 import { startMetricsServer, stopMetricsServer } from './metrics-server';
+import { ProviderHealthChecker, ProviderHealthState } from './health-checker';
 
 // ─── Extension state ──────────────────────────────────────────────
 
@@ -23,8 +24,10 @@ let routerConfigProvider: RouterConfigProvider | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let healthCheckInterval: NodeJS.Timeout | undefined;
 let connectionRetryTimeout: NodeJS.Timeout | undefined;
+let healthChecker: ProviderHealthChecker | undefined;
 let isConnected: boolean = false;
 let isConnecting: boolean = false;
+let providerHealth: Map<string, boolean> = new Map();
 let config: RouterConfig = {
     enabled: true,
     compositeModelsFile: '',
@@ -38,12 +41,6 @@ const RETRY_MAX_DELAY_MS = 300_000;
 const RETRY_BACKOFF_MULTIPLIER = 2;
 
 // ─── Configuration ────────────────────────────────────────────────
-//
-// Settings are read from VS Code settings.json (persistence layer)
-// but there is no "configuration" contribution in package.json —
-// meaning no UI in VS Code's settings editor. All configuration is
-// managed through the webview Config tab, which writes to settings
-// programmatically via vscode.workspace.getConfiguration().update().
 
 function getConfiguration(): RouterConfig {
     const wsConfig = vscode.workspace.getConfiguration('shofer.router');
@@ -56,15 +53,6 @@ function getConfiguration(): RouterConfig {
 }
 
 // ─── Status bar ───────────────────────────────────────────────────
-//
-// A status bar icon-button in the bottom-right corner shows the
-// router's health state. Clicking it opens the webview panel
-// directly to the Status tab.
-//
-// **Why not floating?** VS Code does not support floating UI
-// elements. Status bar items are the standard anchor for extension
-// status indicators (#2 most common after activity bar icons).
-// The shofer extension itself uses an activity bar icon.
 
 async function handleStatusBarClick(): Promise<void> {
     if (!routerConfigProvider) {
@@ -83,6 +71,8 @@ function updateStatusBar(): void {
 
     const providerCount = languageModelProvider?.getConfiguredProviderCount() ?? 0;
     const hasAnyApiKey = providerCount > 0;
+    const healthyCount = [...providerHealth.values()].filter(h => h).length;
+    const totalMonitored = providerHealth.size;
     let statusText: string;
 
     if (!config.enabled) {
@@ -90,7 +80,6 @@ function updateStatusBar(): void {
         statusBarItem.tooltip = 'Shofer Router — disabled. Click to open settings.';
         statusBarItem.backgroundColor = undefined;
     } else if (!hasAnyApiKey) {
-        // No API keys configured — distinct state from connection failure, no retry loop
         statusText = '$(warning) Shofer Router';
         statusBarItem.tooltip = 'Shofer Router — no API keys configured. Click to set up providers.';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
@@ -98,13 +87,17 @@ function updateStatusBar(): void {
         statusText = '$(sync~spin) Shofer Router';
         statusBarItem.tooltip = 'Shofer Router — connecting...';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    } else if (!isConnected) {
-        statusText = '$(warning) Shofer Router';
-        statusBarItem.tooltip = 'Shofer Router — disconnected. Click for status.';
-        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    } else if (totalMonitored > 0 && healthyCount === 0) {
+        statusText = '$(error) Shofer Router';
+        statusBarItem.tooltip = 'Shofer Router — all providers unreachable. Click for status.';
+        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     } else {
-        statusText = `$(rocket) Shofer Router`;
-        statusBarItem.tooltip = `Shofer Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured. Click for status.`;
+        statusText = '$(rocket) Shofer Router';
+        if (totalMonitored > 0) {
+            statusBarItem.tooltip = `Shofer Router — ${healthyCount}/${totalMonitored} provider${totalMonitored !== 1 ? 's' : ''} healthy. Click for status.`;
+        } else {
+            statusBarItem.tooltip = `Shofer Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured. Click for status.`;
+        }
         statusBarItem.backgroundColor = undefined;
     }
 
@@ -162,9 +155,6 @@ function stopConnectionRetry(): void {
 async function connectWithRetry(): Promise<void> {
     const logger = getLogger();
 
-    // If no API keys are configured at all, skip the retry loop entirely.
-    // Show the warning status bar icon and wait for keys to be configured
-    // via the webview or SecretStorage change listener.
     if (!languageModelProvider || !config.enabled) {
         isConnecting = false;
         isConnected = false;
@@ -219,6 +209,50 @@ async function connectWithRetry(): Promise<void> {
     await attemptConnection();
 }
 
+// ─── Health checker (TCP keepalive) ────────────────────────────────
+
+function connectHealthChecker(): void {
+    if (!healthChecker || !languageModelProvider) return;
+
+    const configuredProviders = new Set<string>();
+    const models = languageModelProvider.getAvailableModels();
+    for (const m of models) {
+        if (m.id.startsWith('shofer/')) continue;
+        configuredProviders.add(m.family || m.id.split('-')[0]);
+    }
+
+    // Disconnect providers that are no longer configured
+    for (const [p] of providerHealth) {
+        if (!configuredProviders.has(p)) {
+            healthChecker.disconnect(p);
+            providerHealth.delete(p);
+        }
+    }
+
+    // Connect newly configured providers
+    for (const p of configuredProviders) {
+        if (!providerHealth.has(p)) {
+            const url = getDefaultEndpoint(p);
+            if (url) healthChecker.connect(p, url);
+        }
+    }
+}
+
+function getDefaultEndpoint(provider: string): string {
+    const defaults: Record<string, string> = {
+        openai: 'https://api.openai.com',
+        anthropic: 'https://api.anthropic.com',
+        google: 'https://generativelanguage.googleapis.com',
+        deepseek: 'https://api.deepseek.com',
+        minimax: 'https://api.minimax.io',
+        moonshot: 'https://api.moonshot.cn',
+        xiaomi: 'https://api.xiaomimimo.com',
+        zhipu: 'https://open.bigmodel.cn',
+        openrouter: 'https://openrouter.ai',
+    };
+    return defaults[provider] || '';
+}
+
 // ─── Commands ─────────────────────────────────────────────────────
 
 async function handleConfigure(): Promise<void> {
@@ -231,7 +265,6 @@ async function handleConfigure(): Promise<void> {
 }
 
 async function handleConfigureWebview(): Promise<void> {
-    // Legacy alias for handleConfigure — open the config tab
     await handleConfigure();
 }
 
@@ -426,7 +459,6 @@ async function handleGetCompositeDistribution(compositeId?: string): Promise<voi
 
     const lines = [`=== ${compositeId} Routing Distribution ===`, ''];
 
-    // Aggregate across all windows
     const totalCounts: Record<string, number> = {};
     let totalFailover = 0;
     let totalAttempts = 0;
@@ -483,7 +515,6 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void
 
     config = newConfig;
 
-    // Handle Prometheus endpoint toggle
     if (prometheusChanged) {
         const wsConfig = vscode.workspace.getConfiguration('shofer.router');
         if (wsConfig.get('experimental.prometheusEndpoint', false)) {
@@ -512,20 +543,12 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void
     updateStatusBar();
 }
 
-/**
- * Load composite model configurations from settings or a file.
- *
- * Priority:
- *   1. compositeModelsFile (path to a JSON file) if set and readable
- *   2. compositeModelsConfig (inline JSON string) if set and parseable
- */
 async function loadCompositeModels(context: vscode.ExtensionContext): Promise<void> {
     if (!languageModelProvider) return;
 
     const filePath = config.compositeModelsFile;
     const inlineConfig = config.compositeModelsConfig;
 
-    // Priority 1: file path
     if (filePath) {
         try {
             const uri = vscode.Uri.file(filePath);
@@ -539,7 +562,6 @@ async function loadCompositeModels(context: vscode.ExtensionContext): Promise<vo
         }
     }
 
-    // Priority 2: inline JSON in settings
     if (inlineConfig && inlineConfig.trim()) {
         try {
             const models = JSON.parse(inlineConfig);
@@ -554,22 +576,18 @@ async function loadCompositeModels(context: vscode.ExtensionContext): Promise<vo
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    // Initialize logger — uses a dedicated "Shofer Router" output channel
     const wsConfig = vscode.workspace.getConfiguration('shofer.router');
     const debugEnabled = wsConfig.get('debug', false);
     initLogger('Shofer Router', debugEnabled);
 
-    // Show status bar immediately — it updates as state changes
     config = getConfiguration();
     updateStatusBar();
 
-    // Initialize metrics collector with SQLite persistence
     const dbPath = vscode.Uri.joinPath(context.globalStorageUri, 'metrics.db').fsPath;
     let storage: MetricsStorage | undefined;
     try {
         storage = await MetricsStorage.create(dbPath);
     } catch (err) {
-        // Storage initialization failure is non-fatal — metrics still work in-memory
         getLogger().warning(`Failed to initialize metrics storage: ${err}`);
     }
     initMetricsCollector(storage);
@@ -577,35 +595,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const logger = getLogger();
     logger.info('Shofer Router activating...');
 
-    // Load API keys from SecretStorage
     const apiKeys = await loadApiKeys(context);
     const endpointUrls = await loadEndpointUrls(context);
 
-    // Create the language model provider
     languageModelProvider = new LanguageModelProvider(config);
     languageModelProvider.updateApiKeys(apiKeys as Record<string, string | undefined>);
     languageModelProvider.updateEndpointUrls(endpointUrls);
 
-    // Load composite model configs if specified
     await loadCompositeModels(context);
 
-    // Fetch models immediately
     try {
         await languageModelProvider.fetchModels();
     } catch (err) {
         logger.warning(`Initial model fetch failed: ${err}`);
     }
 
-    // Create the webview config provider
+    // Initialize TCP keepalive health checker
+    healthChecker = new ProviderHealthChecker();
+    healthChecker.onChange((state: ProviderHealthState) => {
+        providerHealth.set(state.provider, state.healthy);
+        updateStatusBar();
+    });
+    connectHealthChecker();
+
     routerConfigProvider = new RouterConfigProvider(languageModelProvider, context);
 
-    // Register language model chat provider
     const providerDisposable = vscode.lm.registerLanguageModelChatProvider(
         'shofer',
         languageModelProvider,
     );
 
-    // Register commands
     const statusBarClickCommand = vscode.commands.registerCommand('shofer.router.statusBarClick', handleStatusBarClick);
     const configureCommand = vscode.commands.registerCommand('shofer.router.configure', handleConfigure);
     const configureWebviewCommand = vscode.commands.registerCommand('shofer.router.configureWebview', handleConfigureWebview);
@@ -613,7 +632,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const refreshModelsCommand = vscode.commands.registerCommand('shofer.router.refreshModels', handleRefreshModels);
     const testConnectionCommand = vscode.commands.registerCommand('shofer.router.testConnection', handleTestConnection);
 
-    // Side-channel commands for downstream consumers (Shofer's vscode-lm provider).
     const getModelPricingCommand = vscode.commands.registerCommand(
         'shofer.router.getModelPricing',
         (modelId: string) => languageModelProvider?.getPricing(modelId),
@@ -627,44 +645,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         (conversationId: string) => languageModelProvider?.getRequestCost(conversationId),
     );
 
-    // Metrics commands
-    const getMetricsCommand = vscode.commands.registerCommand(
-        'shofer.router.getMetrics',
-        handleGetMetrics,
-    );
-    const getModelStatsCommand = vscode.commands.registerCommand(
-        'shofer.router.getModelStats',
-        handleGetModelStats,
-    );
-    const exportMetricsCommand = vscode.commands.registerCommand(
-        'shofer.router.exportMetrics',
-        handleExportMetrics,
-    );
-    const getCompositeDistributionCommand = vscode.commands.registerCommand(
-        'shofer.router.getCompositeDistribution',
-        handleGetCompositeDistribution,
-    );
-    const getCostHistoryCommand = vscode.commands.registerCommand(
-        'shofer.router.getCostHistory',
-        handleGetCostHistory,
-    );
+    const getMetricsCommand = vscode.commands.registerCommand('shofer.router.getMetrics', handleGetMetrics);
+    const getModelStatsCommand = vscode.commands.registerCommand('shofer.router.getModelStats', handleGetModelStats);
+    const exportMetricsCommand = vscode.commands.registerCommand('shofer.router.exportMetrics', handleExportMetrics);
+    const getCompositeDistributionCommand = vscode.commands.registerCommand('shofer.router.getCompositeDistribution', handleGetCompositeDistribution);
+    const getCostHistoryCommand = vscode.commands.registerCommand('shofer.router.getCostHistory', handleGetCostHistory);
 
-    // Configuration change listener
     const configChangeListener = vscode.workspace.onDidChangeConfiguration(handleConfigurationChange);
 
-    // SecretStorage change listener (reload API keys when changed)
     const secretsListener = onApiKeysChanged(context, async () => {
         logger.info('API keys changed, reloading...');
         const keys = await loadApiKeys(context);
         const eps = await loadEndpointUrls(context);
         languageModelProvider?.updateApiKeys(keys as Record<string, string | undefined>);
         languageModelProvider?.updateEndpointUrls(eps);
+        await languageModelProvider?.fetchModels();
+        connectHealthChecker();
         if (config.enabled && !isConnected) {
             connectWithRetry();
         }
     });
 
-    // Register disposables
     context.subscriptions.push(
         providerDisposable,
         statusBarClickCommand,
@@ -688,7 +689,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (config.enabled) {
         connectWithRetry();
 
-        // Verify model availability after a delay
         setTimeout(async () => {
             try {
                 const availableModels = await vscode.lm.selectChatModels({ vendor: 'shofer' });
@@ -712,10 +712,13 @@ export function deactivate(): void {
     stopHealthCheck();
     stopConnectionRetry();
 
-    // Flush metrics to storage before shutdown
+    if (healthChecker) {
+        healthChecker.dispose();
+        healthChecker = undefined;
+    }
+
     shutdownMetricsCollector();
 
-    // Stop Prometheus metrics server
     stopMetricsServer().catch(err =>
         logger.warning(`Failed to stop Prometheus metrics server: ${err}`)
     );
