@@ -81,6 +81,13 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
     }
 
     /**
+     * Update custom provider endpoint URLs from SecretStorage.
+     */
+    updateEndpointUrls(urls: Record<string, string>): void {
+        this.router.updateEndpointUrls(urls);
+    }
+
+    /**
      * Update composite model configurations.
      */
     updateCompositeModels(models: Record<string, any>): void {

@@ -74,6 +74,7 @@ interface ProviderHandler {
 
 export class ProviderRouter {
     private apiKeys: ProviderApiKeys = {};
+    private endpointUrls: Record<string, string> = {};
     private compositeModels: Record<string, CompositeModelConfig> = {};
     private handlerCache = new Map<ProviderType, ProviderHandler>();
 
@@ -138,6 +139,10 @@ export class ProviderRouter {
         this.apiKeys = keys as ProviderApiKeys;
     }
 
+    updateEndpointUrls(urls: Record<string, string>): void {
+        this.endpointUrls = urls;
+    }
+
     updateCompositeModels(models: Record<string, CompositeModelConfig>): void {
         this.compositeModels = models;
     }
@@ -154,6 +159,13 @@ export class ProviderRouter {
      * Determine the resolved provider for a model ID.
      * Composite models (shofer/*) are handled by the composite layer, not here.
      */
+    /**
+     * Resolve the effective base URL for a provider, preferring custom over default.
+     */
+    private getBaseUrl(provider: ProviderType): string {
+        return this.endpointUrls[provider] || PROVIDER_BASE_URLS[provider];
+    }
+
     resolveProvider(modelId: string): { provider: ProviderType; modelId: string; baseUrl: string } | undefined {
         // Check if it's a composite model
         if (modelId.startsWith('shofer/') && this.compositeModels[modelId]) {
@@ -166,7 +178,7 @@ export class ProviderRouter {
                 return {
                     provider,
                     modelId: firstModelId,
-                    baseUrl: PROVIDER_BASE_URLS[provider],
+                    baseUrl: this.getBaseUrl(provider),
                 };
             }
             return undefined;
@@ -178,14 +190,14 @@ export class ProviderRouter {
             return {
                 provider: ProviderType.OpenRouter,
                 modelId,
-                baseUrl: PROVIDER_BASE_URLS[ProviderType.OpenRouter],
+                baseUrl: this.getBaseUrl(ProviderType.OpenRouter),
             };
         }
 
         return {
             provider,
             modelId,
-            baseUrl: PROVIDER_BASE_URLS[provider],
+            baseUrl: this.getBaseUrl(provider),
         };
     }
 

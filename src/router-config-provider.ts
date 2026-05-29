@@ -542,20 +542,20 @@ export class RouterConfigProvider {
 
   /**
    * Build and send provider configuration to the webview.
+   * API keys and endpoint URLs are both read from SecretStorage.
    */
   private async sendProviderConfig(): Promise<void> {
     if (!this.panel) return;
 
     const providerIds = Object.keys(PROVIDER_DEFAULTS);
     const models = this.languageModelProvider.getAvailableModels();
-    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
-    const customEndpoints = wsConfig.get<Record<string, string>>('providerEndpoints', {});
 
     const providers: ProviderConfigEntry[] = [];
     for (const id of providerIds) {
       const def = PROVIDER_DEFAULTS[id];
       try {
         const key = await this.context.secrets.get(`shofer-router.provider.${id}`);
+        const ep = await this.context.secrets.get(`shofer-router.provider.${id}.endpoint`);
         const modelCount = models.filter((m) => {
           for (const entry of ALL_MODELS) {
             if (entry.id === m.id) return entry.provider === id;
@@ -567,7 +567,7 @@ export class RouterConfigProvider {
           id,
           label: def.label,
           hasApiKey: !!key,
-          endpointUrl: customEndpoints[id] || def.defaultEndpoint,
+          endpointUrl: ep || def.defaultEndpoint,
           defaultEndpoint: def.defaultEndpoint,
           modelCount,
         });
@@ -576,7 +576,7 @@ export class RouterConfigProvider {
           id,
           label: def.label,
           hasApiKey: false,
-          endpointUrl: customEndpoints[id] || def.defaultEndpoint,
+          endpointUrl: def.defaultEndpoint,
           defaultEndpoint: def.defaultEndpoint,
           modelCount: 0,
         });
@@ -588,11 +588,13 @@ export class RouterConfigProvider {
 
   /**
    * Handle saving a provider's API key and endpoint URL.
+   * Both are stored in VS Code SecretStorage (OS keychain).
    */
   private async handleSaveProvider(provider: string, apiKey: string, endpointUrl: string): Promise<void> {
     const logger = (await import('./logger')).getLogger();
 
     try {
+      // Store or delete API key
       if (apiKey.trim()) {
         await storeApiKey(this.context, provider, apiKey.trim());
         logger.info(`Saved API key for ${provider}`);
@@ -601,21 +603,22 @@ export class RouterConfigProvider {
         logger.info(`Deleted API key for ${provider}`);
       }
 
+      // Store or delete endpoint URL in SecretStorage
       const def = PROVIDER_DEFAULTS[provider];
-      const wsConfig = vscode.workspace.getConfiguration('shofer.router');
-      const endpoints = { ...wsConfig.get<Record<string, string>>('providerEndpoints', {}) };
-
+      const endpointSecretKey = `shofer-router.provider.${provider}.endpoint`;
       if (endpointUrl.trim() && endpointUrl !== def?.defaultEndpoint) {
-        endpoints[provider] = endpointUrl;
+        await this.context.secrets.store(endpointSecretKey, endpointUrl.trim());
+        logger.info(`Saved custom endpoint for ${provider}: ${endpointUrl}`);
       } else {
-        delete endpoints[provider];
+        await this.context.secrets.delete(endpointSecretKey);
       }
 
-      await wsConfig.update('providerEndpoints', endpoints, vscode.ConfigurationTarget.Global);
-
-      const { loadApiKeys } = await import('./secret-storage');
+      // Reload API keys and endpoint URLs in the language model provider
+      const { loadApiKeys, loadEndpointUrls } = await import('./secret-storage');
       const keys = await loadApiKeys(this.context);
+      const eps = await loadEndpointUrls(this.context);
       this.languageModelProvider.updateApiKeys(keys as Record<string, string | undefined>);
+      this.languageModelProvider.updateEndpointUrls(eps);
 
       this.panel?.webview.postMessage({ type: 'providerConfigSaved', provider });
       logger.info(`Provider config saved for ${provider}`);

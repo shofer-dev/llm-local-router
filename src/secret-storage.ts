@@ -60,6 +60,31 @@ export async function storeApiKey(
 /**
  * Delete an API key for a provider from SecretStorage.
  */
+/**
+ * Load all custom endpoint URLs from SecretStorage.
+ * Stored under keys: shofer-router.provider.{name}.endpoint
+ */
+export async function loadEndpointUrls(context: vscode.ExtensionContext): Promise<Record<string, string>> {
+    const logger = getLogger();
+    const urls: Record<string, string> = {};
+    const providers = Object.values(ProviderType);
+
+    for (const provider of providers) {
+        try {
+            const epKey = `shofer-router.provider.${provider}.endpoint`;
+            const value = await context.secrets.get(epKey);
+            if (value) {
+                urls[provider] = value;
+                logger.debug(`Loaded custom endpoint for ${provider}`);
+            }
+        } catch (err) {
+            logger.errorWithError(`Failed to load endpoint URL for ${provider}`, err as Error);
+        }
+    }
+
+    return urls;
+}
+
 export async function deleteApiKey(
     context: vscode.ExtensionContext,
     provider: string

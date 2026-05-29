@@ -11,7 +11,7 @@ import * as vscode from 'vscode';
 import { LanguageModelProvider, RouterConfig } from './language-model-provider';
 import { RouterConfigProvider } from './router-config-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
-import { loadApiKeys, onApiKeysChanged } from './secret-storage';
+import { loadApiKeys, loadEndpointUrls, onApiKeysChanged } from './secret-storage';
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
 import { startMetricsServer, stopMetricsServer } from './metrics-server';
@@ -579,10 +579,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Load API keys from SecretStorage
     const apiKeys = await loadApiKeys(context);
+    const endpointUrls = await loadEndpointUrls(context);
 
     // Create the language model provider
     languageModelProvider = new LanguageModelProvider(config);
     languageModelProvider.updateApiKeys(apiKeys as Record<string, string | undefined>);
+    languageModelProvider.updateEndpointUrls(endpointUrls);
 
     // Load composite model configs if specified
     await loadCompositeModels(context);
@@ -654,7 +656,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const secretsListener = onApiKeysChanged(context, async () => {
         logger.info('API keys changed, reloading...');
         const keys = await loadApiKeys(context);
+        const eps = await loadEndpointUrls(context);
         languageModelProvider?.updateApiKeys(keys as Record<string, string | undefined>);
+        languageModelProvider?.updateEndpointUrls(eps);
         if (config.enabled && !isConnected) {
             connectWithRetry();
         }
