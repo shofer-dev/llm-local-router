@@ -3,6 +3,7 @@
   "displayName": "Shofer LLM Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
   "version": "0.2.1",
+  "license": "AGPL-3.0-only",
   "publisher": "arkware",
   "repository": "https://github.com/arkware/arkware.ai",
   "engines": {
