@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+
+:root {
+  --vscode-editor-background: var(--vscode-editor-background, #1e1e1e);
+  --vscode-editor-foreground: var(--vscode-editor-foreground, #d4d4d4);
+  --vscode-input-background: var(--vscode-input-background, #3c3c3c);
+  --vscode-input-foreground: var(--vscode-input-foreground, #cccccc);
+  --vscode-input-border: var(--vscode-input-border, #555555);
+  --vscode-focusBorder: var(--vscode-focusBorder, #007acc);
+  --vscode-button-background: var(--vscode-button-background, #0e639c);
+  --vscode-button-foreground: var(--vscode-button-foreground, #ffffff);
+  --vscode-button-hoverBackground: var(--vscode-button-hoverBackground, #1177bb);
+  --vscode-button-secondaryBackground: var(--vscode-button-secondaryBackground, #3a3d41);
+  --vscode-button-secondaryForeground: var(--vscode-button-secondaryForeground, #cccccc);
+  --vscode-button-secondaryHoverBackground: var(--vscode-button-secondaryHoverBackground, #45494e);
+  --vscode-dropdown-background: var(--vscode-dropdown-background, #3c3c3c);
+  --vscode-dropdown-border: var(--vscode-dropdown-border, #555555);
+  --vscode-list-hoverBackground: var(--vscode-list-hoverBackground, #2a2d2e);
+  --vscode-list-activeSelectionBackground: var(--vscode-list-activeSelectionBackground, #094771);
+  --vscode-badge-background: var(--vscode-badge-background, #4d4d4d);
+  --vscode-badge-foreground: var(--vscode-badge-foreground, #ffffff);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  line-height: 1.4;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar styling matching VS Code */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
+}
+
+/* VS Code button overrides */
+.vscode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: none;
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+.vscode-button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+.vscode-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.vscode-button.secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+.vscode-button.secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Input styling */
+.vscode-input {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  padding: 3px 6px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.vscode-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* Select styling */
+.vscode-select {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+  padding: 3px 6px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Badge styling */
+.vscode-badge {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}

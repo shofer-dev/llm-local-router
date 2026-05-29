@@ -11,6 +11,7 @@
 
 import * as vscode from 'vscode';
 import { LanguageModelProvider, RouterConfig } from './language-model-provider';
+import { RouterConfigProvider } from './router-config-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
 import { loadApiKeys, onApiKeysChanged } from './secret-storage';
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
@@ -20,6 +21,7 @@ import { startMetricsServer, stopMetricsServer } from './metrics-server';
 // ─── Extension state ──────────────────────────────────────────────
 
 let languageModelProvider: LanguageModelProvider | undefined;
+let routerConfigProvider: RouterConfigProvider | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let healthCheckInterval: NodeJS.Timeout | undefined;
 let connectionRetryTimeout: NodeJS.Timeout | undefined;
@@ -179,6 +181,14 @@ async function connectWithRetry(): Promise<void> {
 async function handleConfigure(): Promise<void> {
     getLogger().info('Opening extension settings');
     await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:arkware.shofer-router');
+}
+
+async function handleConfigureWebview(): Promise<void> {
+    if (!routerConfigProvider) {
+        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        return;
+    }
+    await routerConfigProvider.show();
 }
 
 async function handleShowModels(): Promise<void> {
@@ -644,6 +654,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         logger.warning(`Initial model fetch failed: ${err}`);
     }
 
+    // Create the webview config provider
+    routerConfigProvider = new RouterConfigProvider(languageModelProvider);
+
     // Register language model chat provider
     const providerDisposable = vscode.lm.registerLanguageModelChatProvider(
         'shofer',
@@ -652,6 +665,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Register commands
     const configureCommand = vscode.commands.registerCommand('shofer.llm.configure', handleConfigure);
+    const configureWebviewCommand = vscode.commands.registerCommand('shofer.llm.configureWebview', handleConfigureWebview);
     const showModelsCommand = vscode.commands.registerCommand('shofer.llm.showModels', handleShowModels);
     const refreshModelsCommand = vscode.commands.registerCommand('shofer.llm.refreshModels', handleRefreshModels);
     const testConnectionCommand = vscode.commands.registerCommand('shofer.llm.testConnection', handleTestConnection);
@@ -709,6 +723,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         providerDisposable,
         configureCommand,
+        configureWebviewCommand,
         showModelsCommand,
         refreshModelsCommand,
         testConnectionCommand,
@@ -758,6 +773,10 @@ export function deactivate(): void {
     stopMetricsServer().catch(err =>
         logger.warning(`Failed to stop Prometheus metrics server: ${err}`)
     );
+
+    if (routerConfigProvider) {
+        routerConfigProvider.dispose();
+    }
 
     if (statusBarItem) {
         statusBarItem.dispose();
