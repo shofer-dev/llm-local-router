@@ -2,7 +2,7 @@
   "name": "shofer-router",
   "displayName": "Shofer Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "license": "AGPL-3.0-only",
   "publisher": "Shoferdev",
   "repository": "https://github.com/arkware/arkware.ai",
@@ -47,42 +47,6 @@
         }
       }
     ],
-    "configuration": {
-      "title": "Shofer Router",
-      "properties": {
-        "shofer.router.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable/disable the LLM router provider"
-        },
-        "shofer.router.debug": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable debug logging"
-        },
-        "shofer.router.compositeModelsFile": {
-          "type": "string",
-          "default": "",
-          "description": "Path to a composite-models.json file defining shofer/* composite models"
-        },
-        "shofer.router.compositeModelsConfig": {
-          "type": "string",
-          "default": "",
-          "editPresentation": "multilineText",
-          "description": "Inline JSON configuration for composite models (shofer/*). Alternative to compositeModelsFile — paste your composite-models.json content here directly. compositeModelsFile takes precedence if both are set."
-        },
-        "shofer.router.webviewDevMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Serve webview from Vite dev server (localhost:5173) instead of compiled bundle"
-        },
-        "shofer.router.experimental.prometheusEndpoint": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable Prometheus /metrics HTTP endpoint on 127.0.0.1:30098 (port overridable via SHOFER_ROUTER_METRICS_PORT env var)"
-        }
-      }
-    },
     "commands": [
       {
         "command": "shofer.router.configure",

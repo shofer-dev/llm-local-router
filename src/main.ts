@@ -38,6 +38,12 @@ const RETRY_MAX_DELAY_MS = 300_000;
 const RETRY_BACKOFF_MULTIPLIER = 2;
 
 // ─── Configuration ────────────────────────────────────────────────
+//
+// Settings are read from VS Code settings.json (persistence layer)
+// but there is no "configuration" contribution in package.json —
+// meaning no UI in VS Code's settings editor. All configuration is
+// managed through the webview Config tab, which writes to settings
+// programmatically via vscode.workspace.getConfiguration().update().
 
 function getConfiguration(): RouterConfig {
     const wsConfig = vscode.workspace.getConfiguration('shofer.router');
