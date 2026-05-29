@@ -1,13 +1,12 @@
 import React from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
-import ConfigEditor from './components/ConfigEditor';
+import ConfigPanel from './components/ConfigPanel';
 import MetricsPanel from './components/MetricsPanel';
 import StatusPanel from './components/StatusPanel';
-import ProvidersPanel from './components/ProvidersPanel';
 import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, MetricsPayload, StatusPayload, ProviderConfigEntry } from './types';
 import { onMessage, postMessage } from './utils/vscode';
 
-type Tab = 'status' | 'config' | 'metrics' | 'providers';
+type Tab = 'status' | 'config' | 'metrics';
 
 /**
  * Root application component with tab navigation.
@@ -37,7 +36,7 @@ export default function App() {
       if (msg.type === 'initConfig') {
         setCompositeModels(msg.compositeModels);
         setModelRegistry(msg.modelRegistry);
-        if (msg.activeTab) {
+        if (msg.activeTab && msg.activeTab !== 'providers') {
           setActiveTab(msg.activeTab);
         }
         setInitialized(true);
@@ -83,21 +82,18 @@ export default function App() {
           >
             📊 Metrics
           </button>
-          <button
-            style={activeTab === 'providers' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('providers')}
-          >
-            🔑 Providers
-          </button>
         </div>
 
         <div style={styles.content}>
           {activeTab === 'status' && <StatusPanel status={status} />}
           {activeTab === 'config' && (
-            <ConfigEditor initialModels={compositeModels} modelRegistry={modelRegistry} />
+            <ConfigPanel
+              initialModels={compositeModels}
+              modelRegistry={modelRegistry}
+              providers={providers}
+            />
           )}
           {activeTab === 'metrics' && <MetricsPanel metrics={metrics} />}
-          {activeTab === 'providers' && <ProvidersPanel providers={providers} />}
         </div>
       </div>
     </ErrorBoundary>
