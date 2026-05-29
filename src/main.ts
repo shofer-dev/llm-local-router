@@ -61,7 +61,7 @@ function updateStatusBar(): void {
         statusBarItem.command = 'shofer.llm.showModels';
     }
 
-    const modelCount = languageModelProvider?.getAvailableModels().length ?? 0;
+    const providerCount = languageModelProvider?.getConfiguredProviderCount() ?? 0;
     let statusText: string;
 
     if (!config.enabled) {
@@ -77,8 +77,8 @@ function updateStatusBar(): void {
         statusBarItem.tooltip = 'Shofer LLM Router (disconnected — configure API keys)';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else {
-        statusText = `$(rocket) ${modelCount}`;
-        statusBarItem.tooltip = `Shofer LLM Router (${modelCount} models)`;
+        statusText = `$(rocket) ${providerCount}`;
+        statusBarItem.tooltip = `Shofer LLM Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured`;
         statusBarItem.backgroundColor = undefined;
     }
 

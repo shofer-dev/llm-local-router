@@ -279,6 +279,13 @@ export class ProviderRouter {
     hasAnyApiKey(): boolean {
         return Object.values(this.apiKeys).some(k => k && k.length > 0);
     }
+
+    /**
+     * Count how many providers have API keys configured.
+     */
+    getConfiguredProviderCount(): number {
+        return Object.values(this.apiKeys).filter(k => k && k.length > 0).length;
+    }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────

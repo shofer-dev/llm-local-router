@@ -705,6 +705,13 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         return this.config.enabled && this.connectionStatus.isConnected;
     }
 
+    /**
+     * Count how many upstream providers have API keys configured.
+     */
+    getConfiguredProviderCount(): number {
+        return this.router.getConfiguredProviderCount();
+    }
+
     // ─── Metrics recording ────────────────────────────────────────
 
     /**
