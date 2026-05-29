@@ -19,6 +19,17 @@ type ConfigSubTab = 'composite' | 'providers';
 export default function ConfigPanel({ initialModels, modelRegistry, providers }: Props) {
   const [subTab, setSubTab] = React.useState<ConfigSubTab>('composite');
 
+  // Filter model registry to only show models from providers with API keys configured.
+  // If no providers are configured at all, show all models (so user can build composites
+  // before configuring keys).
+  const configuredProviderIds = new Set(
+    providers.filter((p) => p.hasApiKey).map((p) => p.id),
+  );
+  const hasAnyConfigured = configuredProviderIds.size > 0;
+  const filteredRegistry = hasAnyConfigured
+    ? modelRegistry.filter((m) => configuredProviderIds.has(m.provider))
+    : modelRegistry;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Sub-tab bar */}
@@ -40,7 +51,7 @@ export default function ConfigPanel({ initialModels, modelRegistry, providers }:
       {/* Sub-tab content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {subTab === 'composite' && (
-          <ConfigEditor initialModels={initialModels} modelRegistry={modelRegistry} />
+          <ConfigEditor initialModels={initialModels} modelRegistry={filteredRegistry} />
         )}
         {subTab === 'providers' && (
           <ProvidersPanel providers={providers} />
