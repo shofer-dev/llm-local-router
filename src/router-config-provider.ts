@@ -24,25 +24,15 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { LanguageModelProvider } from './language-model-provider';
 import { ALL_MODELS } from './model-registry';
-import type { ModelRegistryEntry, CompositeModelConfig as HostCompositeConfig } from './types';
+import type { ModelRegistryEntry } from './types';
+import {
+  convertToHostConfig,
+  convertFromHostConfigs,
+  validateCompositeModels,
+  type WebviewCompositeModel,
+} from './config-converter';
 
 // ─── Webview message types (mirrors webview-ui/src/types.ts) ────────
-
-interface WebviewCompositeModel {
-  modelId: string;
-  strategy: 'failover' | 'round_robin';
-  streamingTimeoutMs: number;
-  nonStreamingTimeoutMs: number;
-  totalTimeoutMs: number;
-  health?: { failureThreshold: number; degradedThreshold: number; cooldownMs: number };
-  throttling?: { maxConcurrent: number; requestsPerWindow: number; windowMinutes: number };
-  underlyingModels: Array<{
-    modelId: string;
-    provider: string;
-    weight: number;
-    priority: number;
-  }>;
-}
 
 interface ModelRegistrySummary {
   id: string;
@@ -291,9 +281,9 @@ export class RouterConfigProvider {
 
   private async handleSave(models: WebviewCompositeModel[]): Promise<void> {
     try {
-      const config: Record<string, HostCompositeConfig> = {};
+      const config: Record<string, import('./types').CompositeModelConfig> = {};
       for (const wm of models) {
-        config[wm.modelId] = this.convertToHostConfig(wm);
+        config[wm.modelId] = convertToHostConfig(wm);
       }
 
       const json = JSON.stringify(config, null, 2);
@@ -325,65 +315,7 @@ export class RouterConfigProvider {
   // ─── Validate ────────────────────────────────────────────────────
 
   private async handleValidate(models: WebviewCompositeModel[]): Promise<void> {
-    const errors: string[] = [];
-    const seenIds = new Set<string>();
-
-    for (const m of models) {
-      // Check model ID
-      if (!m.modelId) {
-        errors.push('A composite model is missing a model_id.');
-        continue;
-      }
-      if (!m.modelId.startsWith('shofer/')) {
-        errors.push(`${m.modelId}: model_id must start with "shofer/".`);
-      }
-      if (seenIds.has(m.modelId)) {
-        errors.push(`${m.modelId}: duplicate model_id.`);
-      }
-      seenIds.add(m.modelId);
-
-      // Check strategy
-      if (m.strategy !== 'failover' && m.strategy !== 'round_robin') {
-        errors.push(`${m.modelId}: strategy must be "failover" or "round_robin".`);
-      }
-
-      // Check underlying models
-      if (m.underlyingModels.length === 0) {
-        errors.push(`${m.modelId}: at least one underlying model is required.`);
-      }
-
-      const seenUnderlying = new Set<string>();
-      for (const um of m.underlyingModels) {
-        if (!um.modelId) {
-          errors.push(`${m.modelId}: an underlying model is missing model_id.`);
-          continue;
-        }
-        if (seenUnderlying.has(um.modelId)) {
-          errors.push(`${m.modelId}: duplicate underlying model "${um.modelId}".`);
-        }
-        seenUnderlying.add(um.modelId);
-
-        // Check model exists in registry
-        const found = ALL_MODELS.find(
-          (r) => r.id === um.modelId || `${r.provider}/${r.id}` === um.modelId,
-        );
-        if (!found) {
-          errors.push(`${m.modelId}: underlying model "${um.modelId}" not found in registry.`);
-        }
-      }
-
-      // Check timeouts
-      if (m.streamingTimeoutMs > m.totalTimeoutMs) {
-        errors.push(
-          `${m.modelId}: streaming_timeout_ms (${m.streamingTimeoutMs}) must be <= total_timeout_ms (${m.totalTimeoutMs}).`,
-        );
-      }
-      if (m.nonStreamingTimeoutMs > m.totalTimeoutMs) {
-        errors.push(
-          `${m.modelId}: nonstreaming_timeout_ms (${m.nonStreamingTimeoutMs}) must be <= total_timeout_ms (${m.totalTimeoutMs}).`,
-        );
-      }
-    }
+    const errors = validateCompositeModels(models);
 
     if (errors.length > 0) {
       await this.sendToWebview({ type: 'validationError', errors });
@@ -396,9 +328,9 @@ export class RouterConfigProvider {
 
   private async handleExport(models: WebviewCompositeModel[]): Promise<void> {
     try {
-      const config: Record<string, HostCompositeConfig> = {};
+      const config: Record<string, import('./types').CompositeModelConfig> = {};
       for (const wm of models) {
-        config[wm.modelId] = this.convertToHostConfig(wm);
+        config[wm.modelId] = convertToHostConfig(wm);
       }
       const json = JSON.stringify(config, null, 2);
 
@@ -431,10 +363,10 @@ export class RouterConfigProvider {
       if (!uris || uris.length === 0) return;
 
       const content = await vscode.workspace.fs.readFile(uris[0]);
-      const parsed = JSON.parse(Buffer.from(content).toString('utf-8')) as Record<string, HostCompositeConfig>;
+      const parsed = JSON.parse(Buffer.from(content).toString('utf-8')) as Record<string, import('./types').CompositeModelConfig>;
 
       // Convert to webview format
-      const webviewModels = this.convertFromHostConfigs(parsed);
+      const webviewModels = convertFromHostConfigs(parsed);
 
       await this.sendToWebview({ type: 'configImported', compositeModels: webviewModels });
       vscode.window.showInformationMessage(
@@ -447,101 +379,7 @@ export class RouterConfigProvider {
   }
 
   // ─── Type conversion ─────────────────────────────────────────────
-
-  /**
-   * Convert a webview CompositeModelConfig to the host CompositeModelConfig format.
-   */
-  private convertToHostConfig(wm: WebviewCompositeModel): HostCompositeConfig {
-    const models: (string | { id: string; weight?: number })[] = [];
-
-    if (wm.strategy === 'failover') {
-      // Sort by priority, then extract just the IDs
-      const sorted = [...wm.underlyingModels].sort((a, b) => a.priority - b.priority);
-      for (const um of sorted) {
-        models.push(um.modelId);
-      }
-    } else {
-      // Round-robin: include weights
-      for (const um of wm.underlyingModels) {
-        models.push({ id: um.modelId, weight: um.weight || 1 });
-      }
-    }
-
-    return {
-      strategy: wm.strategy,
-      models,
-      throttling: wm.throttling ? { ...wm.throttling } : undefined,
-      streamingTimeoutMs: wm.streamingTimeoutMs,
-      perAttemptTimeoutMs: wm.nonStreamingTimeoutMs,
-      totalTimeoutMs: wm.totalTimeoutMs,
-      health: wm.health
-        ? {
-            failureThreshold: wm.health.failureThreshold,
-            degradedThreshold: wm.health.degradedThreshold,
-            cooldownMs: wm.health.cooldownMs,
-          }
-        : undefined,
-    };
-  }
-
-  /**
-   * Convert host configs back to webview format (for import).
-   */
-  private convertFromHostConfigs(configs: Record<string, HostCompositeConfig>): WebviewCompositeModel[] {
-    const result: WebviewCompositeModel[] = [];
-
-    for (const [modelId, config] of Object.entries(configs)) {
-      const underlyingModels: WebviewCompositeModel['underlyingModels'] = [];
-
-      let idx = 0;
-      for (const entry of config.models) {
-        idx++;
-        if (typeof entry === 'string') {
-          const provider = this.resolveProvider(entry);
-          underlyingModels.push({
-            modelId: entry,
-            provider,
-            weight: 1,
-            priority: idx,
-          });
-        } else {
-          const provider = this.resolveProvider(entry.id);
-          underlyingModels.push({
-            modelId: entry.id,
-            provider,
-            weight: entry.weight ?? 1,
-            priority: idx,
-          });
-        }
-      }
-
-      result.push({
-        modelId,
-        strategy: config.strategy,
-        streamingTimeoutMs: config.streamingTimeoutMs ?? 30000,
-        nonStreamingTimeoutMs: config.perAttemptTimeoutMs ?? 120000,
-        totalTimeoutMs: config.totalTimeoutMs ?? 300000,
-        health: config.health
-          ? {
-              failureThreshold: config.health.failureThreshold ?? 3,
-              degradedThreshold: config.health.degradedThreshold ?? 1,
-              cooldownMs: config.health.cooldownMs ?? 30000,
-            }
-          : undefined,
-        throttling: config.throttling,
-        underlyingModels,
-      });
-    }
-
-    return result;
-  }
-
-  private resolveProvider(modelId: string): string {
-    const found = ALL_MODELS.find(
-      (m) => m.id === modelId || `${m.provider}/${m.id}` === modelId,
-    );
-    return found?.provider ?? '';
-  }
+  // Delegates to pure functions in config-converter.ts for testability.
 
   // ─── Settings I/O ────────────────────────────────────────────────
 
@@ -558,8 +396,8 @@ export class RouterConfigProvider {
         const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
         if (fs.existsSync(fullPath)) {
           const content = fs.readFileSync(fullPath, 'utf-8');
-          const parsed = JSON.parse(content) as Record<string, HostCompositeConfig>;
-          return this.convertFromHostConfigs(parsed);
+          const parsed = JSON.parse(content) as Record<string, import('./types').CompositeModelConfig>;
+          return convertFromHostConfigs(parsed);
         }
       } catch {
         // Fall through to inline config
@@ -570,8 +408,8 @@ export class RouterConfigProvider {
     const inlineConfig = wsConfig.get<string>('compositeModelsConfig');
     if (inlineConfig && inlineConfig.trim()) {
       try {
-        const parsed = JSON.parse(inlineConfig) as Record<string, HostCompositeConfig>;
-        return this.convertFromHostConfigs(parsed);
+        const parsed = JSON.parse(inlineConfig) as Record<string, import('./types').CompositeModelConfig>;
+        return convertFromHostConfigs(parsed);
       } catch {
         // Return empty
       }
