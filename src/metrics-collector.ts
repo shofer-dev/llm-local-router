@@ -382,7 +382,12 @@ export class MetricsCollector {
      */
     toPrometheusText(): string {
         const lines: string[] = [];
+        this.ensureCurrentWindow();
         const now = this.currentWindow();
+        if (!now || Object.keys(now.models).length === 0) {
+            // Empty collector — return minimal valid Prometheus output
+            return '# No metrics collected yet\n';
+        }
 
         // Per-model gauges (current window)
         for (const [modelId, stats] of Object.entries(now.models)) {
