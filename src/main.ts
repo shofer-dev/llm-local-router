@@ -84,7 +84,7 @@ async function handleStatusBarMenu(): Promise<void> {
             await vscode.commands.executeCommand('shofer.llm.showModels');
             break;
         case 'configure':
-            await vscode.commands.executeCommand('shofer.llm.configureWebview');
+            await vscode.commands.executeCommand('shofer.llm.configure');
             break;
         case 'metrics':
             await vscode.commands.executeCommand('shofer.llm.getMetrics');
