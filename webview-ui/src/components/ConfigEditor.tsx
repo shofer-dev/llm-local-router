@@ -106,11 +106,6 @@ export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
     return unsub;
   }, []);
 
-  // Notify host that we're ready
-  React.useEffect(() => {
-    vscode.postMessage({ type: 'webviewReady' });
-  }, []);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
