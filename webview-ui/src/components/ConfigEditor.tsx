@@ -1,8 +1,6 @@
 import React from 'react';
 import CompositeList from './CompositeList';
 import CompositeEditor from './CompositeEditor';
-import ActionBar from './ActionBar';
-import JsonPreview from './JsonPreview';
 import CapabilityPreview from './CapabilityPreview';
 import type { CompositeModelConfig, ModelRegistrySummary } from '../types';
 import { getVsCodeApi, onMessage } from '../utils/vscode';
@@ -28,8 +26,7 @@ function createDefaultComposite(modelId: string): CompositeModelConfig {
 }
 
 /**
- * Main layout: left panel (composite list), right panel (editor),
- * bottom bar (actions).
+ * Main layout: left panel (composite list), right panel (editor with Save at top).
  */
 export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
   const [compositeModels, setCompositeModels] = React.useState<CompositeModelConfig[]>(initialModels);
@@ -37,7 +34,6 @@ export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
     initialModels.length > 0 ? initialModels[0].modelId : null,
   );
   const [saving, setSaving] = React.useState(false);
-  const [errors, setErrors] = React.useState<string[] | undefined>();
 
   const vscode = getVsCodeApi();
 
@@ -45,7 +41,6 @@ export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
 
   const handleSelect = (modelId: string) => {
     setSelectedId(modelId);
-    setErrors(undefined);
   };
 
   const handleAdd = () => {
@@ -64,9 +59,7 @@ export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
   };
 
   const handleUpdateSelected = (updated: CompositeModelConfig) => {
-    // Match by selectedId (the old ID), not updated.modelId (which may have changed).
     setCompositeModels(compositeModels.map((m) => (m.modelId === selectedId ? updated : m)));
-    // If the model ID was renamed, update the selection to track the new ID.
     if (updated.modelId !== selectedId) {
       setSelectedId(updated.modelId);
     }
@@ -74,92 +67,80 @@ export default function ConfigEditor({ initialModels, modelRegistry }: Props) {
 
   const handleSave = () => {
     setSaving(true);
-    setErrors(undefined);
     vscode.postMessage({ type: 'saveConfig', compositeModels });
   };
 
-  const handleExport = () => {
-    vscode.postMessage({ type: 'exportConfig', compositeModels });
-  };
-
-  const handleImport = () => {
-    vscode.postMessage({ type: 'importConfig' });
-  };
-
-  const handleValidate = () => {
-    vscode.postMessage({ type: 'validateConfig', compositeModels });
-  };
-
-  // Handle messages from host (for save confirmation, import, validation errors)
+  // Handle save confirmation from host
   React.useEffect(() => {
     const unsub = onMessage((msg) => {
-      switch (msg.type) {
-        case 'configSaved':
-          setSaving(false);
-          break;
-        case 'validationError':
-          setErrors(msg.errors);
-          break;
-        case 'configImported':
-          setCompositeModels(msg.compositeModels);
-          if (msg.compositeModels.length > 0) {
-            setSelectedId(msg.compositeModels[0].modelId);
-          }
-          break;
+      if (msg.type === 'configSaved') {
+        setSaving(false);
+      } else if (msg.type === 'configImported') {
+        setCompositeModels(msg.compositeModels);
+        if (msg.compositeModels.length > 0) {
+          setSelectedId(msg.compositeModels[0].modelId);
+        }
       }
     });
     return unsub;
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left panel: composite list */}
-        <div
-          style={{
-            width: '260px',
-            minWidth: '200px',
-            borderRight: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
-            overflowY: 'auto',
-          }}
-        >
-          <CompositeList
-            compositeModels={compositeModels}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            onAdd={handleAdd}
-            onDelete={handleDelete}
-          />
-        </div>
-
-        {/* Right panel: editor */}
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            <CompositeEditor
-              composite={selectedModel}
-              modelRegistry={modelRegistry}
-              onChange={handleUpdateSelected}
-            />
-
-            {selectedModel && (
-              <div style={{ padding: '0 12px 12px' }}>
-                <CapabilityPreview composite={selectedModel} modelRegistry={modelRegistry} />
-                <JsonPreview composite={selectedModel} />
-              </div>
-            )}
-          </div>
-        </div>
+    <div style={{ display: 'flex', height: '100%' }}>
+      {/* Left panel: composite list */}
+      <div
+        style={{
+          width: '260px',
+          minWidth: '200px',
+          borderRight: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
+          overflowY: 'auto',
+          flexShrink: 0,
+        }}
+      >
+        <CompositeList
+          compositeModels={compositeModels}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+          onAdd={handleAdd}
+          onDelete={handleDelete}
+        />
       </div>
 
-      {/* Bottom action bar */}
-      <ActionBar
-        errors={errors}
-        saving={saving}
-        onSave={handleSave}
-        onExport={handleExport}
-        onImport={handleImport}
-        onValidate={handleValidate}
-      />
+      {/* Right panel: editor */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {/* Save button at top */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
+            background: 'var(--vscode-titleBar-activeBackground, rgba(0,0,0,0.1))',
+            flexShrink: 0,
+          }}
+        >
+          <button className="vscode-button" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving...' : '💾 Save'}
+          </button>
+          <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)' }}>
+            {compositeModels.length} composite model{compositeModels.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Editor content */}
+        <CompositeEditor
+          composite={selectedModel}
+          modelRegistry={modelRegistry}
+          onChange={handleUpdateSelected}
+        />
+
+        {selectedModel && (
+          <div style={{ padding: '0 12px 12px' }}>
+            <CapabilityPreview composite={selectedModel} modelRegistry={modelRegistry} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
