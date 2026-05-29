@@ -2,64 +2,115 @@
  * SQLite persistence layer for the metrics collector.
  *
  * Stores per-request entries and pre-aggregated 5-minute window data
- * using better-sqlite3. On startup, recent windows are loaded back
- * into the in-memory collector. On window transitions, the closing
- * window is flushed to disk.
+ * using sql.js (SQLite compiled to WebAssembly). On startup, recent
+ * windows are loaded back into the in-memory collector. On window
+ * transitions, the closing window is flushed to disk.
+ *
+ * sql.js is pure TypeScript/WebAssembly — no native addons, so a
+ * single VSIX works cross-platform (Linux, macOS, Windows).
  *
  * Schema:
  *   requests  — raw per-request entries (for detailed historical queries)
  *   windows   — pre-aggregated window data as JSON blobs (for fast retrieval)
  */
 
-import Database from 'better-sqlite3';
+import initSqlJs, { Database as SqlJsDatabase, SqlValue } from 'sql.js';
 import * as path from 'path';
+import * as fs from 'fs';
 import {
     MetricsRequestEntry,
     MetricsWindow,
     ModelWindowStats,
-    CompositeDistribution,
 } from './types';
 
 /** How many days of data to retain before pruning. */
 const RETENTION_DAYS = 30;
 
-/** Maximum windows to keep in the database (30 days = 8640 windows). */
-const MAX_DB_WINDOWS = 8640;
-
 export class MetricsStorage {
-    private db: Database.Database;
+    private db: SqlJsDatabase;
+    private dbPath: string;
+    /** When false, saveToDisk() is a no-op — used inside transactions. */
+    private autoSave = true;
 
-    // Prepared statements
-    private stmtInsertRequest!: Database.Statement;
-    private stmtUpsertWindow!: Database.Statement;
-    private stmtLoadWindows!: Database.Statement;
-    private stmtPruneRequests!: Database.Statement;
-    private stmtPruneWindows!: Database.Statement;
-    private stmtWindowCount!: Database.Statement;
-    private stmtRequestCount!: Database.Statement;
-    private stmtQueryRequests!: Database.Statement;
+    /** Private constructor — use MetricsStorage.create() instead. */
+    private constructor(db: SqlJsDatabase, dbPath: string) {
+        this.db = db;
+        this.dbPath = dbPath;
+        this.db.run('PRAGMA journal_mode = WAL');
+        this.db.run('PRAGMA synchronous = NORMAL');
+        this.db.run('PRAGMA cache_size = -8000'); // 8MB cache
+        this.initSchema();
+    }
 
-    constructor(dbPath: string) {
+    /**
+     * Create a MetricsStorage instance, loading existing data from disk
+     * if a database file already exists at the given path.
+     */
+    static async create(dbPath: string): Promise<MetricsStorage> {
         const dir = path.dirname(dbPath);
-
-        // Ensure directory exists (fs.mkdirSync is available in Node)
-        const fs = require('fs');
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
 
-        this.db = new Database(dbPath);
-        this.db.pragma('journal_mode = WAL');
-        this.db.pragma('synchronous = NORMAL');
-        this.db.pragma('cache_size = -8000'); // 8MB cache
-        this.initSchema();
-        this.prepareStatements();
+        const SQL = await initSqlJs();
+
+        let db: SqlJsDatabase;
+        if (fs.existsSync(dbPath)) {
+            const buffer = fs.readFileSync(dbPath);
+            db = new SQL.Database(buffer);
+        } else {
+            db = new SQL.Database();
+        }
+
+        return new MetricsStorage(db, dbPath);
+    }
+
+    // ─── Persistence helpers ──────────────────────────────────────
+
+    /** Write the in-memory database to disk. No-op inside transactions. */
+    private saveToDisk(): void {
+        if (!this.autoSave) return;
+        const data = this.db.export();
+        fs.writeFileSync(this.dbPath, Buffer.from(data));
+    }
+
+    /**
+     * Execute a write statement (INSERT / UPDATE / DELETE) with named
+     * parameters and persist to disk.
+     */
+    private runWrite(sql: string, params: Record<string, SqlValue> = {}): void {
+        this.db.run(sql, params);
+        this.saveToDisk();
+    }
+
+    /** Query all rows matching the statement. */
+    private queryAll<T>(sql: string, params: Record<string, SqlValue> = {}): T[] {
+        const stmt = this.db.prepare(sql);
+        stmt.bind(params);
+        const rows: T[] = [];
+        while (stmt.step()) {
+            rows.push(stmt.getAsObject() as unknown as T);
+        }
+        stmt.free();
+        return rows;
+    }
+
+    /** Query a single row, or undefined if none. */
+    private queryOne<T>(sql: string, params: Record<string, SqlValue> = {}): T | undefined {
+        const stmt = this.db.prepare(sql);
+        stmt.bind(params);
+        let row: T | undefined;
+        if (stmt.step()) {
+            row = stmt.getAsObject() as unknown as T;
+        }
+        stmt.free();
+        return row;
     }
 
     // ─── Schema ────────────────────────────────────────────────────
 
     private initSchema(): void {
-        this.db.exec(`
+        this.db.run(`
             CREATE TABLE IF NOT EXISTS requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
@@ -102,65 +153,26 @@ export class MetricsStorage {
             CREATE INDEX IF NOT EXISTS idx_windows_start
                 ON windows(window_start);
         `);
-    }
-
-    private prepareStatements(): void {
-        this.stmtInsertRequest = this.db.prepare(`
-            INSERT INTO requests (
-                timestamp, model_id, provider, is_composite,
-                composite_model_id, served_by_model, status,
-                error_type, error_message, ttfb_ms, ttlb_ms,
-                prompt_tokens, completion_tokens, cached_tokens,
-                cache_creation_tokens, cost_usd, failover_occurred, attempts
-            ) VALUES (
-                @timestamp, @model_id, @provider, @is_composite,
-                @composite_model_id, @served_by_model, @status,
-                @error_type, @error_message, @ttfb_ms, @ttlb_ms,
-                @prompt_tokens, @completion_tokens, @cached_tokens,
-                @cache_creation_tokens, @cost_usd, @failover_occurred, @attempts
-            )
-        `);
-
-        this.stmtUpsertWindow = this.db.prepare(`
-            INSERT INTO windows (window_start, model_id, data_json)
-            VALUES (@window_start, @model_id, @data_json)
-            ON CONFLICT(window_start, model_id) DO UPDATE SET
-                data_json = excluded.data_json
-        `);
-
-        this.stmtLoadWindows = this.db.prepare(`
-            SELECT window_start, model_id, data_json
-            FROM windows
-            WHERE window_start >= @since
-            ORDER BY window_start ASC
-        `);
-
-        this.stmtPruneRequests = this.db.prepare(`
-            DELETE FROM requests WHERE timestamp < @cutoff
-        `);
-
-        this.stmtPruneWindows = this.db.prepare(`
-            DELETE FROM windows WHERE window_start < @cutoff
-        `);
-
-        this.stmtWindowCount = this.db.prepare(`
-            SELECT COUNT(DISTINCT window_start) as cnt FROM windows
-        `);
-
-        this.stmtRequestCount = this.db.prepare(`
-            SELECT COUNT(*) as cnt FROM requests
-        `);
-
-        this.stmtQueryRequests = this.db.prepare(`
-            SELECT * FROM requests
-            WHERE model_id = @model_id
-              AND timestamp >= @since
-            ORDER BY timestamp DESC
-            LIMIT @limit
-        `);
+        this.saveToDisk();
     }
 
     // ─── Write ─────────────────────────────────────────────────────
+
+    private INSERT_REQUEST_SQL = `
+        INSERT INTO requests (
+            timestamp, model_id, provider, is_composite,
+            composite_model_id, served_by_model, status,
+            error_type, error_message, ttfb_ms, ttlb_ms,
+            prompt_tokens, completion_tokens, cached_tokens,
+            cache_creation_tokens, cost_usd, failover_occurred, attempts
+        ) VALUES (
+            :timestamp, :model_id, :provider, :is_composite,
+            :composite_model_id, :served_by_model, :status,
+            :error_type, :error_message, :ttfb_ms, :ttlb_ms,
+            :prompt_tokens, :completion_tokens, :cached_tokens,
+            :cache_creation_tokens, :cost_usd, :failover_occurred, :attempts
+        )
+    `;
 
     /**
      * Insert a single request entry into the database.
@@ -168,25 +180,25 @@ export class MetricsStorage {
      * if real-time persistence is desired.
      */
     insertRequest(entry: MetricsRequestEntry): void {
-        this.stmtInsertRequest.run({
-            timestamp: entry.timestamp,
-            model_id: entry.modelId,
-            provider: entry.provider,
-            is_composite: entry.isComposite ? 1 : 0,
-            composite_model_id: entry.compositeModelId ?? null,
-            served_by_model: entry.servedByModel,
-            status: entry.status,
-            error_type: entry.errorType ?? null,
-            error_message: entry.errorMessage ?? null,
-            ttfb_ms: entry.ttfbMs,
-            ttlb_ms: entry.ttlbMs,
-            prompt_tokens: entry.promptTokens,
-            completion_tokens: entry.completionTokens,
-            cached_tokens: entry.cachedTokens,
-            cache_creation_tokens: entry.cacheCreationTokens,
-            cost_usd: entry.costUsd,
-            failover_occurred: entry.failoverOccurred ? 1 : 0,
-            attempts: entry.attempts,
+        this.runWrite(this.INSERT_REQUEST_SQL, {
+            ':timestamp': entry.timestamp,
+            ':model_id': entry.modelId,
+            ':provider': entry.provider,
+            ':is_composite': entry.isComposite ? 1 : 0,
+            ':composite_model_id': entry.compositeModelId ?? null,
+            ':served_by_model': entry.servedByModel,
+            ':status': entry.status,
+            ':error_type': entry.errorType ?? null,
+            ':error_message': entry.errorMessage ?? null,
+            ':ttfb_ms': entry.ttfbMs,
+            ':ttlb_ms': entry.ttlbMs,
+            ':prompt_tokens': entry.promptTokens,
+            ':completion_tokens': entry.completionTokens,
+            ':cached_tokens': entry.cachedTokens,
+            ':cache_creation_tokens': entry.cacheCreationTokens,
+            ':cost_usd': entry.costUsd,
+            ':failover_occurred': entry.failoverOccurred ? 1 : 0,
+            ':attempts': entry.attempts,
         });
     }
 
@@ -194,35 +206,86 @@ export class MetricsStorage {
      * Batch-insert multiple request entries in a transaction.
      */
     insertRequests(entries: MetricsRequestEntry[]): void {
-        const insert = this.db.transaction((items: MetricsRequestEntry[]) => {
-            for (const entry of items) {
-                this.insertRequest(entry);
+        this.autoSave = false;
+        try {
+            this.db.run('BEGIN');
+            for (const entry of entries) {
+                this.db.run(this.INSERT_REQUEST_SQL, {
+                    ':timestamp': entry.timestamp,
+                    ':model_id': entry.modelId,
+                    ':provider': entry.provider,
+                    ':is_composite': entry.isComposite ? 1 : 0,
+                    ':composite_model_id': entry.compositeModelId ?? null,
+                    ':served_by_model': entry.servedByModel,
+                    ':status': entry.status,
+                    ':error_type': entry.errorType ?? null,
+                    ':error_message': entry.errorMessage ?? null,
+                    ':ttfb_ms': entry.ttfbMs,
+                    ':ttlb_ms': entry.ttlbMs,
+                    ':prompt_tokens': entry.promptTokens,
+                    ':completion_tokens': entry.completionTokens,
+                    ':cached_tokens': entry.cachedTokens,
+                    ':cache_creation_tokens': entry.cacheCreationTokens,
+                    ':cost_usd': entry.costUsd,
+                    ':failover_occurred': entry.failoverOccurred ? 1 : 0,
+                    ':attempts': entry.attempts,
+                });
             }
-        });
-        insert(entries);
+            this.db.run('COMMIT');
+        } catch (err) {
+            this.db.run('ROLLBACK');
+            throw err;
+        } finally {
+            this.autoSave = true;
+            this.saveToDisk();
+        }
     }
 
     /**
      * Save a single model's window stats as a JSON blob.
      */
     upsertWindowStats(windowStart: string, modelId: string, stats: ModelWindowStats): void {
-        this.stmtUpsertWindow.run({
-            window_start: windowStart,
-            model_id: modelId,
-            data_json: JSON.stringify(stats),
-        });
+        this.runWrite(
+            `INSERT INTO windows (window_start, model_id, data_json)
+             VALUES (:window_start, :model_id, :data_json)
+             ON CONFLICT(window_start, model_id) DO UPDATE SET
+                 data_json = excluded.data_json`,
+            {
+                ':window_start': windowStart,
+                ':model_id': modelId,
+                ':data_json': JSON.stringify(stats),
+            },
+        );
     }
 
     /**
      * Save all model stats from a window in a transaction.
      */
     flushWindow(window: MetricsWindow): void {
-        const txn = this.db.transaction(() => {
+        this.autoSave = false;
+        try {
+            this.db.run('BEGIN');
             for (const [modelId, stats] of Object.entries(window.models)) {
-                this.upsertWindowStats(window.windowStart, modelId, stats);
+                this.db.run(
+                    `INSERT INTO windows (window_start, model_id, data_json)
+                     VALUES (:window_start, :model_id, :data_json)
+                     ON CONFLICT(window_start, model_id) DO UPDATE SET
+                         data_json = excluded.data_json`,
+                    {
+                        ':window_start': window.windowStart,
+                        ':model_id': modelId,
+                        ':data_json': JSON.stringify(stats),
+                    },
+                );
             }
-        });
-        txn();
+            this.db.run('COMMIT');
+        } catch (err) {
+            this.db.run('ROLLBACK');
+            throw err;
+        } finally {
+            this.autoSave = true;
+            this.saveToDisk();
+        }
     }
 
     // ─── Read ──────────────────────────────────────────────────────
@@ -232,11 +295,17 @@ export class MetricsStorage {
      * Returns windows reconstructed from the per-model JSON blobs.
      */
     loadWindows(since: string): MetricsWindow[] {
-        const rows = this.stmtLoadWindows.all({ since }) as Array<{
+        const rows = this.queryAll<{
             window_start: string;
             model_id: string;
             data_json: string;
-        }>;
+        }>(
+            `SELECT window_start, model_id, data_json
+             FROM windows
+             WHERE window_start >= :since
+             ORDER BY window_start ASC`,
+            { ':since': since },
+        );
 
         // Group by window_start
         const windowMap = new Map<string, MetricsWindow>();
@@ -267,11 +336,14 @@ export class MetricsStorage {
      * Query raw request entries for a model within a time range.
      */
     queryRequests(modelId: string, since: string, limit: number = 1000): MetricsRequestEntry[] {
-        const rows = this.stmtQueryRequests.all({
-            model_id: modelId,
-            since,
-            limit,
-        }) as Array<Record<string, unknown>>;
+        const rows = this.queryAll<Record<string, SqlValue>>(
+            `SELECT * FROM requests
+             WHERE model_id = :model_id
+               AND timestamp >= :since
+             ORDER BY timestamp DESC
+             LIMIT :limit`,
+            { ':model_id': modelId, ':since': since, ':limit': limit },
+        );
 
         return rows.map(row => ({
             timestamp: row.timestamp as string,
@@ -300,28 +372,34 @@ export class MetricsStorage {
      * within a time range.
      */
     getTotalCost(modelId: string, since: string): number {
-        const row = this.db.prepare(`
-            SELECT COALESCE(SUM(cost_usd), 0) as total
-            FROM requests
-            WHERE model_id = @model_id AND timestamp >= @since
-        `).get({ model_id: modelId, since }) as { total: number };
-        return row.total;
+        const row = this.queryOne<{ total: number }>(
+            `SELECT COALESCE(SUM(cost_usd), 0) as total
+             FROM requests
+             WHERE model_id = :model_id AND timestamp >= :since`,
+            { ':model_id': modelId, ':since': since },
+        );
+        return row?.total ?? 0;
     }
 
     /**
      * Get cost breakdown by model within a time range.
      */
     getCostBreakdown(since: string): Array<{ modelId: string; totalCost: number; requestCount: number }> {
-        const rows = this.db.prepare(`
-            SELECT
-                model_id,
-                COALESCE(SUM(cost_usd), 0) as total_cost,
-                COUNT(*) as request_count
-            FROM requests
-            WHERE timestamp >= @since
-            GROUP BY model_id
-            ORDER BY total_cost DESC
-        `).all({ since }) as Array<{ model_id: string; total_cost: number; request_count: number }>;
+        const rows = this.queryAll<{
+            model_id: string;
+            total_cost: number;
+            request_count: number;
+        }>(
+            `SELECT
+                 model_id,
+                 COALESCE(SUM(cost_usd), 0) as total_cost,
+                 COUNT(*) as request_count
+             FROM requests
+             WHERE timestamp >= :since
+             GROUP BY model_id
+             ORDER BY total_cost DESC`,
+            { ':since': since },
+        );
 
         return rows.map(r => ({
             modelId: r.model_id,
@@ -341,35 +419,55 @@ export class MetricsStorage {
             Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000,
         ).toISOString();
 
-        const txn = this.db.transaction(() => {
-            const reqResult = this.stmtPruneRequests.run({ cutoff });
-            const winResult = this.stmtPruneWindows.run({ cutoff });
-            return {
-                requestsDeleted: reqResult.changes,
-                windowsDeleted: winResult.changes,
-            };
-        });
+        this.autoSave = false;
+        try {
+            this.db.run('BEGIN');
 
-        return txn();
+            this.db.run(
+                'DELETE FROM requests WHERE timestamp < :cutoff',
+                { ':cutoff': cutoff },
+            );
+            const requestsDeleted = this.db.getRowsModified();
+
+            this.db.run(
+                'DELETE FROM windows WHERE window_start < :cutoff',
+                { ':cutoff': cutoff },
+            );
+            const windowsDeleted = this.db.getRowsModified();
+
+            this.db.run('COMMIT');
+            return { requestsDeleted, windowsDeleted };
+        } catch (err) {
+            this.db.run('ROLLBACK');
+            throw err;
+        } finally {
+            this.autoSave = true;
+            this.saveToDisk();
+        }
     }
 
     /** Number of distinct windows stored. */
     getWindowCount(): number {
-        const row = this.stmtWindowCount.get() as { cnt: number };
-        return row.cnt;
+        const row = this.queryOne<{ cnt: number }>(
+            'SELECT COUNT(DISTINCT window_start) as cnt FROM windows',
+        );
+        return row?.cnt ?? 0;
     }
 
     /** Total number of raw request entries stored. */
     getRequestCount(): number {
-        const row = this.stmtRequestCount.get() as { cnt: number };
-        return row.cnt;
+        const row = this.queryOne<{ cnt: number }>(
+            'SELECT COUNT(*) as cnt FROM requests',
+        );
+        return row?.cnt ?? 0;
     }
 
     /**
      * Vacuum the database to reclaim space after large deletions.
      */
     vacuum(): void {
-        this.db.exec('VACUUM');
+        this.db.run('VACUUM');
+        this.saveToDisk();
     }
 
     /** Close the database connection. */

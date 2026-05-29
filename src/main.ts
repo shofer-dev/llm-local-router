@@ -624,7 +624,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const dbPath = vscode.Uri.joinPath(context.globalStorageUri, 'metrics.db').fsPath;
     let storage: MetricsStorage | undefined;
     try {
-        storage = new MetricsStorage(dbPath);
+        storage = await MetricsStorage.create(dbPath);
     } catch (err) {
         // Storage initialization failure is non-fatal — metrics still work in-memory
         getLogger().warning(`Failed to initialize metrics storage: ${err}`);

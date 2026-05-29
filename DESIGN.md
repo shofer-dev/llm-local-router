@@ -333,11 +333,11 @@ In-process, in-memory metrics aggregation with 5-minute aligned time windows. Re
 
 **Prometheus export**: `toPrometheusText()` produces Prometheus text format compatible with node_exporter textfile collector, enabling external scraping if desired.
 
-**SQLite persistence** (`metrics-storage.ts`): Automatic persistence via better-sqlite3. On each 5-minute window boundary, the closing window's aggregated stats and raw request entries are flushed to disk. On startup, recent windows (last 24h) are loaded back into memory. The database file lives in VS Code's `globalStorageUri`. Retention is 30 days with automatic pruning every 100 windows (~8.3 hours).
+**SQLite persistence** (`metrics-storage.ts`): Automatic persistence via sql.js (SQLite compiled to WebAssembly — pure TypeScript, no native addons). On each 5-minute window boundary, the closing window's aggregated stats and raw request entries are flushed to disk. On startup, recent windows (last 24h) are loaded back into memory. The database file lives in VS Code's `globalStorageUri`. Retention is 30 days with automatic pruning every 100 windows (~8.3 hours).
 
 ### 9. Metrics Storage (`metrics-storage.ts`)
 
-SQLite persistence layer using `better-sqlite3` for storing per-request entries and pre-aggregated window data.
+SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for storing per-request entries and pre-aggregated window data.
 
 **Schema**: Two tables —
 - `requests`: Raw per-request entries (18 columns) with indexes on timestamp, model_id, status, and composite_model_id

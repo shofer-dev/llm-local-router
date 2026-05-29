@@ -2,7 +2,7 @@
   "name": "shofer-router",
   "displayName": "Shofer LLM Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "arkware",
   "repository": "https://github.com/arkware/arkware.ai",
   "engines": {
@@ -150,8 +150,12 @@
     "watch": "tsc -p ./tsconfig.json --watch",
     "package": "npm run compile && npx @vscode/vsce package"
   },
+  "dependencies": {
+    "sql.js": "^1.12.0"
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.96.0",
     "typescript": "^5.7.2",
     "@vscode/vsce": "^3.2.2"
