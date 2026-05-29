@@ -55,10 +55,47 @@ function getConfiguration(): RouterConfig {
 
 // ─── Status bar ───────────────────────────────────────────────────
 
+async function handleStatusBarMenu(): Promise<void> {
+    const picked = await vscode.window.showQuickPick(
+        [
+            {
+                label: '$(pulse) Status',
+                description: 'Provider health, models, connection info',
+                action: 'status',
+            },
+            {
+                label: '$(gear) Configure',
+                description: 'Composite models, API keys, settings',
+                action: 'configure',
+            },
+            {
+                label: '$(graph) Metrics',
+                description: 'Cost, latency, token usage statistics',
+                action: 'metrics',
+            },
+        ],
+        { placeHolder: 'Shofer LLM Router' },
+    );
+
+    if (!picked) return;
+
+    switch (picked.action) {
+        case 'status':
+            await vscode.commands.executeCommand('shofer.llm.showModels');
+            break;
+        case 'configure':
+            await vscode.commands.executeCommand('shofer.llm.configureWebview');
+            break;
+        case 'metrics':
+            await vscode.commands.executeCommand('shofer.llm.getMetrics');
+            break;
+    }
+}
+
 function updateStatusBar(): void {
     if (!statusBarItem) {
         statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-        statusBarItem.command = 'shofer.llm.showModels';
+        statusBarItem.command = 'shofer.llm.statusBarMenu';
     }
 
     const providerCount = languageModelProvider?.getConfiguredProviderCount() ?? 0;
@@ -662,6 +699,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // Register commands
+    const statusBarMenuCommand = vscode.commands.registerCommand('shofer.llm.statusBarMenu', handleStatusBarMenu);
     const configureCommand = vscode.commands.registerCommand('shofer.llm.configure', handleConfigure);
     const configureWebviewCommand = vscode.commands.registerCommand('shofer.llm.configureWebview', handleConfigureWebview);
     const showModelsCommand = vscode.commands.registerCommand('shofer.llm.showModels', handleShowModels);
@@ -720,6 +758,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Register disposables
     context.subscriptions.push(
         providerDisposable,
+        statusBarMenuCommand,
         configureCommand,
         configureWebviewCommand,
         showModelsCommand,
