@@ -74,6 +74,11 @@
           "default": "",
           "description": "Path to a composite-models.json file defining arkware/* composite models"
         },
+        "shofer.router.experimental.prometheusEndpoint": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Prometheus /metrics HTTP endpoint on 127.0.0.1:30098 (port overridable via SHOFER_ROUTER_METRICS_PORT env var)"
+        },
         "shofer.router.compositeModelsConfig": {
           "type": "string",
           "default": "",

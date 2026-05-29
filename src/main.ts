@@ -15,6 +15,7 @@ import { initLogger, getLogger, setDebugMode } from './logger';
 import { loadApiKeys, onApiKeysChanged } from './secret-storage';
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
+import { startMetricsServer, stopMetricsServer } from './metrics-server';
 
 // ─── Extension state ──────────────────────────────────────────────
 
@@ -523,6 +524,7 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void
 
     const newConfig = getConfiguration();
     const debugChanged = event.affectsConfiguration('shofer.router.debug');
+    const prometheusChanged = event.affectsConfiguration('shofer.router.experimental.prometheusEndpoint');
 
     if (debugChanged) setDebugMode(newConfig.debug);
 
@@ -531,6 +533,20 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void
     }
 
     config = newConfig;
+
+    // Handle Prometheus endpoint toggle
+    if (prometheusChanged) {
+        const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+        if (wsConfig.get('experimental.prometheusEndpoint', false)) {
+            startMetricsServer().catch(err =>
+                logger.warning(`Failed to start Prometheus metrics server: ${err}`)
+            );
+        } else {
+            stopMetricsServer().catch(err =>
+                logger.warning(`Failed to stop Prometheus metrics server: ${err}`)
+            );
+        }
+    }
 
     if (config.enabled) {
         if (!isConnected && !isConnecting) {
@@ -737,6 +753,11 @@ export function deactivate(): void {
 
     // Flush metrics to storage before shutdown
     shutdownMetricsCollector();
+
+    // Stop Prometheus metrics server
+    stopMetricsServer().catch(err =>
+        logger.warning(`Failed to stop Prometheus metrics server: ${err}`)
+    );
 
     if (statusBarItem) {
         statusBarItem.dispose();
