@@ -2,24 +2,30 @@ import React from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import ConfigEditor from './components/ConfigEditor';
 import MetricsPanel from './components/MetricsPanel';
-import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, MetricsPayload } from './types';
+import StatusPanel from './components/StatusPanel';
+import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, MetricsPayload, StatusPayload } from './types';
 import { onMessage, postMessage } from './utils/vscode';
 
-type Tab = 'config' | 'metrics';
+type Tab = 'status' | 'config' | 'metrics';
 
 /**
  * Root application component with tab navigation.
  *
- * Two tabs:
- *   - Config: composite model editor (existing)
- *   - Metrics: live metrics dashboard (new)
+ * Three tabs:
+ *   - Status: provider health, available models, connection info
+ *   - Config: composite model editor
+ *   - Metrics: live metrics dashboard
+ *
+ * The host can specify an activeTab in the initConfig message to
+ * set the initial tab when opening the webview.
  */
 export default function App() {
   const [initialized, setInitialized] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<Tab>('config');
+  const [activeTab, setActiveTab] = React.useState<Tab>('status');
   const [compositeModels, setCompositeModels] = React.useState<CompositeModelConfig[]>([]);
   const [modelRegistry, setModelRegistry] = React.useState<ModelRegistrySummary[]>([]);
   const [metrics, setMetrics] = React.useState<MetricsPayload | null>(null);
+  const [status, setStatus] = React.useState<StatusPayload | null>(null);
 
   React.useEffect(() => {
     // Signal that the webview is ready to receive data
@@ -29,9 +35,14 @@ export default function App() {
       if (msg.type === 'initConfig') {
         setCompositeModels(msg.compositeModels);
         setModelRegistry(msg.modelRegistry);
+        if (msg.activeTab) {
+          setActiveTab(msg.activeTab);
+        }
         setInitialized(true);
       } else if (msg.type === 'metricsUpdate') {
         setMetrics(msg.metrics);
+      } else if (msg.type === 'statusUpdate') {
+        setStatus(msg.status);
       }
     });
 
@@ -51,6 +62,12 @@ export default function App() {
       <div style={styles.root}>
         <div style={styles.tabBar}>
           <button
+            style={activeTab === 'status' ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab('status')}
+          >
+            🔌 Status
+          </button>
+          <button
             style={activeTab === 'config' ? styles.tabActive : styles.tab}
             onClick={() => setActiveTab('config')}
           >
@@ -65,11 +82,11 @@ export default function App() {
         </div>
 
         <div style={styles.content}>
-          {activeTab === 'config' ? (
+          {activeTab === 'status' && <StatusPanel status={status} />}
+          {activeTab === 'config' && (
             <ConfigEditor initialModels={compositeModels} modelRegistry={modelRegistry} />
-          ) : (
-            <MetricsPanel metrics={metrics} />
           )}
+          {activeTab === 'metrics' && <MetricsPanel metrics={metrics} />}
         </div>
       </div>
     </ErrorBoundary>

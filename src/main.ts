@@ -54,68 +54,49 @@ function getConfiguration(): RouterConfig {
 }
 
 // ─── Status bar ───────────────────────────────────────────────────
+//
+// A status bar icon-button in the bottom-right corner shows the
+// router's health state. Clicking it opens the webview panel
+// directly to the Status tab.
+//
+// **Why not floating?** VS Code does not support floating UI
+// elements. Status bar items are the standard anchor for extension
+// status indicators (#2 most common after activity bar icons).
+// The shofer extension itself uses an activity bar icon.
 
-async function handleStatusBarMenu(): Promise<void> {
-    const picked = await vscode.window.showQuickPick(
-        [
-            {
-                label: '$(pulse) Status',
-                description: 'Provider health, models, connection info',
-                action: 'status',
-            },
-            {
-                label: '$(gear) Configure',
-                description: 'API keys, model settings, composite models',
-                action: 'configure',
-            },
-            {
-                label: '$(graph) Metrics',
-                description: 'Cost, latency, token usage statistics',
-                action: 'metrics',
-            },
-        ],
-        { placeHolder: 'Shofer LLM Router' },
-    );
-
-    if (!picked) return;
-
-    switch (picked.action) {
-        case 'status':
-            await vscode.commands.executeCommand('shofer.llm.showModels');
-            break;
-        case 'configure':
-            await vscode.commands.executeCommand('shofer.llm.configure');
-            break;
-        case 'metrics':
-            await vscode.commands.executeCommand('shofer.llm.getMetrics');
-            break;
+async function handleStatusBarClick(): Promise<void> {
+    if (!routerConfigProvider) {
+        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
+        return;
     }
+    await routerConfigProvider.show('status');
 }
 
 function updateStatusBar(): void {
     if (!statusBarItem) {
-        statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-        statusBarItem.command = 'shofer.llm.statusBarMenu';
+        statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1);
+        statusBarItem.command = 'shofer.router.statusBarClick';
+        statusBarItem.name = 'Shofer LLM Router';
     }
 
     const providerCount = languageModelProvider?.getConfiguredProviderCount() ?? 0;
     let statusText: string;
 
     if (!config.enabled) {
-        statusText = '$(circle-slash)';
-        statusBarItem.tooltip = 'Shofer LLM Router (disabled)';
+        statusText = '$(circle-slash) Shofer Router';
+        statusBarItem.tooltip = 'Shofer LLM Router — disabled. Click to open settings.';
         statusBarItem.backgroundColor = undefined;
     } else if (isConnecting) {
-        statusText = '$(sync~spin)';
-        statusBarItem.tooltip = 'Shofer LLM Router (connecting...)';
+        statusText = '$(sync~spin) Shofer Router';
+        statusBarItem.tooltip = 'Shofer LLM Router — connecting...';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else if (!isConnected) {
-        statusText = '$(warning)';
-        statusBarItem.tooltip = 'Shofer LLM Router (disconnected — configure API keys)';
+        statusText = '$(warning) Shofer Router';
+        statusBarItem.tooltip = 'Shofer LLM Router — disconnected. Click for status.';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else {
-        statusText = `$(rocket) ${providerCount}`;
-        statusBarItem.tooltip = `Shofer LLM Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured`;
+        statusText = `$(rocket) Shofer Router`;
+        statusBarItem.tooltip = `Shofer LLM Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured. Click for status.`;
         statusBarItem.backgroundColor = undefined;
     }
 
@@ -214,61 +195,26 @@ async function connectWithRetry(): Promise<void> {
 // ─── Commands ─────────────────────────────────────────────────────
 
 async function handleConfigure(): Promise<void> {
-    getLogger().info('Opening extension settings');
-    await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:Shoferdev.shofer-router');
-}
-
-async function handleConfigureWebview(): Promise<void> {
+    getLogger().info('Opening webview configuration panel');
     if (!routerConfigProvider) {
         vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
         return;
     }
-    await routerConfigProvider.show();
+    await routerConfigProvider.show('config');
+}
+
+async function handleConfigureWebview(): Promise<void> {
+    // Legacy alias for handleConfigure — open the config tab
+    await handleConfigure();
 }
 
 async function handleShowModels(): Promise<void> {
-    if (!languageModelProvider) {
+    getLogger().info('Opening webview status panel');
+    if (!routerConfigProvider) {
         vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
         return;
     }
-
-    const models = languageModelProvider.getAvailableModels();
-    if (models.length === 0) {
-        vscode.window.showInformationMessage('No models available. Configure API keys to get started.');
-        return;
-    }
-
-    const items = models.map(m => {
-        const parts: string[] = [];
-        parts.push(`In: ${m.maxInputTokens.toLocaleString()}`);
-        parts.push(`Out: ${m.maxOutputTokens.toLocaleString()}`);
-        if (m.pricing) {
-            parts.push(`$${m.pricing.inputPrice}/$${m.pricing.outputPrice}/1M`);
-        }
-        const caps: string[] = [];
-        if (m.capabilities.imageInput) caps.push('image');
-        if (m.capabilities.toolCalling) caps.push('tools');
-        if (m.capabilities.promptCache) caps.push('cache');
-
-        return {
-            label: `$(rocket) ${m.name}`,
-            description: m.id,
-            detail: `${parts.join(' | ')}${caps.length ? `  [${caps.join(', ')}]` : ''}`,
-            modelId: m.id,
-        };
-    });
-
-    const selected = await vscode.window.showQuickPick(items, {
-        title: `Shofer LLM Router (${models.length} models)`,
-        placeHolder: 'Select a model to copy its ID to clipboard',
-        matchOnDescription: true,
-        matchOnDetail: true,
-    });
-
-    if (selected) {
-        await vscode.env.clipboard.writeText(selected.modelId);
-        vscode.window.showInformationMessage(`Copied: ${selected.modelId}`);
-    }
+    await routerConfigProvider.show('status');
 }
 
 async function handleRefreshModels(): Promise<void> {
@@ -321,81 +267,12 @@ async function handleTestConnection(): Promise<void> {
 }
 
 async function handleGetMetrics(): Promise<void> {
-    const collector = getMetricsCollector();
-    const win = collector.getCurrentWindow();
-    const summaries = collector.getAllModelSummaries(1); // last window only
-
-    if (summaries.length === 0) {
-        vscode.window.showInformationMessage('No metrics collected yet. Make some LLM requests first.');
+    getLogger().info('Opening webview metrics panel');
+    if (!routerConfigProvider) {
+        vscode.window.showErrorMessage('Shofer LLM Router: Provider not initialized');
         return;
     }
-
-    const items = summaries.map(s => ({
-        label: `$(graph) ${s.modelId}`,
-        description: `${s.provider}`,
-        detail: [
-            `Reqs: ${s.totalRequests} (${((s.availability ?? 0) * 100).toFixed(1)}% avail)`,
-            `Cost: $${s.totalCostUsd.toFixed(4)}`,
-            `TTLB: avg ${Math.round(s.avgTtlbMs)}ms / p90 ${Math.round(s.p90TtlbMs)}ms`,
-            `Tokens: ${s.totalPromptTokens.toLocaleString()} in / ${s.totalCompletionTokens.toLocaleString()} out`,
-            s.cacheHitRatio > 0 ? `Cache: ${(s.cacheHitRatio * 100).toFixed(1)}%` : '',
-        ].filter(Boolean).join(' | '),
-        modelId: s.modelId,
-    }));
-
-    const selected = await vscode.window.showQuickPick(items, {
-        title: 'Shofer LLM Router: Model Metrics (current window)',
-        placeHolder: 'Select a model for details, or ESC to dismiss',
-        matchOnDescription: true,
-    });
-
-    if (selected) {
-        const history = collector.getModelHistory(selected.modelId, 12); // last hour
-        const summary = collector.getModelSummary(selected.modelId, 12);
-        if (!summary) return;
-
-        const lines = [
-            `=== ${selected.modelId} (${summary.provider}) ===`,
-            `Window: ${summary.windowCount} × 5m (${(summary.windowCount * 5 / 60).toFixed(1)}h)`,
-            ``,
-            `Requests:   ${summary.totalRequests} total`,
-            `  Success:  ${summary.totalSuccess}`,
-            `  Errors:   ${summary.totalErrors}`,
-            `  Timeouts: ${summary.totalTimeouts}`,
-            `  Cancel'd: ${summary.totalCancelled}`,
-            `Available:  ${((summary.availability ?? 0) * 100).toFixed(2)}%`,
-            ``,
-            `Latency:`,
-            `  TTFB avg: ${Math.round(summary.avgTtfbMs)}ms`,
-            `  TTLB avg: ${Math.round(summary.avgTtlbMs)}ms`,
-            `  TTLB p90: ${Math.round(summary.p90TtlbMs)}ms`,
-            ``,
-            `Tokens:`,
-            `  Prompt:    ${summary.totalPromptTokens.toLocaleString()}`,
-            `  Compl:     ${summary.totalCompletionTokens.toLocaleString()}`,
-            `  Cache hit: ${(summary.cacheHitRatio * 100).toFixed(1)}%`,
-            ``,
-            `Cost: $${summary.totalCostUsd.toFixed(6)}`,
-        ];
-
-        // Show per-window breakdown using window history
-        const windows = collector.getWindowHistory(12);
-        if (windows.length > 1) {
-            lines.push(``, `Per-window (newest first):`);
-            for (const win of windows) {
-                const modelStats = win.models[selected.modelId];
-                if (!modelStats) continue;
-                const ts = new Date(win.windowStart).toLocaleTimeString();
-                lines.push(`  ${ts}: ${modelStats.requestCount} reqs, ${((modelStats.availability ?? 0) * 100).toFixed(0)}% avail, $${modelStats.totalCostUsd.toFixed(4)}`);
-            }
-        }
-
-        const doc = await vscode.workspace.openTextDocument({
-            content: lines.join('\n'),
-            language: 'plaintext',
-        });
-        await vscode.window.showTextDocument(doc, { preview: true });
-    }
+    await routerConfigProvider.show('metrics');
 }
 
 async function handleGetModelStats(modelId?: string): Promise<void> {
@@ -650,10 +527,10 @@ async function loadCompositeModels(context: vscode.ExtensionContext): Promise<vo
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    // Initialize logger
+    // Initialize logger — uses a dedicated "Shofer Router" output channel
     const wsConfig = vscode.workspace.getConfiguration('shofer.router');
     const debugEnabled = wsConfig.get('debug', false);
-    initLogger('Shofer LLM Router', debugEnabled);
+    initLogger('Shofer Router', debugEnabled);
 
     // Show status bar immediately — it updates as state changes
     config = getConfiguration();
@@ -700,14 +577,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // Register commands
-    const statusBarMenuCommand = vscode.commands.registerCommand('shofer.llm.statusBarMenu', handleStatusBarMenu);
-    const configureCommand = vscode.commands.registerCommand('shofer.llm.configure', handleConfigure);
-    const configureWebviewCommand = vscode.commands.registerCommand('shofer.llm.configureWebview', handleConfigureWebview);
-    const showModelsCommand = vscode.commands.registerCommand('shofer.llm.showModels', handleShowModels);
-    const refreshModelsCommand = vscode.commands.registerCommand('shofer.llm.refreshModels', handleRefreshModels);
-    const testConnectionCommand = vscode.commands.registerCommand('shofer.llm.testConnection', handleTestConnection);
+    const statusBarClickCommand = vscode.commands.registerCommand('shofer.router.statusBarClick', handleStatusBarClick);
+    const configureCommand = vscode.commands.registerCommand('shofer.router.configure', handleConfigure);
+    const configureWebviewCommand = vscode.commands.registerCommand('shofer.router.configureWebview', handleConfigureWebview);
+    const showModelsCommand = vscode.commands.registerCommand('shofer.router.showModels', handleShowModels);
+    const refreshModelsCommand = vscode.commands.registerCommand('shofer.router.refreshModels', handleRefreshModels);
+    const testConnectionCommand = vscode.commands.registerCommand('shofer.router.testConnection', handleTestConnection);
 
-    // Side-channel commands for downstream consumers (Shofer's vscode-lm provider)
+    // Side-channel commands for downstream consumers (Shofer's vscode-lm provider).
+    // IMPORTANT: These command IDs are consumed by extensions/shofer and MUST
+    // stay as shofer.llm.* to avoid breaking the vscode-lm provider integration.
     const getModelPricingCommand = vscode.commands.registerCommand(
         'shofer.llm.getModelPricing',
         (modelId: string) => languageModelProvider?.getPricing(modelId),
@@ -723,23 +602,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Metrics commands
     const getMetricsCommand = vscode.commands.registerCommand(
-        'shofer.llm.getMetrics',
+        'shofer.router.getMetrics',
         handleGetMetrics,
     );
     const getModelStatsCommand = vscode.commands.registerCommand(
-        'shofer.llm.getModelStats',
+        'shofer.router.getModelStats',
         handleGetModelStats,
     );
     const exportMetricsCommand = vscode.commands.registerCommand(
-        'shofer.llm.exportMetrics',
+        'shofer.router.exportMetrics',
         handleExportMetrics,
     );
     const getCompositeDistributionCommand = vscode.commands.registerCommand(
-        'shofer.llm.getCompositeDistribution',
+        'shofer.router.getCompositeDistribution',
         handleGetCompositeDistribution,
     );
     const getCostHistoryCommand = vscode.commands.registerCommand(
-        'shofer.llm.getCostHistory',
+        'shofer.router.getCostHistory',
         handleGetCostHistory,
     );
 
@@ -759,7 +638,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Register disposables
     context.subscriptions.push(
         providerDisposable,
-        statusBarMenuCommand,
+        statusBarClickCommand,
         configureCommand,
         configureWebviewCommand,
         showModelsCommand,

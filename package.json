@@ -2,7 +2,7 @@
   "name": "shofer-router",
   "displayName": "Shofer LLM Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "AGPL-3.0-only",
   "publisher": "Shoferdev",
   "repository": "https://github.com/arkware/arkware.ai",
@@ -95,52 +95,52 @@
     },
     "commands": [
       {
-        "command": "shofer.llm.configure",
+        "command": "shofer.router.configure",
         "title": "Shofer LLM Router: Configure",
         "description": "Configure the Shofer LLM Router settings"
       },
       {
-        "command": "shofer.llm.showModels",
+        "command": "shofer.router.showModels",
         "title": "Shofer LLM Router: Show Models",
         "description": "Show available models"
       },
       {
-        "command": "shofer.llm.refreshModels",
+        "command": "shofer.router.refreshModels",
         "title": "Shofer LLM Router: Refresh Models",
         "description": "Refresh the list of available models"
       },
       {
-        "command": "shofer.llm.testConnection",
+        "command": "shofer.router.testConnection",
         "title": "Shofer LLM Router: Test Connection",
         "description": "Test connectivity to LLM providers"
       },
       {
-        "command": "shofer.llm.getMetrics",
+        "command": "shofer.router.getMetrics",
         "title": "Shofer LLM Router: Show Metrics",
         "description": "Show per-model cost, latency, and reliability metrics"
       },
       {
-        "command": "shofer.llm.getModelStats",
+        "command": "shofer.router.getModelStats",
         "title": "Shofer LLM Router: Show Model Stats",
         "description": "Show detailed statistics for a specific model"
       },
       {
-        "command": "shofer.llm.exportMetrics",
+        "command": "shofer.router.exportMetrics",
         "title": "Shofer LLM Router: Export Metrics (Prometheus)",
         "description": "Export current metrics in Prometheus text format"
       },
       {
-        "command": "shofer.llm.getCompositeDistribution",
+        "command": "shofer.router.getCompositeDistribution",
         "title": "Shofer LLM Router: Show Composite Distribution",
         "description": "Show load-balancing distribution for a composite model"
       },
       {
-        "command": "shofer.llm.getCostHistory",
+        "command": "shofer.router.getCostHistory",
         "title": "Shofer LLM Router: Show Cost History",
         "description": "Show cost breakdown by model across a selected time range"
       },
       {
-        "command": "shofer.llm.configureWebview",
+        "command": "shofer.router.configureWebview",
         "title": "Shofer LLM Router: Configure Composite Models",
         "description": "Configure composite (shofer/*) models with a visual editor"
       }
@@ -160,5 +160,8 @@
     "@types/vscode": "^1.96.0",
     "typescript": "^5.7.2",
     "@vscode/vsce": "^3.2.2"
+  },
+  "overrides": {
+    "encoding-sniffer": "0.2.1"
   }
 }

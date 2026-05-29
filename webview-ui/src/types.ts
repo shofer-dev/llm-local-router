@@ -103,6 +103,34 @@ export interface MetricsPayload {
   compositeMetrics: CompositeMetrics[];
 }
 
+// ─── Status data (for StatusPanel) ──────────────────────────────
+
+export interface ProviderStatus {
+  name: string;
+  configured: boolean;
+  modelCount: number;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  imageInput: boolean;
+  toolCalling: boolean;
+  promptCache: boolean;
+  isComposite: boolean;
+  pricing?: { inputPrice: number; outputPrice: number };
+}
+
+export interface StatusPayload {
+  connected: boolean;
+  enabled: boolean;
+  providers: ProviderStatus[];
+  models: ModelInfo[];
+}
+
 // ─── Host → Webview messages ────────────────────────────────────
 
 export type HostMessage =
@@ -110,11 +138,13 @@ export type HostMessage =
       type: 'initConfig';
       compositeModels: CompositeModelConfig[];
       modelRegistry: ModelRegistrySummary[];
+      activeTab?: 'status' | 'config' | 'metrics';
     }
   | { type: 'configSaved' }
   | { type: 'validationError'; errors: string[] }
   | { type: 'configImported'; compositeModels: CompositeModelConfig[] }
-  | { type: 'metricsUpdate'; metrics: MetricsPayload };
+  | { type: 'metricsUpdate'; metrics: MetricsPayload }
+  | { type: 'statusUpdate'; status: StatusPayload };
 
 // ─── Webview → Host messages ────────────────────────────────────
 

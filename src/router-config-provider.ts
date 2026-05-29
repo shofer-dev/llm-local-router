@@ -25,13 +25,16 @@ import * as fs from 'fs';
 import { LanguageModelProvider } from './language-model-provider';
 import { ALL_MODELS } from './model-registry';
 import { getMetricsCollector } from './metrics-collector';
-import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution } from './types';
+import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution, ProviderModelInfo } from './types';
 import {
   convertToHostConfig,
   convertFromHostConfigs,
   validateCompositeModels,
   type WebviewCompositeModel,
 } from './config-converter';
+
+/** The tab to show when opening the webview panel. */
+export type WebviewTab = 'status' | 'config' | 'metrics';
 
 // ─── Webview message types (mirrors webview-ui/src/types.ts) ────────
 
@@ -45,6 +48,32 @@ interface ModelRegistrySummary {
   imageInput: boolean;
   toolCalling: boolean;
   promptCache: boolean;
+}
+
+interface ProviderStatus {
+  name: string;
+  configured: boolean;
+  modelCount: number;
+}
+
+interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  imageInput: boolean;
+  toolCalling: boolean;
+  promptCache: boolean;
+  isComposite: boolean;
+  pricing?: { inputPrice: number; outputPrice: number };
+}
+
+interface StatusPayload {
+  connected: boolean;
+  enabled: boolean;
+  providers: ProviderStatus[];
+  models: ModelInfo[];
 }
 
 interface MetricsPayload {
@@ -83,11 +112,12 @@ interface MetricsPayload {
 }
 
 type HostMessage =
-  | { type: 'initConfig'; compositeModels: WebviewCompositeModel[]; modelRegistry: ModelRegistrySummary[] }
+  | { type: 'initConfig'; compositeModels: WebviewCompositeModel[]; modelRegistry: ModelRegistrySummary[]; activeTab?: WebviewTab }
   | { type: 'configSaved' }
   | { type: 'validationError'; errors: string[] }
   | { type: 'configImported'; compositeModels: WebviewCompositeModel[] }
-  | { type: 'metricsUpdate'; metrics: MetricsPayload };
+  | { type: 'metricsUpdate'; metrics: MetricsPayload }
+  | { type: 'statusUpdate'; status: StatusPayload };
 
 type WebviewMessage =
   | { type: 'webviewReady' }
@@ -109,24 +139,31 @@ export class RouterConfigProvider {
   private disposables: vscode.Disposable[] = [];
   private languageModelProvider: LanguageModelProvider;
   private metricsInterval: ReturnType<typeof setInterval> | undefined;
+  /** The activeTab requested when show() was called; used when webviewReady fires. */
+  private pendingActiveTab: WebviewTab = 'status';
 
   constructor(languageModelProvider: LanguageModelProvider) {
     this.languageModelProvider = languageModelProvider;
   }
 
   /**
-   * Open or reveal the webview configuration panel.
+   * Open or reveal the webview panel.
+   *
+   * @param activeTab — which tab to focus when opening (defaults to 'status')
    */
-  async show(): Promise<void> {
+  async show(activeTab: WebviewTab = 'status'): Promise<void> {
+    this.pendingActiveTab = activeTab;
+
     if (this.panel) {
-      // Reveal existing panel
+      // Reveal existing panel and switch to the requested tab
       this.panel.reveal(vscode.ViewColumn.Active);
+      this.sendInitConfig(activeTab);
       return;
     }
 
     this.panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
-      'Shofer LLM Router: Composite Models',
+      'Shofer LLM Router',
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -275,7 +312,7 @@ export class RouterConfigProvider {
 
     switch (message.type) {
       case 'webviewReady':
-        await this.sendInitConfig();
+        await this.sendInitConfig(this.pendingActiveTab);
         this.startMetricsPush();
         break;
 
@@ -297,20 +334,89 @@ export class RouterConfigProvider {
     }
   }
 
-  private async sendInitConfig(): Promise<void> {
+  /**
+   * Send initial configuration, model registry, and status payload
+   * to the webview after it signals readiness.
+   */
+  private async sendInitConfig(activeTab?: WebviewTab): Promise<void> {
     if (!this.panel) return;
 
     // Read current composite models from settings
     const webviewModels = this.loadCompositeModelsFromSettings();
     const registry = this.buildModelRegistry();
+    const status = this.buildStatusPayload();
 
     const msg: HostMessage = {
       type: 'initConfig',
       compositeModels: webviewModels,
       modelRegistry: registry,
+      ...(activeTab ? { activeTab } : {}),
     };
 
     this.panel.webview.postMessage(msg);
+
+    // Also send status update as a separate message
+    this.panel.webview.postMessage({ type: 'statusUpdate', status });
+  }
+
+  /**
+   * Build the current status payload from the language model provider.
+   */
+  private buildStatusPayload(): StatusPayload {
+    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const enabled = wsConfig.get('enabled', true);
+    const connected = this.languageModelProvider.isReady();
+    const availableModels = this.languageModelProvider.getAvailableModels();
+
+    // Build a lookup from model ID → registry entry for provider resolution
+    const registryMap = new Map<string, ModelRegistryEntry>();
+    for (const entry of ALL_MODELS) {
+      registryMap.set(entry.id, entry);
+    }
+
+    // Derive provider status from available models grouped by their registry provider
+    const providerModels = new Map<string, ProviderModelInfo[]>();
+    for (const m of availableModels) {
+      const registry = registryMap.get(m.id);
+      const provider = registry?.provider ?? 'unknown';
+      if (!providerModels.has(provider)) {
+        providerModels.set(provider, []);
+      }
+      providerModels.get(provider)!.push(m);
+    }
+
+    // Known providers from the static registry
+    const knownProviders = [...new Set(ALL_MODELS.map(m => m.provider))];
+    const providers: ProviderStatus[] = knownProviders.map(name => {
+      const models = providerModels.get(name) ?? [];
+      return {
+        name,
+        configured: models.length > 0,
+        modelCount: models.length,
+      };
+    });
+
+    // Build model info list
+    const models: ModelInfo[] = availableModels.map(m => {
+      const registry = registryMap.get(m.id);
+      return {
+        id: m.id,
+        name: m.name,
+        provider: registry?.provider ?? m.family,
+        maxInputTokens: m.maxInputTokens,
+        maxOutputTokens: m.maxOutputTokens,
+        imageInput: m.capabilities.imageInput ?? false,
+        toolCalling: m.capabilities.toolCalling ?? false,
+        promptCache: m.capabilities.promptCache ?? false,
+        isComposite: m.id.startsWith('shofer/'),
+        pricing: m.pricing ? {
+          inputPrice: m.pricing.inputPrice ?? 0,
+          outputPrice: m.pricing.outputPrice ?? 0,
+        } : undefined,
+      };
+    });
+
+    return { connected, enabled, providers, models };
   }
 
   private startMetricsPush(): void {
