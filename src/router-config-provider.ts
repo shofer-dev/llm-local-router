@@ -176,6 +176,7 @@ export class RouterConfigProvider {
 
     this.panel.iconPath = vscode.Uri.joinPath(
       vscode.Uri.file(path.join(__dirname, '..')),
+      'assets',
       'icon.png',
     );
 
