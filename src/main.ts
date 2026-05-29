@@ -655,6 +655,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const debugEnabled = wsConfig.get('debug', false);
     initLogger('Shofer LLM Router', debugEnabled);
 
+    // Show status bar immediately — it updates as state changes
+    config = getConfiguration();
+    updateStatusBar();
+
     // Initialize metrics collector with SQLite persistence
     const dbPath = vscode.Uri.joinPath(context.globalStorageUri, 'metrics.db').fsPath;
     let storage: MetricsStorage | undefined;
