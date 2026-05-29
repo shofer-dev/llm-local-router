@@ -7,4 +7,5 @@
 - ✅ ~~Reliability metrics (latency percentiles, availability, error breakdown)~~
 - ✅ ~~Composite load-balancing distribution tracking~~
 - ✅ ~~SQLite persistence~~ — sql.js (WebAssembly), automatic window flushes, 30-day retention, cost history command
+- Add VS Code Marketplace metadata to package.json: `repository` as object with `type`, `icon` (128×128 PNG), `galleryBanner`, `homepage`, `bugs`, `pricing`, `author`, `keywords`
 - Prometheus endpoint for metrics (text export exists, needs HTTP endpoint or file write)
