@@ -14,7 +14,7 @@
  *   windows   — pre-aggregated window data as JSON blobs (for fast retrieval)
  */
 
-import initSqlJs, { Database as SqlJsDatabase, SqlValue } from 'sql.js';
+import type { Database as SqlJsDatabase, SqlValue } from 'sql.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import {
@@ -47,6 +47,13 @@ export class MetricsStorage {
      * if a database file already exists at the given path.
      */
     static async create(dbPath: string): Promise<MetricsStorage> {
+        // Dynamic import — sql.js is a large WASM module that may not be
+        // available when the extension is installed from a VSIX (node_modules
+        // are not bundled). We import lazily inside create() so that the
+        // top-level module load doesn't crash if sql.js is missing.
+        const sqlModule = await import('sql.js');
+        const initSqlJs = sqlModule.default;
+
         const dir = path.dirname(dbPath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
