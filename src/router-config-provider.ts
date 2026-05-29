@@ -384,7 +384,7 @@ export class RouterConfigProvider {
     // Read current composite models from settings
     const webviewModels = this.loadCompositeModelsFromSettings();
     const registry = this.buildModelRegistry();
-    const status = this.buildStatusPayload();
+    const status = await this.buildStatusPayload();
 
     const msg: HostMessage = {
       type: 'initConfig',
@@ -402,8 +402,9 @@ export class RouterConfigProvider {
 
   /**
    * Build the current status payload from the language model provider.
+   * Only includes providers and models for which API keys are configured.
    */
-  private buildStatusPayload(): StatusPayload {
+  private async buildStatusPayload(): Promise<StatusPayload> {
     const wsConfig = vscode.workspace.getConfiguration('shofer.router');
     const enabled = wsConfig.get('enabled', true);
     const connected = this.languageModelProvider.isReady();
@@ -415,47 +416,64 @@ export class RouterConfigProvider {
       registryMap.set(entry.id, entry);
     }
 
-    // Derive provider status from available models grouped by their registry provider
+    // Determine which providers have API keys configured
+    const configuredProviders = new Set<string>();
+    for (const entry of ALL_MODELS) {
+      if (configuredProviders.has(entry.provider)) continue;
+      try {
+        const key = await this.context.secrets.get(`shofer-router.provider.${entry.provider}`);
+        if (key) configuredProviders.add(entry.provider);
+      } catch {
+        // Secret not found — provider is not configured
+      }
+    }
+
+    // Build provider status: only configured providers
     const providerModels = new Map<string, ProviderModelInfo[]>();
     for (const m of availableModels) {
       const registry = registryMap.get(m.id);
       const provider = registry?.provider ?? 'unknown';
+      if (!configuredProviders.has(provider)) continue;
       if (!providerModels.has(provider)) {
         providerModels.set(provider, []);
       }
       providerModels.get(provider)!.push(m);
     }
 
-    // Known providers from the static registry
-    const knownProviders = [...new Set(ALL_MODELS.map(m => m.provider))];
-    const providers: ProviderStatus[] = knownProviders.map(name => {
+    const providers: ProviderStatus[] = [...configuredProviders].map(name => {
       const models = providerModels.get(name) ?? [];
       return {
         name,
-        configured: models.length > 0,
+        configured: true,
         modelCount: models.length,
       };
     });
 
-    // Build model info list
-    const models: ModelInfo[] = availableModels.map(m => {
-      const registry = registryMap.get(m.id);
-      return {
-        id: m.id,
-        name: m.name,
-        provider: registry?.provider ?? m.family,
-        maxInputTokens: m.maxInputTokens,
-        maxOutputTokens: m.maxOutputTokens,
-        imageInput: m.capabilities.imageInput ?? false,
-        toolCalling: m.capabilities.toolCalling ?? false,
-        promptCache: m.capabilities.promptCache ?? false,
-        isComposite: m.id.startsWith('shofer/'),
-        pricing: m.pricing ? {
-          inputPrice: m.pricing.inputPrice ?? 0,
-          outputPrice: m.pricing.outputPrice ?? 0,
-        } : undefined,
-      };
-    });
+    // Build model info list: only models from configured providers
+    const models: ModelInfo[] = availableModels
+      .filter(m => {
+        const registry = registryMap.get(m.id);
+        const provider = registry?.provider ?? m.family;
+        return configuredProviders.has(provider) || m.id.startsWith('shofer/');
+      })
+      .map(m => {
+        const registry = registryMap.get(m.id);
+        return {
+          id: m.id,
+          name: m.name,
+          provider: registry?.provider ?? m.family,
+          maxInputTokens: m.maxInputTokens,
+          maxOutputTokens: m.maxOutputTokens,
+          imageInput: m.capabilities.imageInput ?? false,
+          toolCalling: m.capabilities.toolCalling ?? false,
+          promptCache: m.capabilities.promptCache ?? false,
+          isComposite: m.id.startsWith('shofer/'),
+          pricing: m.pricing ? {
+            inputPrice: m.pricing.inputPrice ?? 0,
+            outputPrice: m.pricing.outputPrice ?? 0,
+          } : undefined,
+        };
+      });
 
     return { connected, enabled, providers, models };
   }
