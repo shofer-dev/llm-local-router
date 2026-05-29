@@ -62,6 +62,47 @@ export interface ModelRegistrySummary {
   promptCache: boolean;
 }
 
+// ─── Metrics data (for MetricsPanel) ─────────────────────────────
+
+export interface ModelMetrics {
+  modelId: string;
+  provider: string;
+  isComposite: boolean;
+  requestCount: number;
+  successCount: number;
+  errorCount: number;
+  timeoutCount: number;
+  cancelledCount: number;
+  availability: number;
+  ttfbP50: number;
+  ttfbP90: number;
+  ttfbP99: number;
+  ttlbP50: number;
+  ttlbP90: number;
+  ttlbP99: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalCachedTokens: number;
+  cacheHitRatio: number;
+  totalCostUsd: number;
+  errorTypes: Record<string, number>;
+}
+
+export interface CompositeMetrics {
+  compositeModelId: string;
+  modelCounts: Record<string, number>;
+  failoverCount: number;
+  midstreamFailureCount: number;
+  totalAttempts: number;
+}
+
+export interface MetricsPayload {
+  windowStart: string;
+  windowEnd: string;
+  modelMetrics: ModelMetrics[];
+  compositeMetrics: CompositeMetrics[];
+}
+
 // ─── Host → Webview messages ────────────────────────────────────
 
 export type HostMessage =
@@ -72,7 +113,8 @@ export type HostMessage =
     }
   | { type: 'configSaved' }
   | { type: 'validationError'; errors: string[] }
-  | { type: 'configImported'; compositeModels: CompositeModelConfig[] };
+  | { type: 'configImported'; compositeModels: CompositeModelConfig[] }
+  | { type: 'metricsUpdate'; metrics: MetricsPayload };
 
 // ─── Webview → Host messages ────────────────────────────────────
 

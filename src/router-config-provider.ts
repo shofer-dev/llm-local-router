@@ -24,7 +24,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { LanguageModelProvider } from './language-model-provider';
 import { ALL_MODELS } from './model-registry';
-import type { ModelRegistryEntry } from './types';
+import { getMetricsCollector } from './metrics-collector';
+import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution } from './types';
 import {
   convertToHostConfig,
   convertFromHostConfigs,
@@ -46,11 +47,47 @@ interface ModelRegistrySummary {
   promptCache: boolean;
 }
 
+interface MetricsPayload {
+  windowStart: string;
+  windowEnd: string;
+  modelMetrics: Array<{
+    modelId: string;
+    provider: string;
+    isComposite: boolean;
+    requestCount: number;
+    successCount: number;
+    errorCount: number;
+    timeoutCount: number;
+    cancelledCount: number;
+    availability: number;
+    ttfbP50: number;
+    ttfbP90: number;
+    ttfbP99: number;
+    ttlbP50: number;
+    ttlbP90: number;
+    ttlbP99: number;
+    totalPromptTokens: number;
+    totalCompletionTokens: number;
+    totalCachedTokens: number;
+    cacheHitRatio: number;
+    totalCostUsd: number;
+    errorTypes: Record<string, number>;
+  }>;
+  compositeMetrics: Array<{
+    compositeModelId: string;
+    modelCounts: Record<string, number>;
+    failoverCount: number;
+    midstreamFailureCount: number;
+    totalAttempts: number;
+  }>;
+}
+
 type HostMessage =
   | { type: 'initConfig'; compositeModels: WebviewCompositeModel[]; modelRegistry: ModelRegistrySummary[] }
   | { type: 'configSaved' }
   | { type: 'validationError'; errors: string[] }
-  | { type: 'configImported'; compositeModels: WebviewCompositeModel[] };
+  | { type: 'configImported'; compositeModels: WebviewCompositeModel[] }
+  | { type: 'metricsUpdate'; metrics: MetricsPayload };
 
 type WebviewMessage =
   | { type: 'webviewReady' }
@@ -71,6 +108,7 @@ export class RouterConfigProvider {
   private panel: vscode.WebviewPanel | undefined;
   private disposables: vscode.Disposable[] = [];
   private languageModelProvider: LanguageModelProvider;
+  private metricsInterval: ReturnType<typeof setInterval> | undefined;
 
   constructor(languageModelProvider: LanguageModelProvider) {
     this.languageModelProvider = languageModelProvider;
@@ -123,6 +161,7 @@ export class RouterConfigProvider {
    * Dispose the provider and panel.
    */
   dispose(): void {
+    this.stopMetricsPush();
     if (this.panel) {
       this.panel.dispose();
       this.panel = undefined;
@@ -237,6 +276,7 @@ export class RouterConfigProvider {
     switch (message.type) {
       case 'webviewReady':
         await this.sendInitConfig();
+        this.startMetricsPush();
         break;
 
       case 'saveConfig':
@@ -271,6 +311,80 @@ export class RouterConfigProvider {
     };
 
     this.panel.webview.postMessage(msg);
+  }
+
+  private startMetricsPush(): void {
+    if (this.metricsInterval) return;
+    // Push metrics every 15 seconds
+    this.metricsInterval = setInterval(() => {
+      this.pushMetrics();
+    }, 15_000);
+    // Also push immediately
+    this.pushMetrics();
+  }
+
+  private stopMetricsPush(): void {
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = undefined;
+    }
+  }
+
+  /**
+   * Build and send the current metrics payload to the webview.
+   * Mirrors the data available via the Prometheus /metrics endpoint.
+   */
+  private pushMetrics(): void {
+    if (!this.panel) return;
+
+    const collector = getMetricsCollector();
+    const win = collector.getCurrentWindow();
+    const summaries = collector.getAllModelSummaries();
+
+    // Build per-model metrics from current window stats
+    const modelMetrics = Object.entries(win.models).map(([modelId, stats]) => ({
+      modelId,
+      provider: stats.provider,
+      isComposite: stats.isComposite,
+      requestCount: stats.requestCount,
+      successCount: stats.successCount,
+      errorCount: stats.errorCount,
+      timeoutCount: stats.timeoutCount,
+      cancelledCount: stats.cancelledCount,
+      availability: stats.availability,
+      ttfbP50: stats.ttfbP50,
+      ttfbP90: stats.ttfbP90,
+      ttfbP99: stats.ttfbP99,
+      ttlbP50: stats.ttlbP50,
+      ttlbP90: stats.ttlbP90,
+      ttlbP99: stats.ttlbP99,
+      totalPromptTokens: stats.totalPromptTokens,
+      totalCompletionTokens: stats.totalCompletionTokens,
+      totalCachedTokens: stats.totalCachedTokens,
+      cacheHitRatio: stats.cacheHitRatio,
+      totalCostUsd: stats.totalCostUsd,
+      errorTypes: stats.errorTypes,
+    }));
+
+    // Build composite distribution metrics
+    const compositeMetrics = Object.entries(win.compositeRouting).map(
+      ([compositeId, dist]) => ({
+        compositeModelId: compositeId,
+        modelCounts: dist.modelCounts,
+        failoverCount: dist.failoverCount,
+        midstreamFailureCount: dist.midstreamFailureCount,
+        totalAttempts: dist.totalAttempts,
+      }),
+    );
+
+    const payload: MetricsPayload = {
+      windowStart: win.windowStart,
+      windowEnd: win.windowEnd,
+      modelMetrics,
+      compositeMetrics,
+    };
+
+    this.panel.webview.postMessage({ type: 'metricsUpdate', metrics: payload });
   }
 
   private async sendToWebview(msg: HostMessage): Promise<void> {
