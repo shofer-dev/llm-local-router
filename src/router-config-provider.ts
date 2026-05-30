@@ -394,7 +394,9 @@ export class RouterConfigProvider {
       return;
     }
     try {
-      const data = storage.getTimeSeries(since, modelIds, metric);
+      // cost_cumulative is computed client-side from per-window cost data
+      const storageMetric = metric === 'cost_cumulative' ? 'cost' : metric;
+      const data = storage.getTimeSeries(since, modelIds, storageMetric);
       const models = modelIds.length > 0 ? modelIds : storage.getDistinctModels(since);
       this.panel.webview.postMessage({ type: 'metricsQueryResponse', data, models });
     } catch (err) {

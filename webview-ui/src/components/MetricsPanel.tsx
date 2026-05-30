@@ -18,6 +18,7 @@ interface TimeSeriesPoint {
 
 type MetricKey =
   | 'cost'
+  | 'cost_cumulative'
   | 'requests'
   | 'errors'
   | 'tokens_total'
@@ -29,6 +30,7 @@ type MetricKey =
 
 const METRICS: Array<{ key: MetricKey; label: string; unit: string }> = [
   { key: 'cost', label: 'Cost', unit: '$' },
+  { key: 'cost_cumulative', label: 'Cost (Cumulative)', unit: '$' },
   { key: 'requests', label: 'Requests', unit: '' },
   { key: 'errors', label: 'Errors', unit: '' },
   { key: 'tokens_total', label: 'Tokens (Total)', unit: '' },
@@ -56,7 +58,7 @@ const COLORS = [
  * Format a tick value based on the metric type.
  */
 function formatTick(value: number, metricKey: MetricKey): string {
-  if (metricKey === 'cost') return `$${value.toFixed(4)}`;
+  if (metricKey === 'cost' || metricKey === 'cost_cumulative') return `$${value.toFixed(4)}`;
   if (metricKey === 'cache_hit_ratio') return `${(value * 100).toFixed(0)}%`;
   if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
   return String(Math.round(value));
@@ -116,11 +118,29 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
       windowMap.get(pt.windowStart)![pt.modelId] = pt.value;
     }
     const windows = [...windowMap.keys()].sort();
+
+    // For cumulative metrics, compute running-total series from the
+    // per-window cost data returned by the host. Each model gets its
+    // own independent running total across the sorted windows.
+    if (metricKey === 'cost_cumulative') {
+      const accumulators = new Map<string, number>();
+      return windows.map(w => {
+        const row: Record<string, number | string> = { windowStart: w };
+        for (const modelId of modelsInData) {
+          const delta = (windowMap.get(w)![modelId] ?? 0);
+          const running = (accumulators.get(modelId) ?? 0) + delta;
+          accumulators.set(modelId, running);
+          row[modelId] = running;
+        }
+        return row;
+      });
+    }
+
     return windows.map(w => ({
       windowStart: w,
       ...windowMap.get(w),
     }));
-  }, [data]);
+  }, [data, metricKey, modelsInData]);
 
   // Compute summary values
   const totalValue = data.reduce((s, d) => s + d.value, 0);
@@ -212,7 +232,7 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
             <span style={styles.summaryItem}>
               Models: <strong>{modelsInData.length}</strong>
             </span>
-            {metricKey === 'cost' && (
+            {(metricKey === 'cost' || metricKey === 'cost_cumulative') && (
               <span style={styles.summaryItem}>
                 Total: <strong>${totalValue.toFixed(6)}</strong>
               </span>
@@ -281,7 +301,7 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
                   });
                 }}
                 formatter={(value: number, _name: string) => {
-                  if (metricKey === 'cost') return [`$${(value as number).toFixed(6)}`, ''];
+                  if (metricKey === 'cost' || metricKey === 'cost_cumulative') return [`$${(value as number).toFixed(6)}`, ''];
                   if (metricKey === 'cache_hit_ratio') return [`${((value as number) * 100).toFixed(1)}%`, ''];
                   if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb') return [`${Math.round(value as number)}ms`, ''];
                   return [String(Math.round(value as number)), ''];
