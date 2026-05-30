@@ -74,36 +74,26 @@ function formatTick(value: number, metricKey: MetricKey): string {
 export default function MetricsPanel({ metrics: _metrics }: Props) {
   const [timeRange, setTimeRange] = React.useState(24);
   const [metricKey, setMetricKey] = React.useState<MetricKey>('cost_cumulative');
-  const [selectedModels, setSelectedModels] = React.useState<string[]>([]);
-  const [availableModels, setAvailableModels] = React.useState<string[]>([]);
   const [data, setData] = React.useState<TimeSeriesPoint[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const [showModelPicker, setShowModelPicker] = React.useState(false);
 
-  // Fetch data when params change
+  // Fetch data when params change (always fetch all models)
   React.useEffect(() => {
     const since = new Date(Date.now() - timeRange * 3600 * 1000).toISOString();
     const until = new Date().toISOString();
     setLoading(true);
-    postMessage({ type: 'queryMetrics', metric: metricKey, modelIds: selectedModels, since, until });
-  }, [metricKey, selectedModels, timeRange]);
+    postMessage({ type: 'queryMetrics', metric: metricKey, modelIds: [], since, until });
+  }, [metricKey, timeRange]);
 
   React.useEffect(() => {
     const unsub = onMessage((msg) => {
       if (msg.type === 'metricsQueryResponse') {
         setData(msg.data);
-        setAvailableModels(msg.models);
         setLoading(false);
       }
     });
     return unsub;
   }, []);
-
-  const toggleModel = (id: string) => {
-    setSelectedModels(prev =>
-      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
-    );
-  };
 
   // Pivot flat TimeSeriesPoint[] into [{ windowStart, modelA, modelB, ... }]
   const modelsInData = [...new Set(data.map(d => d.modelId))];
@@ -174,49 +164,6 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
                 {t.label}
               </button>
             ))}
-          </div>
-        </div>
-
-        <div style={styles.controlGroup}>
-          <span style={styles.controlLabel}>Models</span>
-          <div style={{ position: 'relative' }}>
-            <button
-              style={styles.modelPickerBtn}
-              onClick={() => setShowModelPicker(!showModelPicker)}
-            >
-              {selectedModels.length === 0
-                ? 'All models'
-                : `${selectedModels.length} selected`}
-              {' ▾'}
-            </button>
-            {showModelPicker && (
-              <div style={styles.modelDropdown}>
-                <div
-                  style={{ ...styles.modelOption, fontWeight: selectedModels.length === 0 ? 600 : 400 }}
-                  onClick={() => { setSelectedModels([]); setShowModelPicker(false); }}
-                >
-                  All models
-                </div>
-                {availableModels.map(m => (
-                  <div
-                    key={m}
-                    style={{
-                      ...styles.modelOption,
-                      fontWeight: selectedModels.includes(m) ? 600 : 400,
-                    }}
-                    onClick={() => toggleModel(m)}
-                  >
-                    <span style={{
-                      display: 'inline-block', width: '10px', height: '10px',
-                      borderRadius: '2px', marginRight: '6px',
-                      backgroundColor: modelColors.get(m) ?? '#888',
-                      flexShrink: 0,
-                    }}/>
-                    {m}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -307,14 +254,12 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
                   return [String(Math.round(value as number)), ''];
                 }}
               />
-              {modelsInData.length > 1 && (
-                <Legend
-                  wrapperStyle={{
-                    fontSize: '10px',
-                    fontFamily: 'var(--vscode-font-family)',
-                  }}
-                />
-              )}
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  fontFamily: 'var(--vscode-font-family)',
+                }}
+              />
               {modelsInData.map(modelId => (
                 <Line
                   key={modelId}
@@ -409,37 +354,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontWeight: 600,
     fontFamily: 'var(--vscode-font-family)',
-  },
-  modelPickerBtn: {
-    padding: '2px 8px',
-    fontSize: '11px',
-    border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))',
-    borderRadius: '3px',
-    background: 'none',
-    color: 'var(--vscode-foreground)',
-    cursor: 'pointer',
-    fontFamily: 'var(--vscode-font-family)',
-  },
-  modelDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    marginTop: '4px',
-    minWidth: '200px',
-    maxHeight: '300px',
-    overflowY: 'auto',
-    background: 'var(--vscode-dropdown-background)',
-    border: '1px solid var(--vscode-dropdown-border)',
-    borderRadius: '3px',
-    zIndex: 100,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-  },
-  modelOption: {
-    padding: '4px 10px',
-    fontSize: '11px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
   },
   summary: {
     display: 'flex',
