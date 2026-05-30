@@ -42,7 +42,7 @@ import { getOpenRouterBaseUrl } from './providers/openrouter';
 const PROVIDER_BASE_URLS: Record<ProviderType, string> = {
     [ProviderType.OpenAI]: 'https://api.openai.com/v1',
     [ProviderType.Anthropic]: 'https://api.anthropic.com/v1',
-    [ProviderType.Google]: 'https://generativelanguage.googleapis.com/v1beta',
+    [ProviderType.Google]: 'https://generativelanguage.googleapis.com/v1beta/openai',
     [ProviderType.DeepSeek]: 'https://api.deepseek.com/v1',
     [ProviderType.MiniMax]: 'https://api.minimax.io/v1',
     [ProviderType.Moonshot]: 'https://api.moonshot.cn/v1',

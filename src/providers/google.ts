@@ -18,5 +18,5 @@ export function prepareGoogleRequest(req: ChatCompletionRequest): void {
 }
 
 export function getGoogleBaseUrl(): string {
-    return 'https://generativelanguage.googleapis.com/v1beta';
+    return 'https://generativelanguage.googleapis.com/v1beta/openai';
 }
