@@ -34,7 +34,12 @@ import { prepareMiniMaxRequest, transformMiniMaxStreamChunk, getMiniMaxBaseUrl }
 import { prepareMoonshotRequest, getMoonshotBaseUrl } from './providers/moonshot';
 import { prepareXiaomiRequest, getXiaomiBaseUrl } from './providers/xiaomi';
 import { prepareZhipuRequest, getZhipuBaseUrl } from './providers/zhipu';
-import { prepareGoogleRequest, getGoogleBaseUrl } from './providers/google';
+import {
+    prepareGoogleRequest,
+    sendGeminiStreamingRequest,
+    sendGeminiNonStreamingRequest,
+    getGoogleBaseUrl,
+} from './providers/google';
 import { getOpenRouterBaseUrl } from './providers/openrouter';
 
 // ─── Provider endpoint configuration ───────────────────────────────
@@ -97,9 +102,15 @@ export class ProviderRouter {
             },
         });
 
-        // Google: OpenAI-compatible endpoint passthrough
+        // Google: native Gemini API for visible thinking/reasoning
         this.handlerCache.set(ProviderType.Google, {
-            preparer: prepareGoogleRequest,
+            preparer: (_req) => { /* handled by customSend */ },
+            customSend: async (apiKey, req, onChunk, abortController) => {
+                if (req.stream) {
+                    return sendGeminiStreamingRequest(apiKey, req, onChunk, abortController);
+                }
+                return sendGeminiNonStreamingRequest(apiKey, req, abortController);
+            },
         });
 
         // DeepSeek: reasoning_content rehydration + placeholder injection

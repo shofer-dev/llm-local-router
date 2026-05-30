@@ -340,7 +340,7 @@ describe('providers/zhipu', () => {
 import { prepareGoogleRequest } from '../providers/google';
 
 describe('providers/google', () => {
-    it('forwards reasoning_effort', () => {
+    it('prepareGoogleRequest is a no-op (native API path handles everything in customSend)', () => {
         const req: ChatCompletionRequest = {
             conversationId: 'test',
             model: 'gemini-3.1-pro-preview',
@@ -348,8 +348,8 @@ describe('providers/google', () => {
             reasoningEffort: 'high',
         };
         prepareGoogleRequest(req);
-        assert.ok(req.extraBody);
-        assert.equal(req.extraBody!.reasoning_effort, 'high');
+        // Native API handles all preparation — the function is a no-op stub
+        assert.equal(req.extraBody, undefined);
     });
 });
 
