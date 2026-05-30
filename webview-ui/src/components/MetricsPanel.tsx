@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
 import type { MetricsPayload } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
@@ -54,6 +54,8 @@ const COLORS = [
   '#4dd0e1', '#fff176', '#f06292', '#a1887f', '#90a4ae',
 ];
 
+const ALL_MODEL_KEY_COL = 'ALL';
+
 /**
  * Format a tick value based on the metric type.
  */
@@ -67,22 +69,26 @@ function formatTick(value: number, metricKey: MetricKey): string {
 /**
  * Metrics dashboard panel with time-series line charts rendered via Recharts.
  *
- * Replaces the previous hand-rolled SVG approach (which used dangerouslySetInnerHTML
- * to inject raw `<polyline points="M x y L x y..."/>` markup — React does not
- * reconcile innerHTML inside SVG elements, so the lines never rendered).
+ * Features:
+ *   - Multi-line chart with per-model series
+ *   - "ALL" aggregate line (SUM for counts/cost, mean for latencies/ratios)
+ *   - Multi-select dropdown to toggle individual model/all lines
+ *   - Cumulative cost metric (running total across windows)
  */
 export default function MetricsPanel({ metrics: _metrics }: Props) {
   const [timeRange, setTimeRange] = React.useState(24);
   const [metricKey, setMetricKey] = React.useState<MetricKey>('cost_cumulative');
   const [data, setData] = React.useState<TimeSeriesPoint[]>([]);
   const [loading, setLoading] = React.useState(false);
+  /** Which model keys are visible in the chart. Empty = show all. */
+  const [visibleModels, setVisibleModels] = React.useState<string[]>([]);
+  const [showModelPicker, setShowModelPicker] = React.useState(false);
 
   // Fetch data when params change (always fetch all models)
   React.useEffect(() => {
     const since = new Date(Date.now() - timeRange * 3600 * 1000).toISOString();
-    const until = new Date().toISOString();
     setLoading(true);
-    postMessage({ type: 'queryMetrics', metric: metricKey, modelIds: [], since, until });
+    postMessage({ type: 'queryMetrics', metric: metricKey, modelIds: [], since, until: new Date().toISOString() });
   }, [metricKey, timeRange]);
 
   React.useEffect(() => {
@@ -95,10 +101,45 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
     return unsub;
   }, []);
 
-  // Pivot flat TimeSeriesPoint[] into [{ windowStart, modelA, modelB, ..., "ALL" }]
-  const modelsInData = [...new Set(data.map(d => d.modelId))];
+  // ─── Data processing ──────────────────────────────────────────
+
+  const modelsInData = React.useMemo(
+    () => [...new Set(data.map(d => d.modelId))],
+    [data],
+  );
   const modelColors = new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]]));
-  const ALL_MODEL_KEY = 'ALL';
+
+  const allLineKeys = React.useMemo(() => {
+    if (modelsInData.length <= 1) return modelsInData;
+    return [ALL_MODEL_KEY_COL, ...modelsInData];
+  }, [modelsInData]);
+
+  const allColors = new Map(allLineKeys.map((k, i) => [k, k === ALL_MODEL_KEY_COL ? '#ffffff' : COLORS[i % COLORS.length]]));
+
+  /** Which line keys are currently visible (empty = all visible). */
+  const visibleKeys = React.useMemo(() => {
+    if (visibleModels.length === 0) return allLineKeys;
+    return allLineKeys.filter(k => visibleModels.includes(k));
+  }, [visibleModels, allLineKeys]);
+
+  const visibleCount = visibleModels.length === 0 ? allLineKeys.length : visibleModels.length;
+
+  const toggleModel = (id: string) => {
+    setVisibleModels(prev => {
+      const allKeys = [ALL_MODEL_KEY_COL, ...modelsInData];
+      if (id === ALL_MODEL_KEY_COL) {
+        // Toggling ALL: if all are visible, hide all; otherwise show all
+        const allVisible = prev.length === 0 || allKeys.every(k => prev.includes(k));
+        return allVisible ? [] : allKeys;
+      }
+      // Start from "all visible" if nothing selected
+      const next = prev.length === 0 ? allKeys : [...prev];
+      if (next.includes(id)) {
+        return next.filter(m => m !== id);
+      }
+      return [...next, id];
+    });
+  };
 
   const chartData = React.useMemo(() => {
     const windowMap = new Map<string, Record<string, number>>();
@@ -110,47 +151,21 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
     }
     const windows = [...windowMap.keys()].sort();
 
-    /**
-     * Compute the "ALL" aggregate value for a given window.
-     *
-     * Aggregation strategy depends on the metric:
-     *   - SUM: cost, requests, errors, tokens_*, request counts
-     *   - WEIGHTED_AVG: latency (TTFB/TTLB), weighted by request count if
-     *     we had counts per window per model; since we don't, we use
-     *     simple arithmetic mean across models
-     *   - RATIO: cache_hit_ratio — weighted by total prompt tokens
-     */
-    const computeAll = (modelValues: Record<string, number | string>): number => {
-      // Filter to numeric values only (skip windowStart string)
+    const computeAggregate = (modelValues: Record<string, number | string>): number => {
       const values = Object.values(modelValues)
         .filter((v): v is number => typeof v === 'number');
-
       if (values.length === 0) return 0;
-
-      if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb') {
-        // Arithmetic mean across models (cannot weight by request count
-        // without a separate metrics query for request counts per model/window)
+      if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb' || metricKey === 'cache_hit_ratio') {
         return values.reduce((s, v) => s + v, 0) / values.length;
       }
-
-      if (metricKey === 'cache_hit_ratio') {
-        // cache_hit_ratio is already a ratio (0-1) from the SQL layer
-        // (cached_tokens / total_prompt_tokens). Simple average across models.
-        return values.reduce((s, v) => s + v, 0) / values.length;
-      }
-
-      // Default: SUM (cost, requests, errors, tokens_*, cost_cumulative)
       return values.reduce((s, v) => s + v, 0);
     };
 
-    // Build raw rows (per-model values only)
     const rawRows: Array<Record<string, number | string>> = windows.map(w => ({
       windowStart: w,
       ...windowMap.get(w),
     }));
 
-    // For cumulative metrics, compute running-total series.
-    // Each model (including ALL) gets its own independent running total.
     if (metricKey === 'cost_cumulative') {
       const accumulators = new Map<string, number>();
       return rawRows.map(row => {
@@ -161,30 +176,22 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
           accumulators.set(modelId, running);
           result[modelId] = running;
         }
-        // ALL cumulative = sum of per-model cumulative values
-        const allRunning = (accumulators.get(ALL_MODEL_KEY) ?? 0) + computeAll(row);
-        accumulators.set(ALL_MODEL_KEY, allRunning);
-        result[ALL_MODEL_KEY] = allRunning;
+        const allRunning = (accumulators.get(ALL_MODEL_KEY_COL) ?? 0) + computeAggregate(row);
+        accumulators.set(ALL_MODEL_KEY_COL, allRunning);
+        result[ALL_MODEL_KEY_COL] = allRunning;
         return result;
       });
     }
 
-    // Non-cumulative: attach ALL as a computed column
     return rawRows.map(row => ({
       ...row,
-      [ALL_MODEL_KEY]: computeAll(row),
+      [ALL_MODEL_KEY_COL]: computeAggregate(row),
     }));
   }, [data, metricKey, modelsInData]);
 
-  // All lines to render: individual models + the ALL aggregate
-  const allLineKeys = React.useMemo(() => {
-    if (modelsInData.length <= 1) return modelsInData;
-    return [ALL_MODEL_KEY, ...modelsInData];
-  }, [modelsInData]);
-  const allColors = new Map(allLineKeys.map((k, i) => [k, k === ALL_MODEL_KEY ? '#ffffff' : COLORS[i % COLORS.length]]));
-
-  // Compute summary values
   const totalValue = data.reduce((s, d) => s + d.value, 0);
+
+  // ─── Render ────────────────────────────────────────────────────
 
   return (
     <div style={styles.container}>
@@ -215,6 +222,46 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
                 {t.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div style={styles.controlGroup}>
+          <span style={styles.controlLabel}>Lines</span>
+          <div style={{ position: 'relative' }}>
+            <button
+              style={styles.modelPickerBtn}
+              onClick={() => setShowModelPicker(!showModelPicker)}
+            >
+              {visibleModels.length === 0
+                ? `All (${allLineKeys.length})`
+                : `${visibleCount} of ${allLineKeys.length}`}
+              {' ▾'}
+            </button>
+            {showModelPicker && (
+              <div style={styles.modelDropdown}>
+                {allLineKeys.map(m => {
+                  const isVisible = visibleModels.length === 0 || visibleModels.includes(m);
+                  return (
+                    <div
+                      key={m}
+                      style={{
+                        ...styles.modelOption,
+                        fontWeight: isVisible ? 600 : 400,
+                      }}
+                      onClick={() => toggleModel(m)}
+                    >
+                      <span style={{
+                        display: 'inline-block', width: '10px', height: '10px',
+                        borderRadius: '2px', marginRight: '6px',
+                        backgroundColor: allColors.get(m) ?? '#888',
+                        flexShrink: 0, opacity: isVisible ? 1 : 0.3,
+                      }}/>
+                      {m}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -305,12 +352,6 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
                   return [String(Math.round(value as number)), ''];
                 }}
               />
-              <Legend
-                wrapperStyle={{
-                  fontSize: '10px',
-                  fontFamily: 'var(--vscode-font-family)',
-                }}
-              />
               {allLineKeys.map(key => (
                 <Line
                   key={key}
@@ -318,8 +359,9 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
                   dataKey={key}
                   name={key}
                   stroke={allColors.get(key)!}
-                  strokeWidth={key === ALL_MODEL_KEY ? 3 : 2}
-                  strokeDasharray={key === ALL_MODEL_KEY ? '6 3' : undefined}
+                  strokeWidth={key === ALL_MODEL_KEY_COL ? 3 : 2}
+                  strokeDasharray={key === ALL_MODEL_KEY_COL ? '6 3' : undefined}
+                  hide={!visibleKeys.includes(key)}
                   dot={false}
                   activeDot={{ r: 4 }}
                   connectNulls
@@ -406,6 +448,37 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontWeight: 600,
     fontFamily: 'var(--vscode-font-family)',
+  },
+  modelPickerBtn: {
+    padding: '2px 8px',
+    fontSize: '11px',
+    border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))',
+    borderRadius: '3px',
+    background: 'none',
+    color: 'var(--vscode-foreground)',
+    cursor: 'pointer',
+    fontFamily: 'var(--vscode-font-family)',
+  },
+  modelDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: '4px',
+    minWidth: '200px',
+    maxHeight: '300px',
+    overflowY: 'auto',
+    background: 'var(--vscode-dropdown-background)',
+    border: '1px solid var(--vscode-dropdown-border)',
+    borderRadius: '3px',
+    zIndex: 100,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+  },
+  modelOption: {
+    padding: '4px 10px',
+    fontSize: '11px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
   },
   summary: {
     display: 'flex',
