@@ -686,6 +686,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         secretsListener,
     );
 
+    // First-install onboarding popup
+    const hasSeenOnboarding = context.globalState.get<boolean>('shofer.router.onboardingSeen');
+    if (!hasSeenOnboarding) {
+        vscode.window.showInformationMessage(
+            'Shofer Router is ready! \\u{1F44B} Click the rocket icon in the status bar to open the dashboard.',
+            'Open Dashboard',
+            'Dismiss',
+        ).then(async (choice) => {
+            if (choice === 'Open Dashboard') {
+                await handleStatusBarClick();
+            }
+            await context.globalState.update('shofer.router.onboardingSeen', true);
+        });
+    }
+
     if (config.enabled) {
         connectWithRetry();
 
