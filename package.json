@@ -2,10 +2,38 @@
   "name": "shofer-router",
   "displayName": "Shofer Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "license": "AGPL-3.0-only",
   "publisher": "Shoferdev",
-  "repository": "https://github.com/arkware/arkware.ai",
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#1e293b",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shofer-dev/shofer.git"
+  },
+  "homepage": "https://shofer.dev",
+  "bugs": {
+    "url": "https://github.com/shofer-dev/shofer/issues"
+  },
+  "pricing": "Free",
+  "author": {
+    "name": "Shofer"
+  },
+  "keywords": [
+    "shofer",
+    "router",
+    "llm",
+    "composite",
+    "failover",
+    "ai",
+    "coding",
+    "mcp",
+    "deepseek",
+    "openai"
+  ],
   "engines": {
     "vscode": "^1.100.0"
   },
@@ -14,6 +42,8 @@
     "languageModelThinkingPart"
   ],
   "categories": [
+    "AI",
+    "Chat",
     "Other",
     "Programming Languages"
   ],
