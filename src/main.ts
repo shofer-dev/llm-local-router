@@ -690,7 +690,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const hasSeenOnboarding = context.globalState.get<boolean>('shofer.router.onboardingSeen');
     if (!hasSeenOnboarding) {
         vscode.window.showInformationMessage(
-            'Shofer Router is ready! \\u{1F44B} Click the rocket icon in the status bar to open the dashboard.',
+            'Shofer Router is ready! \\u{1F44B} Click the rocket icon in the status bar to configure.',
             'Open Dashboard',
             'Dismiss',
         ).then(async (choice) => {

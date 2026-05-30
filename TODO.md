@@ -1,11 +1,10 @@
-- let's make configuration easier using UI `Shofer Router: Configure`
-- webview dashboard / cost (integrate with metrics-collector data)
-- more flexibility in failover/load-balancing/cost-control
+- Test the other providers (all of them)
+- Test with copilot
+- are we passing any ConversationId?
+
+
 - can we pass an annotation back to the caller with the model actually used
-- ✅ ~~Metrics/observability~~ — in-memory 5-min windowed metrics collector with Prometheus text export
-- ✅ ~~Cost & token tracking by model per 5m window~~
-- ✅ ~~Reliability metrics (latency percentiles, availability, error breakdown)~~
-- ✅ ~~Composite load-balancing distribution tracking~~
-- ✅ ~~SQLite persistence~~ — sql.js (WebAssembly), automatic window flushes, 30-day retention, cost history command
 - Add VS Code Marketplace metadata to package.json: `repository` as object with `type`, `icon` (128×128 PNG), `galleryBanner`, `homepage`, `bugs`, `pricing`, `author`, `keywords`
-66ookg, 6
+
+
+- Add a pop-up on first install to invite the user to click on the status bar icon
