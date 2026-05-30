@@ -1,4 +1,8 @@
 import React from 'react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
 import type { MetricsPayload } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
 
@@ -12,7 +16,16 @@ interface TimeSeriesPoint {
   value: number;
 }
 
-type MetricKey = 'cost' | 'requests' | 'errors' | 'tokens_total' | 'tokens_prompt' | 'tokens_completion' | 'latency_ttfb' | 'latency_ttlb' | 'cache_hit_ratio';
+type MetricKey =
+  | 'cost'
+  | 'requests'
+  | 'errors'
+  | 'tokens_total'
+  | 'tokens_prompt'
+  | 'tokens_completion'
+  | 'latency_ttfb'
+  | 'latency_ttlb'
+  | 'cache_hit_ratio';
 
 const METRICS: Array<{ key: MetricKey; label: string; unit: string }> = [
   { key: 'cost', label: 'Cost', unit: '$' },
@@ -34,9 +47,29 @@ const TIME_RANGES: Array<{ label: string; hours: number }> = [
   { label: '30d', hours: 720 },
 ];
 
-const COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4dd0e1', '#fff176', '#f06292', '#a1887f', '#90a4ae'];
+const COLORS = [
+  '#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8',
+  '#4dd0e1', '#fff176', '#f06292', '#a1887f', '#90a4ae',
+];
 
-export default function MetricsPanel({ metrics }: Props) {
+/**
+ * Format a tick value based on the metric type.
+ */
+function formatTick(value: number, metricKey: MetricKey): string {
+  if (metricKey === 'cost') return `$${value.toFixed(4)}`;
+  if (metricKey === 'cache_hit_ratio') return `${(value * 100).toFixed(0)}%`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(Math.round(value));
+}
+
+/**
+ * Metrics dashboard panel with time-series line charts rendered via Recharts.
+ *
+ * Replaces the previous hand-rolled SVG approach (which used dangerouslySetInnerHTML
+ * to inject raw `<polyline points="M x y L x y..."/>` markup — React does not
+ * reconcile innerHTML inside SVG elements, so the lines never rendered).
+ */
+export default function MetricsPanel({ metrics: _metrics }: Props) {
   const [timeRange, setTimeRange] = React.useState(24);
   const [metricKey, setMetricKey] = React.useState<MetricKey>('cost');
   const [selectedModels, setSelectedModels] = React.useState<string[]>([]);
@@ -44,8 +77,6 @@ export default function MetricsPanel({ metrics }: Props) {
   const [data, setData] = React.useState<TimeSeriesPoint[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [showModelPicker, setShowModelPicker] = React.useState(false);
-
-  const metric = METRICS.find(m => m.key === metricKey)!;
 
   // Fetch data when params change
   React.useEffect(() => {
@@ -72,48 +103,27 @@ export default function MetricsPanel({ metrics }: Props) {
     );
   };
 
-  // Group data by window
-  const windows = [...new Set(data.map(d => d.windowStart))].sort();
+  // Pivot flat TimeSeriesPoint[] into [{ windowStart, modelA, modelB, ... }]
   const modelsInData = [...new Set(data.map(d => d.modelId))];
   const modelColors = new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]]));
 
-  // Compute chart dimensions
-  const chartW = 700;
-  const chartH = 300;
-  const pad = { top: 20, right: 20, bottom: 40, left: 60 };
-  const plotW = chartW - pad.left - pad.right;
-  const plotH = chartH - pad.top - pad.bottom;
+  const chartData = React.useMemo(() => {
+    const windowMap = new Map<string, Record<string, number>>();
+    for (const pt of data) {
+      if (!windowMap.has(pt.windowStart)) {
+        windowMap.set(pt.windowStart, {});
+      }
+      windowMap.get(pt.windowStart)![pt.modelId] = pt.value;
+    }
+    const windows = [...windowMap.keys()].sort();
+    return windows.map(w => ({
+      windowStart: w,
+      ...windowMap.get(w),
+    }));
+  }, [data]);
 
-  const maxVal = Math.max(1, ...data.map(d => d.value));
-  const yScale = (v: number) => pad.top + plotH * (1 - v / maxVal);
-  const xScale = (i: number) => pad.left + (plotW / Math.max(1, windows.length - 1)) * i;
-
-  // Per-model polylines
-  const polylines = modelsInData.map(modelId => {
-    const points = windows.map((w, i) => {
-      const pt = data.find(d => d.windowStart === w && d.modelId === modelId);
-      return `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(pt?.value ?? 0).toFixed(1)}`;
-    });
-    const color = modelColors.get(modelId)!;
-    return `<polyline points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
-  });
-
-  const yTicks = 4;
-  const yLabels = Array.from({ length: yTicks + 1 }, (_, i) => {
-    const v = (maxVal / yTicks) * i;
-    const y = yScale(v);
-    return `<text x="${pad.left - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--vscode-descriptionForeground, #999)">${metricKey === 'cost' ? '$' + v.toFixed(4) : metricKey === 'cache_hit_ratio' ? (v * 100).toFixed(0) + '%' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v))}</text>`;
-  });
-
-  const xLabels = windows.length > 1 ? windows.map((w, i) => {
-    const d = new Date(w);
-    const label = timeRange <= 6
-      ? `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-      : timeRange <= 24
-        ? `${d.getHours().toString().padStart(2, '0')}h`
-        : `${d.getMonth() + 1}/${d.getDate()}`;
-    return `<text x="${xScale(i)}" y="${chartH - 4}" text-anchor="middle" font-size="9" fill="var(--vscode-descriptionForeground, #999)">${label}</text>`;
-  }) : [];
+  // Compute summary values
+  const totalValue = data.reduce((s, d) => s + d.value, 0);
 
   return (
     <div style={styles.container}>
@@ -197,19 +207,19 @@ export default function MetricsPanel({ metrics }: Props) {
         {!loading && (
           <>
             <span style={styles.summaryItem}>
-              Windows: <strong>{windows.length}</strong>
+              Windows: <strong>{chartData.length}</strong>
             </span>
             <span style={styles.summaryItem}>
               Models: <strong>{modelsInData.length}</strong>
             </span>
             {metricKey === 'cost' && (
               <span style={styles.summaryItem}>
-                Total: <strong>${data.reduce((s, d) => s + d.value, 0).toFixed(6)}</strong>
+                Total: <strong>${totalValue.toFixed(6)}</strong>
               </span>
             )}
             {metricKey === 'requests' && (
               <span style={styles.summaryItem}>
-                Total: <strong>{data.reduce((s, d) => s + d.value, 0)}</strong>
+                Total: <strong>{totalValue}</strong>
               </span>
             )}
           </>
@@ -219,34 +229,88 @@ export default function MetricsPanel({ metrics }: Props) {
       {/* Chart */}
       {data.length > 0 && (
         <div style={styles.chartContainer}>
-          {/* Legend */}
-          {modelsInData.length > 1 && (
-            <div style={styles.legend}>
-              {modelsInData.map(m => (
-                <div key={m} style={styles.legendItem}>
-                  <span style={{ ...styles.legendSwatch, backgroundColor: modelColors.get(m) }}/>
-                  <span style={styles.legendLabel}>{m}</span>
-                </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
+            >
+              <CartesianGrid
+                stroke="var(--vscode-panel-border, rgba(128,128,128,0.15))"
+                strokeDasharray="3 3"
+              />
+              <XAxis
+                dataKey="windowStart"
+                tick={{
+                  fontSize: 10,
+                  fill: 'var(--vscode-descriptionForeground, #999)',
+                }}
+                tickFormatter={(iso: string) => {
+                  const d = new Date(iso);
+                  if (timeRange <= 6) {
+                    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                  }
+                  if (timeRange <= 24) {
+                    return `${d.getHours().toString().padStart(2, '0')}h`;
+                  }
+                  return `${d.getMonth() + 1}/${d.getDate()}`;
+                }}
+                interval="preserveStartEnd"
+                minTickGap={40}
+              />
+              <YAxis
+                tick={{
+                  fontSize: 10,
+                  fill: 'var(--vscode-descriptionForeground, #999)',
+                }}
+                tickFormatter={(v: number) => formatTick(v, metricKey)}
+                width={60}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'var(--vscode-editor-background, #1e1e1e)',
+                  border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontFamily: 'var(--vscode-font-family)',
+                }}
+                labelFormatter={(iso: string) => {
+                  const d = new Date(iso);
+                  return d.toLocaleString(undefined, {
+                    month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  });
+                }}
+                formatter={(value: number, _name: string) => {
+                  if (metricKey === 'cost') return [`$${(value as number).toFixed(6)}`, ''];
+                  if (metricKey === 'cache_hit_ratio') return [`${((value as number) * 100).toFixed(1)}%`, ''];
+                  if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb') return [`${Math.round(value as number)}ms`, ''];
+                  return [String(Math.round(value as number)), ''];
+                }}
+              />
+              {modelsInData.length > 1 && (
+                <Legend
+                  wrapperStyle={{
+                    fontSize: '10px',
+                    fontFamily: 'var(--vscode-font-family)',
+                  }}
+                />
+              )}
+              {modelsInData.map(modelId => (
+                <Line
+                  key={modelId}
+                  type="monotone"
+                  dataKey={modelId}
+                  name={modelId}
+                  stroke={modelColors.get(modelId)!}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
               ))}
-            </div>
-          )}
-
-          <svg viewBox={`0 0 ${chartW} ${chartH}`} style={styles.svg}>
-            {/* Grid lines */}
-            {Array.from({ length: yTicks + 1 }, (_, i) => {
-              const y = yScale((maxVal / yTicks) * i);
-              return <line key={i} x1={pad.left} y1={y} x2={chartW - pad.right} y2={y} stroke="var(--vscode-panel-border, rgba(128,128,128,0.15))" strokeWidth="1"/>;
-            })}
-
-            {/* Y axis labels */}
-            {yLabels.map((l, i) => <g key={`yl-${i}`} dangerouslySetInnerHTML={{ __html: l }}/>)}
-
-            {/* X axis labels */}
-            {xLabels.map((l, i) => <g key={`xl-${i}`} dangerouslySetInnerHTML={{ __html: l }}/>)}
-
-            {/* Data lines */}
-            {polylines.map((p, i) => <g key={`line-${i}`} dangerouslySetInnerHTML={{ __html: p }}/>)}
-          </svg>
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       )}
 
@@ -376,34 +440,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   chartContainer: {
     marginTop: '8px',
-  },
-  legend: {
-    display: 'flex',
-    gap: '12px',
-    flexWrap: 'wrap',
-    marginBottom: '8px',
-  },
-  legendItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  legendSwatch: {
-    width: '12px',
-    height: '12px',
-    borderRadius: '2px',
-    flexShrink: 0,
-  },
-  legendLabel: {
-    fontSize: '10px',
-    color: 'var(--vscode-descriptionForeground, #999)',
-  },
-  svg: {
-    width: '100%',
-    height: 'auto',
     border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.15))',
     borderRadius: '4px',
     background: 'var(--vscode-editor-background)',
+    padding: '8px 4px 4px 4px',
   },
   empty: {
     display: 'flex',

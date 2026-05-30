@@ -437,6 +437,7 @@ export class MetricsStorage {
             case 'tokens_total': valueExpr = 'COALESCE(SUM(prompt_tokens + completion_tokens), 0)'; break;
             case 'latency_ttfb': valueExpr = 'COALESCE(AVG(ttfb_ms), 0)'; break;
             case 'latency_ttlb': valueExpr = 'COALESCE(AVG(ttlb_ms), 0)'; break;
+            case 'cache_hit_ratio': valueExpr = 'COALESCE(SUM(cached_tokens) * 1.0 / NULLIF(SUM(prompt_tokens), 0), 0)'; break;
             default: valueExpr = 'COUNT(*)';
         }
 
@@ -445,11 +446,16 @@ export class MetricsStorage {
             : '';
         const params: SqlValue[] = [since, ...modelIds];
 
+        // For cache_hit_ratio, we need IFNULL to handle the division by zero edge case
+        const valueAlias = metric === 'cache_hit_ratio'
+            ? 'IFNULL(SUM(cached_tokens) * 1.0 / NULLIF(SUM(prompt_tokens), 0), 0) AS value'
+            : `${valueExpr} AS value`;
+
         const sql = `
             SELECT
                 datetime((strftime('%s', timestamp) / 300) * 300, 'unixepoch') AS window_start,
                 model_id,
-                ${valueExpr} AS value
+                ${valueAlias}
             FROM requests
             WHERE timestamp >= ? ${modelPlaceholders}
             GROUP BY window_start, model_id
