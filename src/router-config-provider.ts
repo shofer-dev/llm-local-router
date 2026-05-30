@@ -291,6 +291,10 @@ export class RouterConfigProvider {
     const registryMap = new Map<string, ModelRegistryEntry>();
     for (const entry of ALL_MODELS) registryMap.set(entry.id, entry);
 
+    // Collect all distinct providers from the registry (including unconfigured ones).
+    const allProviders = new Set<string>();
+    for (const entry of ALL_MODELS) allProviders.add(entry.provider);
+
     const configuredProviders = new Set<string>();
     for (const entry of ALL_MODELS) {
       if (configuredProviders.has(entry.provider)) continue;
@@ -304,13 +308,13 @@ export class RouterConfigProvider {
     for (const m of availableModels) {
       const registry = registryMap.get(m.id);
       const provider = registry?.provider ?? 'unknown';
-      if (!configuredProviders.has(provider)) continue;
       if (!providerModels.has(provider)) providerModels.set(provider, []);
       providerModels.get(provider)!.push(m);
     }
 
-    const providers: ProviderStatus[] = [...configuredProviders].map(name => ({
-      name, configured: true,
+    const providers: ProviderStatus[] = [...allProviders].map(name => ({
+      name,
+      configured: configuredProviders.has(name),
       modelCount: (providerModels.get(name) ?? []).length,
     }));
 
