@@ -123,14 +123,13 @@ export async function sendNonStreamingRequest(
     apiKey: string,
     request: ChatCompletionRequest,
     abortController: AbortController,
-    extraHeaders?: Record<string, string>,
 ): Promise<ChatCompletionResponse> {
     const url = `${baseUrl}/chat/completions`;
     const body = buildRequestBody(request);
 
     const response = await fetch(url, {
         method: 'POST',
-        headers: buildHeaders(apiKey, extraHeaders),
+        headers: buildHeaders(apiKey),
         body: JSON.stringify(body),
         signal: abortController.signal,
     });
@@ -153,7 +152,6 @@ export async function sendStreamingRequest(
     request: ChatCompletionRequest,
     onChunk: (chunk: ChatCompletionResponse) => void,
     abortController: AbortController,
-    extraHeaders?: Record<string, string>,
 ): Promise<ChatCompletionResponse> {
     const url = `${baseUrl}/chat/completions`;
     const body = buildRequestBody(request);
@@ -161,7 +159,7 @@ export async function sendStreamingRequest(
 
     const response = await fetch(url, {
         method: 'POST',
-        headers: buildHeaders(apiKey, extraHeaders),
+        headers: buildHeaders(apiKey),
         body: JSON.stringify(body),
         signal: abortController.signal,
     });
@@ -192,19 +190,11 @@ function extractReasoningFromDetails(details: unknown): string | undefined {
 
 // ─── Internal helpers ───────────────────────────────────────────────
 
-function buildHeaders(apiKey: string, extraHeaders?: Record<string, string>): Record<string, string> {
-    const headers: Record<string, string> = {
+function buildHeaders(apiKey: string): Record<string, string> {
+    return {
         'Content-Type': 'application/json',
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
     };
-    if (extraHeaders) {
-        // Provider uses custom auth (e.g. Google's x-goog-api-key) —
-        // suppress the default Bearer header; extraHeaders is fully
-        // responsible for authentication.
-        Object.assign(headers, extraHeaders);
-    } else if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`;
-    }
-    return headers;
 }
 
 /** Router-internal fields that must NOT be forwarded to upstream providers. */
