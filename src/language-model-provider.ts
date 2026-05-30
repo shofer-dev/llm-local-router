@@ -299,6 +299,13 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         const buildPreparingMarker = (name: string, byteCount: number): string =>
             `\x00tool_preparing\x00${name}\x00${byteCount}\x00`;
 
+        // Response metadata marker for the caller (e.g. Shofer's vscode-lm).
+        // Uses \x00-delimited format so the caller can parse it consistently.
+        // Emitted as a LanguageModelThinkingPart at stream end.
+        const buildMetadataMarker = (meta: Record<string, unknown>): string =>
+            `\x00response_metadata\x00${JSON.stringify(meta)}\x00`;
+        let metadataMarker = '';
+
         // Metrics: track timing
         const requestStartMs = Date.now();
         let ttfbMs = 0;
@@ -392,9 +399,21 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             }
 
             const ttlbMs = Date.now() - requestStartMs;
+            const usage = result.response.usage;
+
+            // Build response metadata marker for the caller
+            metadataMarker = buildMetadataMarker({
+                model: modelId,
+                actualModel: result.servedByModel,
+                ttfbMs,
+                ttlbMs,
+                promptTokens: usage?.promptTokens ?? 0,
+                completionTokens: usage?.completionTokens ?? 0,
+                costUsd: usage?.costUsd,
+                attempts: result.attempts,
+            });
 
             // Structured success log at INFO level
-            const usage = result.response.usage;
             const costStr = usage?.costUsd !== undefined
                 ? `$${usage.costUsd.toFixed(6)}`
                 : '?';
@@ -414,6 +433,11 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
 
             // Record success metrics
             this.recordMetrics(modelId, isComposite, result, ttfbMs, ttlbMs, requestStartMs);
+
+            // Emit response metadata as a thinking part at the end of the stream
+            if (metadataMarker) {
+                progress.report(new vscode.LanguageModelThinkingPart(metadataMarker));
+            }
         } catch (error) {
             const ttlbMs = Date.now() - requestStartMs;
             const err = error as Error;
@@ -421,6 +445,12 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
 
             // Record error metrics
             this.recordErrorMetrics(modelId, isComposite, err, ttfbMs, ttlbMs, requestStartMs);
+
+            // Emit error metadata
+            metadataMarker = buildMetadataMarker({ model: modelId, error: err.message, ttlbMs });
+            if (metadataMarker) {
+                progress.report(new vscode.LanguageModelThinkingPart(metadataMarker));
+            }
             throw error;
         }
     }
