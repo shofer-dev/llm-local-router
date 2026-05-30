@@ -170,7 +170,8 @@ export type HostMessage =
   | { type: 'metricsUpdate'; metrics: MetricsPayload }
   | { type: 'statusUpdate'; status: StatusPayload }
   | { type: 'providerConfigSaved'; provider: string }
-  | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] };
+  | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] }
+  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] };
 
 // ─── Webview → Host messages ────────────────────────────────────
 
@@ -181,4 +182,5 @@ export type WebviewMessage =
   | { type: 'exportConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'importConfig' }
   | { type: 'testModel'; modelId: string }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing };
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing }
+  | { type: 'queryMetrics'; metric: string; modelIds: string[]; since: string; until: string };

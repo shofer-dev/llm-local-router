@@ -415,6 +415,66 @@ export class MetricsStorage {
         }));
     }
 
+
+    // ─── Time-series queries ───────────────────────────────────────
+
+    /**
+     * Get time-series data for dashboard charts.
+     * Returns aggregated data points grouped by 5-minute windows.
+     */
+    getTimeSeries(
+        since: string,
+        modelIds: string[],
+        metric: string,
+    ): Array<{ windowStart: string; modelId: string; value: number }> {
+        let valueExpr: string;
+        switch (metric) {
+            case 'cost': valueExpr = 'COALESCE(SUM(cost_usd), 0)'; break;
+            case 'requests': valueExpr = 'COUNT(*)'; break;
+            case 'errors': valueExpr = "COUNT(CASE WHEN status IN ('error', 'timeout', 'cancelled') THEN 1 END)"; break;
+            case 'tokens_prompt': valueExpr = 'COALESCE(SUM(prompt_tokens), 0)'; break;
+            case 'tokens_completion': valueExpr = 'COALESCE(SUM(completion_tokens), 0)'; break;
+            case 'tokens_total': valueExpr = 'COALESCE(SUM(prompt_tokens + completion_tokens), 0)'; break;
+            case 'latency_ttfb': valueExpr = 'COALESCE(AVG(ttfb_ms), 0)'; break;
+            case 'latency_ttlb': valueExpr = 'COALESCE(AVG(ttlb_ms), 0)'; break;
+            default: valueExpr = 'COUNT(*)';
+        }
+
+        const modelPlaceholders = modelIds.length > 0
+            ? `AND model_id IN (${modelIds.map(() => '?').join(',')})`
+            : '';
+        const params: SqlValue[] = [since, ...modelIds];
+
+        const sql = `
+            SELECT
+                datetime((strftime('%s', timestamp) / 300) * 300, 'unixepoch') AS window_start,
+                model_id,
+                ${valueExpr} AS value
+            FROM requests
+            WHERE timestamp >= ? ${modelPlaceholders}
+            GROUP BY window_start, model_id
+            ORDER BY window_start ASC, model_id ASC
+        `;
+
+        const stmt = this.db.prepare(sql);
+        stmt.bind(params);
+        const rows: Array<{ windowStart: string; modelId: string; value: number }> = [];
+        while (stmt.step()) {
+            const r = stmt.getAsObject() as { window_start: string; model_id: string; value: number };
+            rows.push({ windowStart: r.window_start, modelId: r.model_id, value: r.value });
+        }
+        stmt.free();
+        return rows;
+    }
+
+    /** Get distinct model IDs for the dropdown filter. */
+    getDistinctModels(since: string): string[] {
+        return this.queryAll<{ model_id: string }>(
+            `SELECT DISTINCT model_id FROM requests WHERE timestamp >= :since ORDER BY model_id`,
+            { ':since': since },
+        ).map(r => r.model_id);
+    }
+
     // ─── Maintenance ───────────────────────────────────────────────
 
     /**

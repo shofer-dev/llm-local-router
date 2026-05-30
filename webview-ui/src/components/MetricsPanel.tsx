@@ -1,232 +1,265 @@
 import React from 'react';
-import type { ModelMetrics, CompositeMetrics, MetricsPayload } from '../types';
+import type { MetricsPayload } from '../types';
+import { postMessage, onMessage } from '../utils/vscode';
 
 interface Props {
   metrics: MetricsPayload | null;
 }
 
-/**
- * Metrics panel showing per-model cost, latency, availability,
- * token usage, and composite routing distribution.
- *
- * Mirrors the data exposed via the Prometheus /metrics endpoint
- * in a human-readable tabular format.
- */
-export default function MetricsPanel({ metrics }: Props) {
-  if (!metrics || metrics.modelMetrics.length === 0) {
-    return (
-      <div style={styles.empty}>
-        <p style={styles.emptyIcon}>📊</p>
-        <p>No metrics collected yet.</p>
-        <p style={styles.emptyHint}>
-          Metrics are recorded automatically when LLM requests are made.
-          Make some requests and come back.
-        </p>
-      </div>
-    );
-  }
+interface TimeSeriesPoint {
+  windowStart: string;
+  modelId: string;
+  value: number;
+}
 
-  const sorted = [...metrics.modelMetrics].sort(
-    (a, b) => b.totalCostUsd - a.totalCostUsd,
-  );
+type MetricKey = 'cost' | 'requests' | 'errors' | 'tokens_total' | 'tokens_prompt' | 'tokens_completion' | 'latency_ttfb' | 'latency_ttlb' | 'cache_hit_ratio';
+
+const METRICS: Array<{ key: MetricKey; label: string; unit: string }> = [
+  { key: 'cost', label: 'Cost', unit: '$' },
+  { key: 'requests', label: 'Requests', unit: '' },
+  { key: 'errors', label: 'Errors', unit: '' },
+  { key: 'tokens_total', label: 'Tokens (Total)', unit: '' },
+  { key: 'tokens_prompt', label: 'Tokens (Prompt)', unit: '' },
+  { key: 'tokens_completion', label: 'Tokens (Completion)', unit: '' },
+  { key: 'latency_ttfb', label: 'Latency (TTFB)', unit: 'ms' },
+  { key: 'latency_ttlb', label: 'Latency (TTLB)', unit: 'ms' },
+  { key: 'cache_hit_ratio', label: 'Cache Hit Ratio', unit: '%' },
+];
+
+const TIME_RANGES: Array<{ label: string; hours: number }> = [
+  { label: '1h', hours: 1 },
+  { label: '6h', hours: 6 },
+  { label: '24h', hours: 24 },
+  { label: '7d', hours: 168 },
+  { label: '30d', hours: 720 },
+];
+
+const COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4dd0e1', '#fff176', '#f06292', '#a1887f', '#90a4ae'];
+
+export default function MetricsPanel({ metrics }: Props) {
+  const [timeRange, setTimeRange] = React.useState(24);
+  const [metricKey, setMetricKey] = React.useState<MetricKey>('cost');
+  const [selectedModels, setSelectedModels] = React.useState<string[]>([]);
+  const [availableModels, setAvailableModels] = React.useState<string[]>([]);
+  const [data, setData] = React.useState<TimeSeriesPoint[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [showModelPicker, setShowModelPicker] = React.useState(false);
+
+  const metric = METRICS.find(m => m.key === metricKey)!;
+
+  // Fetch data when params change
+  React.useEffect(() => {
+    const since = new Date(Date.now() - timeRange * 3600 * 1000).toISOString();
+    const until = new Date().toISOString();
+    setLoading(true);
+    postMessage({ type: 'queryMetrics', metric: metricKey, modelIds: selectedModels, since, until });
+  }, [metricKey, selectedModels, timeRange]);
+
+  React.useEffect(() => {
+    const unsub = onMessage((msg) => {
+      if (msg.type === 'metricsQueryResponse') {
+        setData(msg.data);
+        setAvailableModels(msg.models);
+        setLoading(false);
+      }
+    });
+    return unsub;
+  }, []);
+
+  const toggleModel = (id: string) => {
+    setSelectedModels(prev =>
+      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+    );
+  };
+
+  // Group data by window
+  const windows = [...new Set(data.map(d => d.windowStart))].sort();
+  const modelsInData = [...new Set(data.map(d => d.modelId))];
+  const modelColors = new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]]));
+
+  // Compute chart dimensions
+  const chartW = 700;
+  const chartH = 300;
+  const pad = { top: 20, right: 20, bottom: 40, left: 60 };
+  const plotW = chartW - pad.left - pad.right;
+  const plotH = chartH - pad.top - pad.bottom;
+
+  const maxVal = Math.max(1, ...data.map(d => d.value));
+  const yScale = (v: number) => pad.top + plotH * (1 - v / maxVal);
+  const xScale = (i: number) => pad.left + (plotW / Math.max(1, windows.length - 1)) * i;
+
+  // Per-model polylines
+  const polylines = modelsInData.map(modelId => {
+    const points = windows.map((w, i) => {
+      const pt = data.find(d => d.windowStart === w && d.modelId === modelId);
+      return `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(pt?.value ?? 0).toFixed(1)}`;
+    });
+    const color = modelColors.get(modelId)!;
+    return `<polyline points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  });
+
+  const yTicks = 4;
+  const yLabels = Array.from({ length: yTicks + 1 }, (_, i) => {
+    const v = (maxVal / yTicks) * i;
+    const y = yScale(v);
+    return `<text x="${pad.left - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--vscode-descriptionForeground, #999)">${metricKey === 'cost' ? '$' + v.toFixed(4) : metricKey === 'cache_hit_ratio' ? (v * 100).toFixed(0) + '%' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v))}</text>`;
+  });
+
+  const xLabels = windows.length > 1 ? windows.map((w, i) => {
+    const d = new Date(w);
+    const label = timeRange <= 6
+      ? `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+      : timeRange <= 24
+        ? `${d.getHours().toString().padStart(2, '0')}h`
+        : `${d.getMonth() + 1}/${d.getDate()}`;
+    return `<text x="${xScale(i)}" y="${chartH - 4}" text-anchor="middle" font-size="9" fill="var(--vscode-descriptionForeground, #999)">${label}</text>`;
+  }) : [];
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>Metrics Dashboard</h2>
-        <span style={styles.windowLabel}>
-          Window: {new Date(metrics.windowStart).toLocaleTimeString()} –{' '}
-          {new Date(metrics.windowEnd).toLocaleTimeString()}
-        </span>
-      </div>
-
-      {/* Per-model metrics */}
-      <h3 style={styles.sectionTitle}>Per-Model Metrics</h3>
-      <div style={styles.tableWrapper}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Model</th>
-              <th style={styles.th}>Reqs</th>
-              <th style={styles.th}>Avail</th>
-              <th style={styles.th}>TTFB p50</th>
-              <th style={styles.th}>TTLB p50</th>
-              <th style={styles.th}>TTLB p90</th>
-              <th style={styles.th}>Tokens In</th>
-              <th style={styles.th}>Tokens Out</th>
-              <th style={styles.th}>Cache</th>
-              <th style={styles.th}>Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((m) => (
-              <tr key={m.modelId} style={m.isComposite ? styles.compositeRow : undefined}>
-                <td style={styles.td}>
-                  <span style={styles.modelName}>{m.modelId}</span>
-                  <span style={styles.providerTag}>{m.provider}</span>
-                  {m.isComposite && <span style={styles.compositeTag}>composite</span>}
-                </td>
-                <td style={styles.td}>
-                  <span style={styles.reqCount}>{m.requestCount}</span>
-                  <span style={styles.reqDetail}>
-                    {m.successCount}s / {m.errorCount}e / {m.timeoutCount}t
-                  </span>
-                </td>
-                <td style={styles.td}>
-                  <AvailabilityBadge value={m.availability} />
-                </td>
-                <td style={styles.td}>{m.ttfbP50}ms</td>
-                <td style={styles.td}>{m.ttlbP50}ms</td>
-                <td style={styles.td}>{m.ttlbP90}ms</td>
-                <td style={styles.td}>{formatTokens(m.totalPromptTokens)}</td>
-                <td style={styles.td}>{formatTokens(m.totalCompletionTokens)}</td>
-                <td style={styles.td}>
-                  {m.cacheHitRatio > 0
-                    ? `${(m.cacheHitRatio * 100).toFixed(0)}%`
-                    : '—'}
-                </td>
-                <td style={styles.td}>
-                  <span style={styles.cost}>${m.totalCostUsd.toFixed(4)}</span>
-                </td>
-              </tr>
+      {/* Controls bar */}
+      <div style={styles.controls}>
+        <div style={styles.controlGroup}>
+          <span style={styles.controlLabel}>Metric</span>
+          <select
+            style={styles.select}
+            value={metricKey}
+            onChange={e => setMetricKey(e.target.value as MetricKey)}
+          >
+            {METRICS.map(m => (
+              <option key={m.key} value={m.key}>{m.label}</option>
             ))}
-          </tbody>
-        </table>
+          </select>
+        </div>
+
+        <div style={styles.controlGroup}>
+          <span style={styles.controlLabel}>Time</span>
+          <div style={styles.timeButtons}>
+            {TIME_RANGES.map(t => (
+              <button
+                key={t.hours}
+                style={timeRange === t.hours ? styles.timeBtnActive : styles.timeBtn}
+                onClick={() => setTimeRange(t.hours)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={styles.controlGroup}>
+          <span style={styles.controlLabel}>Models</span>
+          <div style={{ position: 'relative' }}>
+            <button
+              style={styles.modelPickerBtn}
+              onClick={() => setShowModelPicker(!showModelPicker)}
+            >
+              {selectedModels.length === 0
+                ? 'All models'
+                : `${selectedModels.length} selected`}
+              {' ▾'}
+            </button>
+            {showModelPicker && (
+              <div style={styles.modelDropdown}>
+                <div
+                  style={{ ...styles.modelOption, fontWeight: selectedModels.length === 0 ? 600 : 400 }}
+                  onClick={() => { setSelectedModels([]); setShowModelPicker(false); }}
+                >
+                  All models
+                </div>
+                {availableModels.map(m => (
+                  <div
+                    key={m}
+                    style={{
+                      ...styles.modelOption,
+                      fontWeight: selectedModels.includes(m) ? 600 : 400,
+                    }}
+                    onClick={() => toggleModel(m)}
+                  >
+                    <span style={{
+                      display: 'inline-block', width: '10px', height: '10px',
+                      borderRadius: '2px', marginRight: '6px',
+                      backgroundColor: modelColors.get(m) ?? '#888',
+                      flexShrink: 0,
+                    }}/>
+                    {m}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Composite distribution */}
-      {metrics.compositeMetrics.length > 0 && (
-        <>
-          <h3 style={styles.sectionTitle}>Composite Model Distribution</h3>
-          <div style={styles.tableWrapper}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Composite</th>
-                  <th style={styles.th}>Underlying Models</th>
-                  <th style={styles.th}>Failovers</th>
-                  <th style={styles.th}>Mid-Stream Fails</th>
-                  <th style={styles.th}>Avg Attempts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.compositeMetrics.map((c) => {
-                  const totalReqs = Object.values(c.modelCounts).reduce(
-                    (a, b) => a + b,
-                    0,
-                  );
-                  return (
-                    <tr key={c.compositeModelId}>
-                      <td style={styles.td}>
-                        <span style={styles.modelName}>{c.compositeModelId}</span>
-                      </td>
-                      <td style={styles.td}>
-                        <div style={styles.distBars}>
-                          {Object.entries(c.modelCounts)
-                            .sort((a, b) => b[1] - a[1])
-                            .map(([model, count]) => (
-                              <div key={model} style={styles.distRow}>
-                                <span style={styles.distModel}>{model}</span>
-                                <div style={styles.barContainer}>
-                                  <div
-                                    style={{
-                                      ...styles.bar,
-                                      width: `${totalReqs > 0 ? (count / totalReqs) * 100 : 0}%`,
-                                    }}
-                                  />
-                                </div>
-                                <span style={styles.distCount}>{count}</span>
-                              </div>
-                            ))}
-                        </div>
-                      </td>
-                      <td style={styles.td}>{c.failoverCount}</td>
-                      <td style={styles.td}>{c.midstreamFailureCount}</td>
-                      <td style={styles.td}>
-                        {totalReqs > 0
-                          ? (c.totalAttempts / totalReqs).toFixed(2)
-                          : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+      {/* Summary bar */}
+      <div style={styles.summary}>
+        {loading && <span style={styles.loadingText}>Loading...</span>}
+        {!loading && (
+          <>
+            <span style={styles.summaryItem}>
+              Windows: <strong>{windows.length}</strong>
+            </span>
+            <span style={styles.summaryItem}>
+              Models: <strong>{modelsInData.length}</strong>
+            </span>
+            {metricKey === 'cost' && (
+              <span style={styles.summaryItem}>
+                Total: <strong>${data.reduce((s, d) => s + d.value, 0).toFixed(6)}</strong>
+              </span>
+            )}
+            {metricKey === 'requests' && (
+              <span style={styles.summaryItem}>
+                Total: <strong>{data.reduce((s, d) => s + d.value, 0)}</strong>
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Chart */}
+      {data.length > 0 && (
+        <div style={styles.chartContainer}>
+          {/* Legend */}
+          {modelsInData.length > 1 && (
+            <div style={styles.legend}>
+              {modelsInData.map(m => (
+                <div key={m} style={styles.legendItem}>
+                  <span style={{ ...styles.legendSwatch, backgroundColor: modelColors.get(m) }}/>
+                  <span style={styles.legendLabel}>{m}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <svg viewBox={`0 0 ${chartW} ${chartH}`} style={styles.svg}>
+            {/* Grid lines */}
+            {Array.from({ length: yTicks + 1 }, (_, i) => {
+              const y = yScale((maxVal / yTicks) * i);
+              return <line key={i} x1={pad.left} y1={y} x2={chartW - pad.right} y2={y} stroke="var(--vscode-panel-border, rgba(128,128,128,0.15))" strokeWidth="1"/>;
+            })}
+
+            {/* Y axis labels */}
+            {yLabels.map((l, i) => <g key={`yl-${i}`} dangerouslySetInnerHTML={{ __html: l }}/>)}
+
+            {/* X axis labels */}
+            {xLabels.map((l, i) => <g key={`xl-${i}`} dangerouslySetInnerHTML={{ __html: l }}/>)}
+
+            {/* Data lines */}
+            {polylines.map((p, i) => <g key={`line-${i}`} dangerouslySetInnerHTML={{ __html: p }}/>)}
+          </svg>
+        </div>
       )}
 
-      {/* Error breakdown */}
-      <h3 style={styles.sectionTitle}>Error Breakdown</h3>
-      <div style={styles.tableWrapper}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Model</th>
-              <th style={styles.th}>HTTP 4xx</th>
-              <th style={styles.th}>HTTP 5xx</th>
-              <th style={styles.th}>HTTP 429</th>
-              <th style={styles.th}>Timeout</th>
-              <th style={styles.th}>Network</th>
-              <th style={styles.th}>Other</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted
-              .filter((m) => m.errorCount + m.timeoutCount > 0)
-              .map((m) => (
-                <tr key={m.modelId}>
-                  <td style={styles.td}>{m.modelId}</td>
-                  <td style={styles.td}>{m.errorTypes['http_4xx'] ?? 0}</td>
-                  <td style={styles.td}>{m.errorTypes['http_5xx'] ?? 0}</td>
-                  <td style={styles.td}>{m.errorTypes['http_429'] ?? 0}</td>
-                  <td style={styles.td}>{m.errorTypes['timeout'] ?? 0}</td>
-                  <td style={styles.td}>{m.errorTypes['network_error'] ?? 0}</td>
-                  <td style={styles.td}>
-                    {(m.errorCount + m.timeoutCount) -
-                      ((m.errorTypes['http_4xx'] ?? 0) +
-                        (m.errorTypes['http_5xx'] ?? 0) +
-                        (m.errorTypes['http_429'] ?? 0) +
-                        (m.errorTypes['timeout'] ?? 0) +
-                        (m.errorTypes['network_error'] ?? 0))}
-                  </td>
-                </tr>
-              ))}
-            {sorted.filter((m) => m.errorCount + m.timeoutCount > 0).length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ ...styles.td, textAlign: 'center', color: 'var(--vscode-descriptionForeground)' }}>
-                  No errors recorded in this window
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {!loading && data.length === 0 && (
+        <div style={styles.empty}>
+          <p style={styles.emptyIcon}>📊</p>
+          <p>No metrics data for the selected time range.</p>
+          <p style={styles.emptySub}>Send some requests to populate the dashboard.</p>
+        </div>
+      )}
     </div>
   );
 }
-
-// ─── Sub-components ──────────────────────────────────────────────
-
-function AvailabilityBadge({ value }: { value: number }) {
-  const pct = (value * 100).toFixed(1);
-  const color =
-    value >= 0.99 ? 'var(--vscode-testing-iconPassed, #73c991)' :
-    value >= 0.95 ? 'var(--vscode-testing-iconQueued, #cca700)' :
-    'var(--vscode-testing-iconFailed, #f14c4c)';
-
-  return <span style={{ color, fontWeight: 600 }}>{pct}%</span>;
-}
-
-// ─── Helpers ────────────────────────────────────────────────────
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
-// ─── Styles ─────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -234,133 +267,160 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'var(--vscode-font-family)',
     fontSize: '12px',
     color: 'var(--vscode-foreground)',
-    maxWidth: '100%',
-    overflowX: 'auto',
+    height: '100%',
+    overflowY: 'auto',
   },
-  header: {
+  controls: {
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: '16px',
+    gap: '16px',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginBottom: '12px',
+    padding: '8px 12px',
+    border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
+    borderRadius: '4px',
+    background: 'var(--vscode-editor-background)',
   },
-  title: {
-    margin: 0,
-    fontSize: '16px',
-    fontWeight: 600,
-  },
-  windowLabel: {
-    fontSize: '11px',
-    color: 'var(--vscode-descriptionForeground)',
-  },
-  sectionTitle: {
-    fontSize: '13px',
-    fontWeight: 600,
-    marginTop: '16px',
-    marginBottom: '8px',
-  },
-  tableWrapper: {
-    overflowX: 'auto',
-    marginBottom: '4px',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse' as const,
-    fontSize: '11px',
-  },
-  th: {
-    textAlign: 'left' as const,
-    padding: '4px 8px',
-    borderBottom: '1px solid var(--vscode-panel-border)',
-    fontWeight: 600,
-    whiteSpace: 'nowrap' as const,
-    color: 'var(--vscode-descriptionForeground)',
-  },
-  td: {
-    padding: '3px 8px',
-    borderBottom: '1px solid var(--vscode-panel-border, #333)',
-    verticalAlign: 'top' as const,
-  },
-  compositeRow: {
-    backgroundColor: 'var(--vscode-list-hoverBackground, rgba(255,255,255,0.03))',
-  },
-  modelName: {
-    fontWeight: 600,
-    display: 'block',
-  },
-  providerTag: {
-    fontSize: '10px',
-    color: 'var(--vscode-descriptionForeground)',
-    marginRight: '4px',
-  },
-  compositeTag: {
-    fontSize: '9px',
-    backgroundColor: 'var(--vscode-badge-background)',
-    color: 'var(--vscode-badge-foreground)',
-    padding: '1px 4px',
-    borderRadius: '3px',
-  },
-  reqCount: {
-    fontWeight: 600,
-    display: 'block',
-  },
-  reqDetail: {
-    fontSize: '10px',
-    color: 'var(--vscode-descriptionForeground)',
-  },
-  cost: {
-    fontWeight: 600,
-    fontFamily: 'var(--vscode-editor-font-family, monospace)',
-  },
-  distBars: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '2px',
-  },
-  distRow: {
+  controlGroup: {
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
+    gap: '8px',
   },
-  distModel: {
-    minWidth: '140px',
-    fontSize: '10px',
-    color: 'var(--vscode-descriptionForeground)',
-  },
-  barContainer: {
-    flex: 1,
-    height: '8px',
-    backgroundColor: 'var(--vscode-panel-border)',
-    borderRadius: '4px',
-    overflow: 'hidden',
-  },
-  bar: {
-    height: '100%',
-    backgroundColor: 'var(--vscode-charts-blue, #007acc)',
-    borderRadius: '4px',
-    transition: 'width 0.3s',
-    minWidth: '2px',
-  },
-  distCount: {
-    fontSize: '10px',
-    minWidth: '24px',
-    textAlign: 'right' as const,
+  controlLabel: {
+    fontSize: '11px',
     fontWeight: 600,
+    color: 'var(--vscode-descriptionForeground, #999)',
+    textTransform: 'uppercase',
+  },
+  select: {
+    padding: '3px 6px',
+    fontSize: '12px',
+    color: 'var(--vscode-input-foreground)',
+    backgroundColor: 'var(--vscode-input-background)',
+    border: '1px solid var(--vscode-input-border)',
+    borderRadius: '3px',
+    fontFamily: 'var(--vscode-font-family)',
+  },
+  timeButtons: {
+    display: 'flex',
+    gap: '2px',
+  },
+  timeBtn: {
+    padding: '2px 8px',
+    fontSize: '11px',
+    border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))',
+    borderRadius: '3px',
+    background: 'none',
+    color: 'var(--vscode-descriptionForeground, #999)',
+    cursor: 'pointer',
+    fontFamily: 'var(--vscode-font-family)',
+  },
+  timeBtnActive: {
+    padding: '2px 8px',
+    fontSize: '11px',
+    border: '1px solid var(--vscode-focusBorder, #007acc)',
+    borderRadius: '3px',
+    background: 'var(--vscode-list-activeSelectionBackground)',
+    color: 'var(--vscode-foreground)',
+    cursor: 'pointer',
+    fontWeight: 600,
+    fontFamily: 'var(--vscode-font-family)',
+  },
+  modelPickerBtn: {
+    padding: '2px 8px',
+    fontSize: '11px',
+    border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))',
+    borderRadius: '3px',
+    background: 'none',
+    color: 'var(--vscode-foreground)',
+    cursor: 'pointer',
+    fontFamily: 'var(--vscode-font-family)',
+  },
+  modelDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: '4px',
+    minWidth: '200px',
+    maxHeight: '300px',
+    overflowY: 'auto',
+    background: 'var(--vscode-dropdown-background)',
+    border: '1px solid var(--vscode-dropdown-border)',
+    borderRadius: '3px',
+    zIndex: 100,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+  },
+  modelOption: {
+    padding: '4px 10px',
+    fontSize: '11px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  summary: {
+    display: 'flex',
+    gap: '16px',
+    flexWrap: 'wrap',
+    padding: '6px 0',
+    marginBottom: '8px',
+    borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.15))',
+  },
+  summaryItem: {
+    fontSize: '11px',
+    color: 'var(--vscode-descriptionForeground, #999)',
+  },
+  loadingText: {
+    fontSize: '11px',
+    color: 'var(--vscode-descriptionForeground, #999)',
+    fontStyle: 'italic',
+  },
+  chartContainer: {
+    marginTop: '8px',
+  },
+  legend: {
+    display: 'flex',
+    gap: '12px',
+    flexWrap: 'wrap',
+    marginBottom: '8px',
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  legendSwatch: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '2px',
+    flexShrink: 0,
+  },
+  legendLabel: {
+    fontSize: '10px',
+    color: 'var(--vscode-descriptionForeground, #999)',
+  },
+  svg: {
+    width: '100%',
+    height: 'auto',
+    border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.15))',
+    borderRadius: '4px',
+    background: 'var(--vscode-editor-background)',
   },
   empty: {
     display: 'flex',
-    flexDirection: 'column' as const,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100vh',
+    padding: '60px 0',
     color: 'var(--vscode-descriptionForeground)',
-    textAlign: 'center' as const,
+    textAlign: 'center',
   },
   emptyIcon: {
     fontSize: '32px',
-    margin: 0,
+    margin: '0 0 8px',
   },
-  emptyHint: {
+  emptySub: {
     fontSize: '11px',
-    maxWidth: '300px',
+    margin: '4px 0 0',
+    opacity: 0.7,
   },
 };
