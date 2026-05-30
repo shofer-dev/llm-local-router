@@ -73,7 +73,7 @@ function formatTick(value: number, metricKey: MetricKey): string {
  */
 export default function MetricsPanel({ metrics: _metrics }: Props) {
   const [timeRange, setTimeRange] = React.useState(24);
-  const [metricKey, setMetricKey] = React.useState<MetricKey>('cost');
+  const [metricKey, setMetricKey] = React.useState<MetricKey>('cost_cumulative');
   const [selectedModels, setSelectedModels] = React.useState<string[]>([]);
   const [availableModels, setAvailableModels] = React.useState<string[]>([]);
   const [data, setData] = React.useState<TimeSeriesPoint[]>([]);
