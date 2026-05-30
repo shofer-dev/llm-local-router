@@ -3,10 +3,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ConfigPanel from './components/ConfigPanel';
 import MetricsPanel from './components/MetricsPanel';
 import StatusPanel from './components/StatusPanel';
+import HelpPanel from './components/HelpPanel';
+import AboutPanel from './components/AboutPanel';
 import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, MetricsPayload, StatusPayload, ProviderConfigEntry } from './types';
 import { onMessage, postMessage } from './utils/vscode';
 
-type Tab = 'status' | 'config' | 'metrics';
+type Tab = 'status' | 'config' | 'metrics' | 'help' | 'about';
 
 /**
  * Root application component with tab navigation.
@@ -82,6 +84,18 @@ export default function App() {
           >
             📊 Metrics
           </button>
+          <button
+            style={activeTab === 'help' ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab('help')}
+          >
+            🧭 Help
+          </button>
+          <button
+            style={activeTab === 'about' ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab('about')}
+          >
+            ℹ️ About
+          </button>
         </div>
 
         <div style={styles.content}>
@@ -94,6 +108,8 @@ export default function App() {
             />
           )}
           {activeTab === 'metrics' && <MetricsPanel metrics={metrics} />}
+          {activeTab === 'help' && <HelpPanel />}
+          {activeTab === 'about' && <AboutPanel />}
         </div>
       </div>
     </ErrorBoundary>
