@@ -224,7 +224,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         }
 
         const modelId = model.id;
-        const conversationId = options.modelOptions?.conversationId as string | undefined;
+        let conversationId = options.modelOptions?.conversationId as string | undefined;
         const parentConversationId = options.modelOptions?.parentConversationId as string | undefined;
         const rootConversationId = options.modelOptions?.rootConversationId as string | undefined;
 
@@ -238,8 +238,11 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             `root=${rootConversationId || '?'} msgs=${msgCount} last=${lastMsgRole}`
         );
 
+        // conversationId is optional — generate a fallback if not provided.
+        // This allows the extension to work with upstream callers (e.g. Copilot)
+        // that don't supply conversation IDs.
         if (!conversationId) {
-            throw new Error('conversationId is required in modelOptions');
+            conversationId = `anon-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         }
 
         // parentConversationId and rootConversationId already extracted above
