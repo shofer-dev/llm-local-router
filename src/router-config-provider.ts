@@ -24,7 +24,8 @@ import { ALL_MODELS } from './model-registry';
 import { getMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
 import { storeApiKey, deleteApiKey } from './secret-storage';
-import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution, ProviderModelInfo, ProviderType } from './types';
+import { ProviderType } from './types';
+import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution, ProviderModelInfo } from './types';
 import {
   convertToHostConfig,
   convertFromHostConfigs,
@@ -291,9 +292,9 @@ export class RouterConfigProvider {
     const registryMap = new Map<string, ModelRegistryEntry>();
     for (const entry of ALL_MODELS) registryMap.set(entry.id, entry);
 
-    // Collect all distinct providers from the registry (including unconfigured ones).
-    const allProviders = new Set<string>();
-    for (const entry of ALL_MODELS) allProviders.add(entry.provider);
+    // Collect all providers from the ProviderType enum (not the registry,
+    // since some like OpenRouter have no model entries — they're catch-alls).
+    const allProviders = Object.values(ProviderType) as string[];
 
     const configuredProviders = new Set<string>();
     for (const entry of ALL_MODELS) {
