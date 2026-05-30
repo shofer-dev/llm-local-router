@@ -61,6 +61,10 @@ type StreamChunkTransformer = (chunk: ChatCompletionResponse) => void;
 interface ProviderHandler {
     preparer: RequestPreparer;
     chunkTransformer?: StreamChunkTransformer;
+    /** Extra HTTP headers to send alongside the default Authorization header.
+     *  Use for providers (e.g. Google) that need x-goog-api-key in addition to,
+     *  or instead of, the Bearer token. */
+    extraHeaders?: (apiKey: string) => Record<string, string>;
     /** If true, this provider uses a non-OpenAI-compatible API (e.g., Anthropic) */
     customSend?: (
         apiKey: string,
@@ -97,7 +101,7 @@ export class ProviderRouter {
             },
         });
 
-        // Google: OpenAI-compatible endpoint passthrough
+        // Google: OpenAI-compatible endpoint passthrough (uses Bearer auth)
         this.handlerCache.set(ProviderType.Google, {
             preparer: prepareGoogleRequest,
         });
@@ -227,11 +231,14 @@ export class ProviderRouter {
             return handler.customSend(apiKey, prepared, () => {}, abortController);
         }
 
+        const extraHeaders = handler.extraHeaders ? handler.extraHeaders(apiKey) : undefined;
+
         const response = await sendNonStreamingRequest(
             resolved.baseUrl,
             apiKey,
             prepared,
             abortController,
+            extraHeaders,
         );
 
         // Apply chunk transformer if present
@@ -276,12 +283,15 @@ export class ProviderRouter {
               }
             : onChunk;
 
+        const extraHeaders = handler.extraHeaders ? handler.extraHeaders(apiKey) : undefined;
+
         return sendStreamingRequest(
             resolved.baseUrl,
             apiKey,
             prepared,
             wrappedOnChunk,
             abortController,
+            extraHeaders,
         );
     }
 
