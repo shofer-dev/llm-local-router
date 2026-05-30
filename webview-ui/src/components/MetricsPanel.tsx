@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import type { MetricsPayload } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
@@ -83,6 +83,19 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
   /** Which model keys are visible in the chart. Empty = show all. */
   const [visibleModels, setVisibleModels] = React.useState<string[]>([]);
   const [showModelPicker, setShowModelPicker] = React.useState(false);
+  const pickerRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    if (!showModelPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowModelPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showModelPicker]);
 
   // Fetch data when params change (always fetch all models)
   React.useEffect(() => {
@@ -126,19 +139,20 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
 
   const toggleModel = (id: string) => {
     setVisibleModels(prev => {
-      const allKeys = [ALL_MODEL_KEY_COL, ...modelsInData];
       if (id === ALL_MODEL_KEY_COL) {
-        // Toggling ALL: if all are visible, hide all; otherwise show all
-        const allVisible = prev.length === 0 || allKeys.every(k => prev.includes(k));
-        return allVisible ? [] : allKeys;
+        // Toggle ALL aggregate line visibility only
+        return prev.includes(ALL_MODEL_KEY_COL)
+          ? prev.filter(m => m !== ALL_MODEL_KEY_COL)
+          : [...prev, ALL_MODEL_KEY_COL];
       }
       // Start from "all visible" if nothing selected
-      const next = prev.length === 0 ? allKeys : [...prev];
+      const next = prev.length === 0 ? allLineKeys : [...prev];
       if (next.includes(id)) {
         return next.filter(m => m !== id);
       }
       return [...next, id];
     });
+    // Keep dropdown open for multi-select convenience
   };
 
   const chartData = React.useMemo(() => {
@@ -227,7 +241,7 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
 
         <div style={styles.controlGroup}>
           <span style={styles.controlLabel}>Lines</span>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }} ref={pickerRef}>
             <button
               style={styles.modelPickerBtn}
               onClick={() => setShowModelPicker(!showModelPicker)}
@@ -235,7 +249,7 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
               {visibleModels.length === 0
                 ? `All (${allLineKeys.length})`
                 : `${visibleCount} of ${allLineKeys.length}`}
-              {' ▾'}
+              {showModelPicker ? ' ▴' : ' ▾'}
             </button>
             {showModelPicker && (
               <div style={styles.modelDropdown}>
@@ -302,6 +316,12 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
               <CartesianGrid
                 stroke="var(--vscode-panel-border, rgba(128,128,128,0.15))"
                 strokeDasharray="3 3"
+              />
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  fontFamily: 'var(--vscode-font-family)',
+                }}
               />
               <XAxis
                 dataKey="windowStart"
