@@ -95,9 +95,10 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
     return unsub;
   }, []);
 
-  // Pivot flat TimeSeriesPoint[] into [{ windowStart, modelA, modelB, ... }]
+  // Pivot flat TimeSeriesPoint[] into [{ windowStart, modelA, modelB, ..., "ALL" }]
   const modelsInData = [...new Set(data.map(d => d.modelId))];
   const modelColors = new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]]));
+  const ALL_MODEL_KEY = 'ALL';
 
   const chartData = React.useMemo(() => {
     const windowMap = new Map<string, Record<string, number>>();
@@ -109,28 +110,78 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
     }
     const windows = [...windowMap.keys()].sort();
 
-    // For cumulative metrics, compute running-total series from the
-    // per-window cost data returned by the host. Each model gets its
-    // own independent running total across the sorted windows.
-    if (metricKey === 'cost_cumulative') {
-      const accumulators = new Map<string, number>();
-      return windows.map(w => {
-        const row: Record<string, number | string> = { windowStart: w };
-        for (const modelId of modelsInData) {
-          const delta = (windowMap.get(w)![modelId] ?? 0);
-          const running = (accumulators.get(modelId) ?? 0) + delta;
-          accumulators.set(modelId, running);
-          row[modelId] = running;
-        }
-        return row;
-      });
-    }
+    /**
+     * Compute the "ALL" aggregate value for a given window.
+     *
+     * Aggregation strategy depends on the metric:
+     *   - SUM: cost, requests, errors, tokens_*, request counts
+     *   - WEIGHTED_AVG: latency (TTFB/TTLB), weighted by request count if
+     *     we had counts per window per model; since we don't, we use
+     *     simple arithmetic mean across models
+     *   - RATIO: cache_hit_ratio — weighted by total prompt tokens
+     */
+    const computeAll = (modelValues: Record<string, number | string>): number => {
+      // Filter to numeric values only (skip windowStart string)
+      const values = Object.values(modelValues)
+        .filter((v): v is number => typeof v === 'number');
 
-    return windows.map(w => ({
+      if (values.length === 0) return 0;
+
+      if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb') {
+        // Arithmetic mean across models (cannot weight by request count
+        // without a separate metrics query for request counts per model/window)
+        return values.reduce((s, v) => s + v, 0) / values.length;
+      }
+
+      if (metricKey === 'cache_hit_ratio') {
+        // cache_hit_ratio is already a ratio (0-1) from the SQL layer
+        // (cached_tokens / total_prompt_tokens). Simple average across models.
+        return values.reduce((s, v) => s + v, 0) / values.length;
+      }
+
+      // Default: SUM (cost, requests, errors, tokens_*, cost_cumulative)
+      return values.reduce((s, v) => s + v, 0);
+    };
+
+    // Build raw rows (per-model values only)
+    const rawRows: Array<Record<string, number | string>> = windows.map(w => ({
       windowStart: w,
       ...windowMap.get(w),
     }));
+
+    // For cumulative metrics, compute running-total series.
+    // Each model (including ALL) gets its own independent running total.
+    if (metricKey === 'cost_cumulative') {
+      const accumulators = new Map<string, number>();
+      return rawRows.map(row => {
+        const result: Record<string, number | string> = { windowStart: row.windowStart };
+        for (const modelId of modelsInData) {
+          const delta = (row[modelId] as number | undefined) ?? 0;
+          const running = (accumulators.get(modelId) ?? 0) + delta;
+          accumulators.set(modelId, running);
+          result[modelId] = running;
+        }
+        // ALL cumulative = sum of per-model cumulative values
+        const allRunning = (accumulators.get(ALL_MODEL_KEY) ?? 0) + computeAll(row);
+        accumulators.set(ALL_MODEL_KEY, allRunning);
+        result[ALL_MODEL_KEY] = allRunning;
+        return result;
+      });
+    }
+
+    // Non-cumulative: attach ALL as a computed column
+    return rawRows.map(row => ({
+      ...row,
+      [ALL_MODEL_KEY]: computeAll(row),
+    }));
   }, [data, metricKey, modelsInData]);
+
+  // All lines to render: individual models + the ALL aggregate
+  const allLineKeys = React.useMemo(() => {
+    if (modelsInData.length <= 1) return modelsInData;
+    return [ALL_MODEL_KEY, ...modelsInData];
+  }, [modelsInData]);
+  const allColors = new Map(allLineKeys.map((k, i) => [k, k === ALL_MODEL_KEY ? '#ffffff' : COLORS[i % COLORS.length]]));
 
   // Compute summary values
   const totalValue = data.reduce((s, d) => s + d.value, 0);
@@ -260,14 +311,15 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
                   fontFamily: 'var(--vscode-font-family)',
                 }}
               />
-              {modelsInData.map(modelId => (
+              {allLineKeys.map(key => (
                 <Line
-                  key={modelId}
+                  key={key}
                   type="monotone"
-                  dataKey={modelId}
-                  name={modelId}
-                  stroke={modelColors.get(modelId)!}
-                  strokeWidth={2}
+                  dataKey={key}
+                  name={key}
+                  stroke={allColors.get(key)!}
+                  strokeWidth={key === ALL_MODEL_KEY ? 3 : 2}
+                  strokeDasharray={key === ALL_MODEL_KEY ? '6 3' : undefined}
                   dot={false}
                   activeDot={{ r: 4 }}
                   connectNulls
