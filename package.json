@@ -12,11 +12,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/shofer-dev/shofer.git"
+    "url": "https://github.com/shofer-dev/shofer-router"
   },
   "homepage": "https://shofer.dev",
   "bugs": {
-    "url": "https://github.com/shofer-dev/shofer/issues"
+    "url": "https://github.com/shofer-dev/shofer-router/issues"
   },
   "pricing": "Free",
   "author": {
