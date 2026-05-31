@@ -627,16 +627,16 @@ export default function ProvidersPanel({ providers }: Props) {
           <span>Custom Providers</span>
           <button
             className="vscode-button"
-            style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '16px' }}
+            style={{ padding: "2px 8px", fontSize: "12px" }}
             onClick={() => { setSelectedId(null); setShowAddCustom(true); setEditingCustomId(null); }}
           >
-            + Add
+            + New
           </button>
         </div>
 
         {customProviders.length === 0 ? (
           <div style={{ padding: '12px', fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)', textAlign: 'center' }}>
-            No custom providers registered. Click "+ Add" to register one.
+            No custom providers registered. Click "+ New" to register one.
           </div>
         ) : (
           customProviders.map((cp) => {
@@ -666,6 +666,22 @@ export default function ProvidersPanel({ providers }: Props) {
                     {cp.models.length} model{cp.models.length !== 1 ? 's' : ''}
                   </div>
                 </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteCustom(cp.id); }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--vscode-descriptionForeground, #999)",
+                  cursor: "pointer",
+                  padding: "2px 4px",
+                  fontSize: "12px",
+                  flexShrink: 0,
+                  marginLeft: "8px",
+                }}
+                title="Delete custom provider"
+              >
+                🗑
+              </button>
               </div>
             );
           })
