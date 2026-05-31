@@ -569,17 +569,27 @@ export default function ProvidersPanel({ providers }: Props) {
         display: 'flex',
         flexDirection: 'column',
       }}>
+        {/* Primary Providers header with + New button (same style as CompositeList) */}
         <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           padding: '8px 12px',
           borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
-          fontSize: '11px',
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          color: 'var(--vscode-descriptionForeground, #999)',
         }}>
-          Providers
+          <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--vscode-descriptionForeground, #999)' }}>
+            Primary Providers
+          </span>
+          <button
+            className="vscode-button"
+            style={{ padding: '2px 8px', fontSize: '12px' }}
+            onClick={() => { setSelectedId(null); setShowAddCustom(true); setEditingCustomId(null); }}
+          >
+            + New
+          </button>
         </div>
 
+        {/* Built-in providers */}
         {providers.map((p) => {
           const isSelected = p.id === selectedId;
           return (
@@ -620,18 +630,8 @@ export default function ProvidersPanel({ providers }: Props) {
           fontWeight: 600,
           textTransform: 'uppercase',
           color: 'var(--vscode-descriptionForeground, #999)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
         }}>
-          <span>Custom Providers</span>
-          <button
-            className="vscode-button"
-            style={{ padding: "2px 8px", fontSize: "12px" }}
-            onClick={() => { setSelectedId(null); setShowAddCustom(true); setEditingCustomId(null); }}
-          >
-            + New
-          </button>
+          Custom Providers
         </div>
 
         {customProviders.length === 0 ? (
@@ -666,22 +666,22 @@ export default function ProvidersPanel({ providers }: Props) {
                     {cp.models.length} model{cp.models.length !== 1 ? 's' : ''}
                   </div>
                 </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteCustom(cp.id); }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--vscode-descriptionForeground, #999)",
-                  cursor: "pointer",
-                  padding: "2px 4px",
-                  fontSize: "12px",
-                  flexShrink: 0,
-                  marginLeft: "8px",
-                }}
-                title="Delete custom provider"
-              >
-                🗑
-              </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteCustom(cp.id); }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--vscode-descriptionForeground, #999)',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    fontSize: '12px',
+                    flexShrink: 0,
+                    marginLeft: '8px',
+                  }}
+                  title="Delete custom provider"
+                >
+                  🗑
+                </button>
               </div>
             );
           })
