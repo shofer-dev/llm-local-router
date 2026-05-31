@@ -384,8 +384,8 @@ describe('providers/custom', () => {
             protocol: 'openai-compatible',
             endpointUrl: 'https://bedrock.example.com/v1',
             models: [
-                { id: 'bedrock-claude', name: 'Claude via Bedrock', contextLength: 200000, maxOutputTokens: 65536, imageInput: true, toolCalling: true },
-                { id: 'bedrock-gpt', name: 'GPT via Bedrock', contextLength: 128000, maxOutputTokens: 16384, imageInput: false, toolCalling: true },
+                { id: 'bedrock-claude', name: 'Claude via Bedrock', contextLength: 200000, maxOutputTokens: 65536, imageInput: true, toolCalling: true, thinking: false },
+                { id: 'bedrock-gpt', name: 'GPT via Bedrock', contextLength: 128000, maxOutputTokens: 16384, imageInput: false, toolCalling: true, thinking: false },
             ],
             defaultPricing: { prompt: 0.003, completion: 0.015 },
             ...overrides,
@@ -443,7 +443,7 @@ describe('providers/custom', () => {
                 label: 'Shadow',
                 protocol: 'openai-compatible',
                 endpointUrl: 'https://shadow.example.com/v1',
-                models: [{ id: 'deepseek-v4-pro', name: 'Shadow DS', contextLength: 100000, maxOutputTokens: 32768, imageInput: false, toolCalling: true }],
+                models: [{ id: 'deepseek-v4-pro', name: 'Shadow DS', contextLength: 100000, maxOutputTokens: 32768, imageInput: false, toolCalling: true, thinking: false }],
             });
             r.updateCustomProviders(map);
             r.updateCustomApiKeys({ shadow: 'sk-shadow' });

@@ -36,7 +36,7 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
   const [completionPrice, setCompletionPrice] = React.useState(initial?.defaultPricing?.completion?.toString() ?? '');
   const [cacheReadPrice, setCacheReadPrice] = React.useState(initial?.defaultPricing?.cacheRead?.toString() ?? '');
   const [modelsJson, setModelsJson] = React.useState(
-    initial ? JSON.stringify(initial.models, null, 2) : '[\n  {"id": "model-id", "name": "Model Name", "contextLength": 131072, "maxOutputTokens": 16384, "imageInput": false, "toolCalling": true}\n]'
+    initial ? JSON.stringify(initial.models, null, 2) : '[\n  {"id": "model-id", "name": "Model Name", "contextLength": 131072, "maxOutputTokens": 16384, "imageInput": false, "toolCalling": true, "thinking": false}\n]'
   );
   const [jsonError, setJsonError] = React.useState('');
 

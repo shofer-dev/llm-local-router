@@ -167,6 +167,7 @@ export interface CustomProviderModel {
   maxOutputTokens: number;
   imageInput: boolean;
   toolCalling: boolean;
+  thinking: boolean;
 }
 
 export interface CustomProviderConfig {

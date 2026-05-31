@@ -241,6 +241,8 @@ export interface CustomProviderModel {
     imageInput: boolean;
     /** Whether the model supports tool calling. */
     toolCalling: boolean;
+    /** Whether the model supports reasoning / extended thinking. */
+    thinking: boolean;
 }
 
 /** Full configuration for a user-registered custom primary provider. */
