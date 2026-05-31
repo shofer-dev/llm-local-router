@@ -12,7 +12,7 @@ interface CustomProviderFormProps {
   initial?: CustomProviderConfig;
   saving: boolean;
   saved: boolean;
-  onSave: (cfg: CustomProviderConfig) => void;
+  onSave: (cfg: CustomProviderConfig, apiKey: string) => void;
   onCancel: () => void;
   onDelete?: () => void;
   /** Callback so the form can stash the API key before parent saves. */
@@ -70,10 +70,7 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
         : undefined,
     };
 
-    // Stash API key so parent handleSaveCustom can pick it up
-    onFormChange(cfg.id, { apiKey, endpointUrl: cfg.endpointUrl, promptPrice, completionPrice, cacheReadPrice });
-
-    onSave(cfg);
+    onSave(cfg, apiKey);
   };
 
   return (
@@ -344,13 +341,12 @@ export default function ProvidersPanel({ providers }: Props) {
 
   // ─── Save / delete custom provider ──────────────────────────────
 
-  const handleSaveCustom = (cfg: CustomProviderConfig) => {
+  const handleSaveCustom = (cfg: CustomProviderConfig, apiKey: string) => {
     setSaving(true);
-    const formForCustom = forms[cfg.id];
     postMessage({
       type: 'saveCustomProvider',
       provider: cfg,
-      apiKey: formForCustom?.apiKey ?? '',
+      apiKey,
     });
   };
 
