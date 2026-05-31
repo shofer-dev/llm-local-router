@@ -13,7 +13,7 @@ import { ALL_MODELS } from './model-registry';
 
 export interface WebviewCompositeModel {
   modelId: string;
-  strategy: 'failover' | 'round_robin';
+  strategy: 'failover' | 'round_robin' | 'lowest_latency';
   streamingTimeoutMs: number;
   nonStreamingTimeoutMs: number;
   totalTimeoutMs: number;
@@ -25,6 +25,8 @@ export interface WebviewCompositeModel {
     weight: number;
     priority: number;
   }>;
+  /** For lowest_latency strategy: sliding window in ms for TTFB averaging. */
+  latencyWindowMs?: number;
 }
 
 // ─── Conversion: webview → host ────────────────────────────────────
@@ -55,6 +57,7 @@ export function convertToHostConfig(wm: WebviewCompositeModel): HostCompositeCon
     streamingTimeoutMs: wm.streamingTimeoutMs,
     perAttemptTimeoutMs: wm.nonStreamingTimeoutMs,
     totalTimeoutMs: wm.totalTimeoutMs,
+    latencyWindowMs: wm.latencyWindowMs,
     health: wm.health
       ? {
           failureThreshold: wm.health.failureThreshold,
@@ -102,6 +105,7 @@ export function convertFromHostConfigs(configs: Record<string, HostCompositeConf
       streamingTimeoutMs: config.streamingTimeoutMs ?? 30000,
       nonStreamingTimeoutMs: config.perAttemptTimeoutMs ?? 120000,
       totalTimeoutMs: config.totalTimeoutMs ?? 300000,
+      latencyWindowMs: config.latencyWindowMs,
       health: config.health
         ? {
             failureThreshold: config.health.failureThreshold ?? 3,
@@ -142,8 +146,8 @@ export function validateCompositeModels(models: WebviewCompositeModel[]): string
     seenIds.add(m.modelId);
 
     // Check strategy
-    if (m.strategy !== 'failover' && m.strategy !== 'round_robin') {
-      errors.push(`${m.modelId}: strategy must be "failover" or "round_robin".`);
+    if (m.strategy !== 'failover' && m.strategy !== 'round_robin' && m.strategy !== 'lowest_latency') {
+      errors.push(`${m.modelId}: strategy must be "failover", "round_robin", or "lowest_latency".`);
     }
 
     // Check underlying models

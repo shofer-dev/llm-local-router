@@ -150,6 +150,20 @@ export default function CompositeEditor({ composite, modelRegistry, onChange }: 
         />
       </ConfigSection>
 
+      {/* Latency window (lowest_latency strategy only) */}
+      {composite.strategy === 'lowest_latency' && (
+        <ConfigSection title="Latency">
+          <NumberInput
+            label="Latency Window (ms)"
+            value={composite.latencyWindowMs ?? 600000}
+            min={30000}
+            max={3600000}
+            step={30000}
+            onChange={(v) => update({ latencyWindowMs: v })}
+          />
+        </ConfigSection>
+      )}
+
       {/* Health */}
       <ConfigSection title="Health">
         <NumberInput

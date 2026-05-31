@@ -10,6 +10,7 @@ interface Props {
 const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   failover: 'Failover (strict priority order)',
   round_robin: 'Round Robin (weighted distribution)',
+  lowest_latency: 'Lowest Latency (fastest model wins)',
 };
 
 /**
@@ -28,7 +29,7 @@ export default function StrategySelector({ value, onChange, disabled }: Props) {
         onChange={(e) => onChange(e.target.value as RoutingStrategy)}
         style={{ width: '100%' }}
       >
-        {(['failover', 'round_robin'] as RoutingStrategy[]).map((s) => (
+        {(['failover', 'round_robin', 'lowest_latency'] as RoutingStrategy[]).map((s) => (
           <option key={s} value={s}>
             {STRATEGY_LABELS[s]}
           </option>

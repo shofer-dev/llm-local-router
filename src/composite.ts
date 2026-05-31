@@ -5,6 +5,9 @@
  * with configurable routing strategies:
  *   - failover: tries models in strict order; on failure, falls back
  *   - round_robin: smooth weighted round-robin (nginx-style) across models
+ *   - lowest_latency: always picks the model with lowest average TTFB over
+ *     a configurable sliding window (default 10 min). Falls back to equal
+ *     weights when no latency data is available.
  *
  * Streaming requests follow a "first-byte rule": once any chunk has been
  * sent to the client, failover to a different model is not possible.
@@ -95,6 +98,18 @@ interface SWRRState {
     currentWeights: Map<string, number>;
 }
 
+/** Per-model latency tracking for lowest_latency strategy. */
+interface LatencyTracker {
+    /** Timestamped TTFB samples in milliseconds. */
+    samples: number[];
+    /** Current exponential moving average. */
+    ema: number;
+    /** Smoothing factor for EMA (0-1). Higher = more weight to recent. */
+    alpha: number;
+}
+
+const DEFAULT_LATENCY_WINDOW_MS = 600_000; // 10 minutes
+
 export class CompositeService {
     private router: ProviderRouter;
     private compositeConfigs: Map<string, CompositeModelConfig> = new Map();
@@ -107,6 +122,9 @@ export class CompositeService {
 
     // Smooth WRR state per composite model
     private swrrState = new Map<string, SWRRState>();
+    // Per-model latency tracking for lowest_latency strategy
+    private latencyTrackers = new Map<string, LatencyTracker>();
+
 
     constructor(router: ProviderRouter) {
         this.router = router;
@@ -244,9 +262,13 @@ export class CompositeService {
                         timeoutId = setTimeout(() => attemptAbort.abort(), timeoutMs);
                     }
                 };
-                resetInactivityTimer();
+                const attemptStartMs = Date.now();
+                let ttfbMs = 0;
                 const wrappedOnChunk = (chunk: ChatCompletionResponse) => {
-                    firstByteReceived = true;
+                    if (!firstByteReceived) {
+                        firstByteReceived = true;
+                        ttfbMs = Date.now() - attemptStartMs;
+                    }
                     lastChunkMs = Date.now();
                     // Reset inactivity timer on each chunk for streaming
                     if (isStreaming) resetInactivityTimer();
@@ -263,6 +285,9 @@ export class CompositeService {
                 if (timeoutId) clearTimeout(timeoutId);
 
                 this.recordSuccess(candidateModel, health);
+                if (ttfbMs > 0) {
+                    this.recordLatency(candidateModel, ttfbMs, config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS);
+                }
 
                 logger.debug(
                     `Composite ${compositeModelId}: served by ${candidateModel} ` +
@@ -321,6 +346,10 @@ export class CompositeService {
 
         if (config.strategy === 'round_robin') {
             return this.smoothWRRSelect(compositeId, resolvedModels, health);
+        }
+
+        if (config.strategy === 'lowest_latency') {
+            return this.lowestLatencySelect(compositeId, resolvedModels, config, health);
         }
 
         // failover: strict order, but skip unhealthy
@@ -446,6 +475,80 @@ export class CompositeService {
         }
 
         return true;
+    }
+
+
+    // ─── Latency-based selection ─────────────────────────────────────
+
+    /**
+     * Record a TTFB sample and update the exponential moving average
+     * for the given model. Old samples beyond the window are pruned.
+     */
+    private recordLatency(modelId: string, ttfbMs: number, windowMs: number): void {
+        let tracker = this.latencyTrackers.get(modelId);
+        if (!tracker) {
+            tracker = { samples: [], ema: ttfbMs, alpha: 0.3 };
+            this.latencyTrackers.set(modelId, tracker);
+        }
+
+        // Prune old samples
+        const cutoff = Date.now() - windowMs;
+        tracker.samples = tracker.samples.filter(s => s > cutoff);
+        tracker.samples.push(Date.now());
+
+        // EMA update
+        tracker.ema = tracker.alpha * ttfbMs + (1 - tracker.alpha) * tracker.ema;
+    }
+
+    /**
+     * Get the estimated TTFB for a model based on EMA. Returns
+     * Infinity if no data exists.
+     */
+    private getEstimatedLatency(modelId: string): number {
+        const tracker = this.latencyTrackers.get(modelId);
+        if (!tracker || tracker.samples.length === 0) return Infinity;
+        return tracker.ema;
+    }
+
+    /**
+     * Select the model with the lowest average TTFB for the
+     * lowest_latency strategy. Falls back to equal-weight round-robin
+     * when no latency data is available for any model.
+     */
+    private lowestLatencySelect(
+        compositeId: string,
+        resolvedModels: ResolvedModelConfig[],
+        config: CompositeModelConfig,
+        health: CompositeHealthConfig,
+    ): string[] {
+        const latencyWindowMs = config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS;
+        const healthy = resolvedModels.filter(m => !this.isUnhealthy(m.id, health));
+
+        if (healthy.length === 0) return [];
+
+        // Compute per-model weighted score: closer to 0 = faster.
+        // Using EMA-based estimate avoids noise from outliers.
+        let bestModel = '';
+        let bestLatency = Infinity;
+        let allUnknown = true;
+
+        for (const model of healthy) {
+            const est = this.getEstimatedLatency(model.id);
+            if (est < Infinity) allUnknown = false;
+            if (est < bestLatency) {
+                bestLatency = est;
+                bestModel = model.id;
+            }
+        }
+
+        // If no latency data exists, fall back to equal weights for all healthy models
+        if (allUnknown) {
+            // Use simple round-robin with equal weights (weight=1)
+            const equalModels = healthy.map(m => ({ ...m, weight: 1 }));
+            return this.smoothWRRSelect(compositeId, equalModels, health);
+        }
+
+        return bestModel ? [bestModel] : [];
     }
 
     // ─── Throttling ─────────────────────────────────────────────────

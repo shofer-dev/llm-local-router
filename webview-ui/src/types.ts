@@ -8,7 +8,7 @@
 
 // ─── Strategy ───────────────────────────────────────────────────
 
-export type RoutingStrategy = 'failover' | 'round_robin';
+export type RoutingStrategy = 'failover' | 'round_robin' | 'lowest_latency';
 
 // ─── Throttling ─────────────────────────────────────────────────
 
@@ -46,6 +46,8 @@ export interface CompositeModelConfig {
   health?: HealthConfig;
   throttling?: ThrottlingConfig;
   underlyingModels: UnderlyingModelEntry[];
+  /** For lowest_latency strategy: sliding window in ms for TTFB averaging. Default 600000 (10 min). */
+  latencyWindowMs?: number;
 }
 
 // ─── Model registry summary (for model picker) ──────────────────
