@@ -2,9 +2,232 @@ import React from 'react';
 import type { ProviderConfigEntry, ProviderPricing, CustomProviderConfig, CustomProviderModel, CustomProviderProtocol } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
 
+// ─── Props ────────────────────────────────────────────────────────
+
 interface Props {
   providers: ProviderConfigEntry[];
 }
+
+interface CustomProviderFormProps {
+  initial?: CustomProviderConfig;
+  saving: boolean;
+  saved: boolean;
+  onSave: (cfg: CustomProviderConfig) => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+  /** Callback so the form can stash the API key before parent saves. */
+  onFormChange: (cfgId: string, form: { apiKey: string; endpointUrl: string; promptPrice: string; completionPrice: string; cacheReadPrice: string }) => void;
+}
+
+// ─── Custom provider form (module scope — stable identity) ────────
+
+/**
+ * Standalone form for adding/editing a custom primary provider.
+ * Defined at module scope so React preserves component identity across
+ * parent re-renders (e.g., when metricsUpdate fires every 15s).
+ */
+const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving, saved, onSave, onCancel, onDelete, onFormChange }) => {
+  const [id, setId] = React.useState(initial?.id ?? '');
+  const [label, setLabel] = React.useState(initial?.label ?? '');
+  const [protocol, setProtocol] = React.useState<CustomProviderProtocol>(initial?.protocol ?? 'openai-compatible');
+  const [endpointUrl, setEndpointUrl] = React.useState(initial?.endpointUrl ?? '');
+  const [apiKey, setApiKey] = React.useState('');
+  const [promptPrice, setPromptPrice] = React.useState(initial?.defaultPricing?.prompt?.toString() ?? '');
+  const [completionPrice, setCompletionPrice] = React.useState(initial?.defaultPricing?.completion?.toString() ?? '');
+  const [cacheReadPrice, setCacheReadPrice] = React.useState(initial?.defaultPricing?.cacheRead?.toString() ?? '');
+  const [modelsJson, setModelsJson] = React.useState(
+    initial ? JSON.stringify(initial.models, null, 2) : '[\n  {"id": "model-id", "name": "Model Name", "contextLength": 131072, "maxOutputTokens": 16384, "imageInput": false, "toolCalling": true}\n]'
+  );
+  const [jsonError, setJsonError] = React.useState('');
+
+  const handleSubmit = () => {
+    if (!id.trim() || !label.trim() || !endpointUrl.trim()) return;
+    let models: CustomProviderModel[];
+    try {
+      models = JSON.parse(modelsJson);
+      if (!Array.isArray(models) || models.length === 0) {
+        setJsonError('Models must be a non-empty array.');
+        return;
+      }
+    } catch {
+      setJsonError('Invalid JSON format.');
+      return;
+    }
+    setJsonError('');
+
+    const cfg: CustomProviderConfig = {
+      id: id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+      label: label.trim(),
+      protocol,
+      endpointUrl: endpointUrl.trim(),
+      models,
+      defaultPricing: promptPrice || completionPrice || cacheReadPrice
+        ? {
+            prompt: promptPrice ? parseFloat(promptPrice) : undefined,
+            completion: completionPrice ? parseFloat(completionPrice) : undefined,
+            cacheRead: cacheReadPrice ? parseFloat(cacheReadPrice) : undefined,
+          }
+        : undefined,
+    };
+
+    // Stash API key so parent handleSaveCustom can pick it up
+    onFormChange(cfg.id, { apiKey, endpointUrl: cfg.endpointUrl, promptPrice, completionPrice, cacheReadPrice });
+
+    onSave(cfg);
+  };
+
+  return (
+    <div style={{ padding: '12px', overflowY: 'auto' }}>
+      <div style={{ marginBottom: '12px' }}>
+        <label style={formStyles.fieldLabel}>Provider ID</label>
+        <input
+          type="text"
+          className="vscode-input"
+          style={{ width: '100%' }}
+          value={id}
+          onChange={(e) => setId(e.target.value)}
+          placeholder="my-custom-provider"
+          disabled={!!initial}
+        />
+        <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
+          Unique ID (lowercase, a-z, 0-9, -, _). Cannot be changed after creation.
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '12px' }}>
+        <label style={formStyles.fieldLabel}>Label</label>
+        <input
+          type="text"
+          className="vscode-input"
+          style={{ width: '100%' }}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="My Provider"
+        />
+      </div>
+
+      <div style={{ marginBottom: '12px' }}>
+        <label style={formStyles.fieldLabel}>Protocol</label>
+        <select
+          className="vscode-input"
+          style={{ width: '100%' }}
+          value={protocol}
+          onChange={(e) => setProtocol(e.target.value as CustomProviderProtocol)}
+        >
+          <option value="openai-compatible">OpenAI Compatible</option>
+          <option value="anthropic-compatible">Anthropic Compatible</option>
+          <option value="google-compatible">Google Compatible</option>
+        </select>
+        <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
+          Determines how requests are formatted before sending to the provider.
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '12px' }}>
+        <label style={formStyles.fieldLabel}>API Key</label>
+        <input
+          type="password"
+          className="vscode-input"
+          style={{ width: '100%' }}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder={initial ? '(stored — enter to change)' : 'sk-...'}
+        />
+      </div>
+
+      <div style={{ marginBottom: '12px' }}>
+        <label style={formStyles.fieldLabel}>Endpoint URL</label>
+        <input
+          type="text"
+          className="vscode-input"
+          style={{ width: '100%' }}
+          value={endpointUrl}
+          onChange={(e) => setEndpointUrl(e.target.value)}
+          placeholder="https://api.example.com/v1"
+        />
+      </div>
+
+      <div style={{ marginBottom: '12px' }}>
+        <label style={{ ...formStyles.fieldLabel, marginBottom: '6px' }}>
+          Default Pricing (USD per 1M tokens)
+        </label>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 120px' }}>
+            <label style={formStyles.subLabel}>Prompt ($/1M)</label>
+            <input
+              type="number"
+              className="vscode-input"
+              style={{ width: '100%' }}
+              value={promptPrice}
+              onChange={(e) => setPromptPrice(e.target.value)}
+              placeholder="—"
+              step="0.01"
+              min="0"
+            />
+          </div>
+          <div style={{ flex: '1 1 120px' }}>
+            <label style={formStyles.subLabel}>Completion ($/1M)</label>
+            <input
+              type="number"
+              className="vscode-input"
+              style={{ width: '100%' }}
+              value={completionPrice}
+              onChange={(e) => setCompletionPrice(e.target.value)}
+              placeholder="—"
+              step="0.01"
+              min="0"
+            />
+          </div>
+          <div style={{ flex: '1 1 120px' }}>
+            <label style={formStyles.subLabel}>Cache Read ($/1M)</label>
+            <input
+              type="number"
+              className="vscode-input"
+              style={{ width: '100%' }}
+              value={cacheReadPrice}
+              onChange={(e) => setCacheReadPrice(e.target.value)}
+              placeholder="—"
+              step="0.01"
+              min="0"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '12px' }}>
+        <label style={formStyles.fieldLabel}>
+          Models
+          {jsonError && <span style={{ color: 'var(--vscode-errorForeground, #f48771)', marginLeft: '8px', fontWeight: 400, textTransform: 'none' }}>{jsonError}</span>}
+        </label>
+        <textarea
+          className="vscode-input"
+          style={{ width: '100%', minHeight: '150px', fontFamily: 'monospace', fontSize: '12px' }}
+          value={modelsJson}
+          onChange={(e) => { setModelsJson(e.target.value); setJsonError(''); }}
+        />
+        <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
+          JSON array of model objects. Each model needs: id, name, contextLength, maxOutputTokens, imageInput, toolCalling.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+        <button className="vscode-button" onClick={handleSubmit} disabled={saving}>
+          {saving ? 'Saving...' : saved ? '✓ Saved' : '💾 Save Custom Provider'}
+        </button>
+        <button className="vscode-button" onClick={onCancel} style={{ background: 'var(--vscode-button-secondaryBackground)' }}>
+          Cancel
+        </button>
+        {onDelete && (
+          <button className="vscode-button" onClick={onDelete} style={{ background: 'var(--vscode-inputValidation-errorBackground, #5a1d1d)', marginLeft: 'auto' }}>
+            🗑 Delete
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Main panel ───────────────────────────────────────────────────
 
 /**
  * Two-panel provider configuration: left list of built-in + custom providers,
@@ -64,8 +287,6 @@ export default function ProvidersPanel({ providers }: Props) {
       } else if (msg.type === 'customProviderSaved') {
         setSaving(false);
         setSaved(true);
-        // Refresh custom providers list from host
-        // The host will re-send initCustomProviders; we just clear editing state.
         setShowAddCustom(false);
         setEditingCustomId(null);
         setTimeout(() => setSaved(false), 2000);
@@ -121,7 +342,7 @@ export default function ProvidersPanel({ providers }: Props) {
     });
   };
 
-  // ─── Save custom provider ───────────────────────────────────────
+  // ─── Save / delete custom provider ──────────────────────────────
 
   const handleSaveCustom = (cfg: CustomProviderConfig) => {
     setSaving(true);
@@ -133,230 +354,23 @@ export default function ProvidersPanel({ providers }: Props) {
     });
   };
 
-  // ─── Delete custom provider ─────────────────────────────────────
-
   const handleDeleteCustom = (providerId: string) => {
     if (!confirm(`Delete custom provider "${providerId}" and all its models?`)) return;
     setSaving(true);
     postMessage({ type: 'deleteCustomProvider', providerId });
   };
 
-  // ─── Custom provider form component ─────────────────────────────
-
-  const CustomProviderForm: React.FC<{
-    initial?: CustomProviderConfig;
-    onSave: (cfg: CustomProviderConfig) => void;
-    onCancel: () => void;
-    onDelete?: () => void;
-  }> = ({ initial, onSave, onCancel, onDelete }) => {
-    const [id, setId] = React.useState(initial?.id ?? '');
-    const [label, setLabel] = React.useState(initial?.label ?? '');
-    const [protocol, setProtocol] = React.useState<CustomProviderProtocol>(initial?.protocol ?? 'openai-compatible');
-    const [endpointUrl, setEndpointUrl] = React.useState(initial?.endpointUrl ?? '');
-    const [apiKey, setApiKey] = React.useState('');
-    const [promptPrice, setPromptPrice] = React.useState(initial?.defaultPricing?.prompt?.toString() ?? '');
-    const [completionPrice, setCompletionPrice] = React.useState(initial?.defaultPricing?.completion?.toString() ?? '');
-    const [cacheReadPrice, setCacheReadPrice] = React.useState(initial?.defaultPricing?.cacheRead?.toString() ?? '');
-    // Models editor (simple JSON textarea)
-    const [modelsJson, setModelsJson] = React.useState(
-      initial ? JSON.stringify(initial.models, null, 2) : '[\n  {"id": "model-id", "name": "Model Name", "contextLength": 131072, "maxOutputTokens": 16384, "imageInput": false, "toolCalling": true}\n]'
-    );
-    const [jsonError, setJsonError] = React.useState('');
-
-    const handleSubmit = () => {
-      if (!id.trim() || !label.trim() || !endpointUrl.trim()) return;
-      let models: CustomProviderModel[];
-      try {
-        models = JSON.parse(modelsJson);
-        if (!Array.isArray(models) || models.length === 0) {
-          setJsonError('Models must be a non-empty array.');
-          return;
-        }
-      } catch {
-        setJsonError('Invalid JSON format.');
-        return;
-      }
-      setJsonError('');
-
-      const cfg: CustomProviderConfig = {
-        id: id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
-        label: label.trim(),
-        protocol,
-        endpointUrl: endpointUrl.trim(),
-        models,
-        defaultPricing: promptPrice || completionPrice || cacheReadPrice
-          ? {
-              prompt: promptPrice ? parseFloat(promptPrice) : undefined,
-              completion: completionPrice ? parseFloat(completionPrice) : undefined,
-              cacheRead: cacheReadPrice ? parseFloat(cacheReadPrice) : undefined,
-            }
-          : undefined,
-      };
-
-      // Also push API key into the forms state so handleSaveCustom can find it
-      setForms(prev => ({
-        ...prev,
-        [cfg.id]: { apiKey, endpointUrl: cfg.endpointUrl, promptPrice, completionPrice, cacheReadPrice },
-      }));
-
-      onSave(cfg);
-    };
-
-    return (
-      <div style={{ padding: '12px', overflowY: 'auto' }}>
-        <div style={{ marginBottom: '12px' }}>
-          <label style={styles.fieldLabel}>Provider ID</label>
-          <input
-            type="text"
-            className="vscode-input"
-            style={{ width: '100%' }}
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-            placeholder="my-custom-provider"
-            disabled={!!initial}
-          />
-          <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
-            Unique ID (lowercase, a-z, 0-9, -, _). Cannot be changed after creation.
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <label style={styles.fieldLabel}>Label</label>
-          <input
-            type="text"
-            className="vscode-input"
-            style={{ width: '100%' }}
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="My Provider"
-          />
-        </div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <label style={styles.fieldLabel}>Protocol</label>
-          <select
-            className="vscode-input"
-            style={{ width: '100%' }}
-            value={protocol}
-            onChange={(e) => setProtocol(e.target.value as CustomProviderProtocol)}
-          >
-            <option value="openai-compatible">OpenAI Compatible</option>
-            <option value="anthropic-compatible">Anthropic Compatible</option>
-            <option value="google-compatible">Google Compatible</option>
-          </select>
-          <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
-            Determines how requests are formatted before sending to the provider.
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <label style={styles.fieldLabel}>API Key</label>
-          <input
-            type="password"
-            className="vscode-input"
-            style={{ width: '100%' }}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={initial ? '(stored — enter to change)' : 'sk-...'}
-          />
-        </div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <label style={styles.fieldLabel}>Endpoint URL</label>
-          <input
-            type="text"
-            className="vscode-input"
-            style={{ width: '100%' }}
-            value={endpointUrl}
-            onChange={(e) => setEndpointUrl(e.target.value)}
-            placeholder="https://api.example.com/v1"
-          />
-        </div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ ...styles.fieldLabel, marginBottom: '6px' }}>
-            Default Pricing (USD per 1M tokens)
-          </label>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 120px' }}>
-              <label style={styles.subLabel}>Prompt ($/1M)</label>
-              <input
-                type="number"
-                className="vscode-input"
-                style={{ width: '100%' }}
-                value={promptPrice}
-                onChange={(e) => setPromptPrice(e.target.value)}
-                placeholder="—"
-                step="0.01"
-                min="0"
-              />
-            </div>
-            <div style={{ flex: '1 1 120px' }}>
-              <label style={styles.subLabel}>Completion ($/1M)</label>
-              <input
-                type="number"
-                className="vscode-input"
-                style={{ width: '100%' }}
-                value={completionPrice}
-                onChange={(e) => setCompletionPrice(e.target.value)}
-                placeholder="—"
-                step="0.01"
-                min="0"
-              />
-            </div>
-            <div style={{ flex: '1 1 120px' }}>
-              <label style={styles.subLabel}>Cache Read ($/1M)</label>
-              <input
-                type="number"
-                className="vscode-input"
-                style={{ width: '100%' }}
-                value={cacheReadPrice}
-                onChange={(e) => setCacheReadPrice(e.target.value)}
-                placeholder="—"
-                step="0.01"
-                min="0"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <label style={styles.fieldLabel}>
-            Models
-            {jsonError && <span style={{ color: 'var(--vscode-errorForeground, #f48771)', marginLeft: '8px', fontWeight: 400, textTransform: 'none' }}>{jsonError}</span>}
-          </label>
-          <textarea
-            className="vscode-input"
-            style={{ width: '100%', minHeight: '150px', fontFamily: 'monospace', fontSize: '12px' }}
-            value={modelsJson}
-            onChange={(e) => { setModelsJson(e.target.value); setJsonError(''); }}
-          />
-          <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
-            JSON array of model objects. Each model needs: id, name, contextLength, maxOutputTokens, imageInput, toolCalling.
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-          <button className="vscode-button" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Saving...' : saved ? '✓ Saved' : '💾 Save Custom Provider'}
-          </button>
-          <button className="vscode-button" onClick={onCancel} style={{ background: 'var(--vscode-button-secondaryBackground)' }}>
-            Cancel
-          </button>
-          {onDelete && (
-            <button className="vscode-button" onClick={onDelete} style={{ background: 'var(--vscode-inputValidation-errorBackground, #5a1d1d)', marginLeft: 'auto' }}>
-              🗑 Delete
-            </button>
-          )}
-        </div>
-      </div>
-    );
+  /** Called by CustomProviderForm to stash its form fields before save. */
+  const handleCustomFormChange = (
+    cfgId: string,
+    f: { apiKey: string; endpointUrl: string; promptPrice: string; completionPrice: string; cacheReadPrice: string }
+  ) => {
+    setForms(prev => ({ ...prev, [cfgId]: f }));
   };
 
   // ─── Determine what to show in the right panel ──────────────────
 
   const renderRightPanel = () => {
-    // Adding a new custom provider
     if (showAddCustom) {
       return (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -372,14 +386,16 @@ export default function ProvidersPanel({ providers }: Props) {
             <span style={{ fontSize: '13px', fontWeight: 600 }}>New Custom Provider</span>
           </div>
           <CustomProviderForm
+            saving={saving}
+            saved={saved}
             onSave={handleSaveCustom}
             onCancel={() => setShowAddCustom(false)}
+            onFormChange={handleCustomFormChange}
           />
         </div>
       );
     }
 
-    // Editing an existing custom provider
     if (editingCustomId && selectedCustom) {
       return (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -396,19 +412,20 @@ export default function ProvidersPanel({ providers }: Props) {
           </div>
           <CustomProviderForm
             initial={selectedCustom}
+            saving={saving}
+            saved={saved}
             onSave={handleSaveCustom}
             onCancel={() => setEditingCustomId(null)}
             onDelete={() => handleDeleteCustom(selectedCustom.id)}
+            onFormChange={handleCustomFormChange}
           />
         </div>
       );
     }
 
-    // Built-in provider editing (existing flow)
     if (selected && form && isBuiltIn(selected.id)) {
       return (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-          {/* Save button at top */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -423,11 +440,9 @@ export default function ProvidersPanel({ providers }: Props) {
             </button>
           </div>
 
-          {/* Settings form */}
           <div style={{ padding: '12px', overflowY: 'auto' }}>
-            {/* API Key */}
             <div style={{ marginBottom: '12px' }}>
-              <label style={styles.fieldLabel}>API Key</label>
+              <label style={formStyles.fieldLabel}>API Key</label>
               <input
                 type="password"
                 className="vscode-input"
@@ -438,9 +453,8 @@ export default function ProvidersPanel({ providers }: Props) {
               />
             </div>
 
-            {/* Endpoint URL */}
             <div style={{ marginBottom: '12px' }}>
-              <label style={styles.fieldLabel}>Endpoint URL</label>
+              <label style={formStyles.fieldLabel}>Endpoint URL</label>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <input
                   type="text"
@@ -462,14 +476,13 @@ export default function ProvidersPanel({ providers }: Props) {
               </div>
             </div>
 
-            {/* Pricing overrides */}
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ ...styles.fieldLabel, marginBottom: '6px' }}>
+              <label style={{ ...formStyles.fieldLabel, marginBottom: '6px' }}>
                 Pricing Overrides (USD per 1M tokens)
               </label>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 120px' }}>
-                  <label style={styles.subLabel}>Prompt ($/1M)</label>
+                  <label style={formStyles.subLabel}>Prompt ($/1M)</label>
                   <input
                     type="number"
                     className="vscode-input"
@@ -482,7 +495,7 @@ export default function ProvidersPanel({ providers }: Props) {
                   />
                 </div>
                 <div style={{ flex: '1 1 120px' }}>
-                  <label style={styles.subLabel}>Completion ($/1M)</label>
+                  <label style={formStyles.subLabel}>Completion ($/1M)</label>
                   <input
                     type="number"
                     className="vscode-input"
@@ -495,7 +508,7 @@ export default function ProvidersPanel({ providers }: Props) {
                   />
                 </div>
                 <div style={{ flex: '1 1 120px' }}>
-                  <label style={styles.subLabel}>Cache Read ($/1M)</label>
+                  <label style={formStyles.subLabel}>Cache Read ($/1M)</label>
                   <input
                     type="number"
                     className="vscode-input"
@@ -513,7 +526,6 @@ export default function ProvidersPanel({ providers }: Props) {
               </div>
             </div>
 
-            {/* Provider models info */}
             <div style={{
               padding: '8px',
               border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
@@ -529,7 +541,6 @@ export default function ProvidersPanel({ providers }: Props) {
       );
     }
 
-    // Nothing selected
     return (
       <div style={{
         display: 'flex',
@@ -558,7 +569,6 @@ export default function ProvidersPanel({ providers }: Props) {
         display: 'flex',
         flexDirection: 'column',
       }}>
-        {/* Built-in providers header */}
         <div style={{
           padding: '8px 12px',
           borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
@@ -631,8 +641,6 @@ export default function ProvidersPanel({ providers }: Props) {
         ) : (
           customProviders.map((cp) => {
             const isSelected = cp.id === selectedId;
-            const cpForm = forms[cp.id];
-            const hasKey = !!cpForm?.apiKey || false; // apiKey in form means user entered one
             return (
               <div
                 key={cp.id}
@@ -670,7 +678,9 @@ export default function ProvidersPanel({ providers }: Props) {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+// ─── Shared styles ────────────────────────────────────────────────
+
+const formStyles: Record<string, React.CSSProperties> = {
   fieldLabel: {
     display: 'block',
     marginBottom: '4px',
