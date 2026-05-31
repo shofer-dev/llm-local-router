@@ -17,7 +17,8 @@ Shofer Router is a self-contained VS Code extension that embeds all LLM routing 
 │  │  • Command registration                                  │ │
 │  │  • Status bar + health checks                            │ │
 │  │  • SecretStorage API key management                      │ │
-│  └──────────────────────────┬───────────────────────────────┘ │
+│  │  • Custom provider loading (settings.json + SecretStorage)│ │
+│  └───���──────────────────────┬───────────────────────────────┘ │
 │                              │                                 │
 │  ┌──────────────────────────▼───────────────────────────────┐ │
 │  │            LanguageModelProvider                          │ │
@@ -26,14 +27,20 @@ Shofer Router is a self-contained VS Code extension that embeds all LLM routing 
 │  │  • Tool call accumulation + ordering validation           │ │
 │  │  • Per-conversation cost ledger                          │ │
 │  │  • Side-channel commands (pricing, capabilities, cost)   │ │
+│  │  • Custom provider model → ProviderModelInfo conversion  │ │
 │  └──────────┬────────────────────────┬──────────────────────┘ │
 │             │                        │                         │
 │  ┌──────────▼──────────┐  ┌─────────▼──────────────────────┐ │
 │  │   ProviderRouter    │  │      CompositeService          │ │
-│  │  • Provider selection│  │  • Failover strategy           │ │
-│  │  • API key routing   │  │  • Round-robin strategy        │ │
-│  │  • Request prep      │  │  • Health monitoring            │ │
-│  │  • Stream transform  │  │  • Throttling                  │ │
+│  │  • Built-in provider │  │  • Failover strategy           │ │
+│  │    selection         │  │  • Round-robin strategy        │ │
+│  │  • Custom provider   │  │  • Lowest-latency strategy     │ │
+│  │    resolution        │  │  • Health monitoring           │ │
+│  │  • Protocol-based    │  │  • Throttling                  │ │
+│  │    handler factory   │  │  • TTFB latency tracking       │ │
+│  │  • API key routing   │  │                                │ │
+│  │  • Request prep      │  │                                │ │
+│  │  • Stream transform  │  │                                │ │
 │  └──────────┬───────────┘  └────────────────────────────────┘ │
 │             │                                                  │
 │  ┌──────────▼──────────────────────────────────────────────┐ │
@@ -64,6 +71,7 @@ Implements `vscode.LanguageModelChatProvider<vscode.LanguageModelChatInformation
 
 **Responsibilities:**
 - Register models from the built-in registry via `provideLanguageModelChatInformation()`
+- Register custom (user-defined) provider models alongside built-in models
 - Handle chat requests via `provideLanguageModelChatResponse()`
 - Convert VS Code messages ↔ OpenAI Chat Completions format
 - Accumulate streaming tool calls and report them as `LanguageModelToolCallPart`
@@ -74,16 +82,19 @@ Implements `vscode.LanguageModelChatProvider<vscode.LanguageModelChatInformation
 
 ### 2. ProviderRouter (`provider-client.ts`)
 
-Routes requests to the correct provider based on model ID.
+Routes requests to the correct provider based on model ID. Supports both built-in providers (via `ProviderType` enum) and user-registered custom providers.
 
 **Responsibilities:**
-- Map model ID → provider type via the model registry
-- Select the correct API key for the provider
+- Map model ID → provider type via the model registry (built-in)
+- Resolve custom provider models via a reverse index (`customModelIndex`)
+- Build per-protocol handlers for custom providers (`buildCustomHandler`)
+- Select the correct API key for both built-in and custom providers
 - Apply provider-specific request transformations before sending
 - Route Anthropic requests through the custom Messages API path
+- Route Google requests through the native Gemini API path
 - Handle OpenRouter as the catch-all for unknown models
 
-**Provider resolution** (from `getProviderForModel()`):
+**Provider resolution** (from `resolveProvider()`):
 
 | Model pattern | Provider |
 |---------------|----------|
@@ -96,9 +107,35 @@ Routes requests to the correct provider based on model ID.
 | `mimo-*` | Xiaomi |
 | `glm-*` | Zhipu |
 | `shofer/*` | Composite (routed by CompositeService) |
+| Custom provider model | Resolved via customModelIndex |
 | Anything else | OpenRouter |
 
-### 3. Provider Clients (`providers/*.ts`)
+### 3. Custom Primary Providers
+
+Users can register their own LLM providers through the webview UI or `settings.json`. Each custom provider specifies:
+
+- **Provider ID** — unique, lowercase identifier (must not collide with built-in names)
+- **Label** — human-readable display name
+- **Protocol** — one of `openai-compatible`, `anthropic-compatible`, or `google-compatible`
+- **Endpoint URL** — base URL for the provider's API
+- **API Key** — stored in SecretStorage under `shofer-router.provider.custom.{id}`
+- **Models** — array of model definitions (id, name, contextLength, maxOutputTokens, imageInput, toolCalling, thinking)
+- **Default Pricing** — per 1M tokens (prompt, completion, cache read)
+
+**Source of Truth:**
+| What | Storage |
+|------|---------|
+| Custom provider metadata | `settings.json` (`shofer.router.customProviders`) |
+| Custom provider API keys | `SecretStorage` (`shofer-router.provider.custom.{id}`) |
+| Built-in provider API keys | `SecretStorage` (`shofer-router.provider.{name}`) |
+| Composite models | `settings.json` (`shofer.router.compositeModelsConfig`) |
+
+**Protocol handling** — `buildCustomHandler()` creates the appropriate `ProviderHandler`:
+- `openai-compatible` → pure passthrough (standard `/v1/chat/completions`)
+- `anthropic-compatible` → Anthropic Messages API translation with streaming SSE parsing
+- `google-compatible` → Google Gemini native API with visible thinking
+
+### 4. Provider Clients (`providers/*.ts`)
 
 Each provider file handles protocol-specific transformations:
 
@@ -144,19 +181,26 @@ Each provider file handles protocol-specific transformations:
 #### OpenRouter (`openrouter.ts`)
 - Pure passthrough — catch-all for unknown models
 
-### 4. CompositeService (`composite.ts`)
+### 5. CompositeService (`composite.ts`)
 
 Handles `shofer/*` composite models with reliability features — the primary place where health monitoring, throttling, and timeout policies live. Any model (even a single one) can be wrapped in a composite config to get these guarantees.
 
 **Strategies:**
+
 - **failover**: Tries models in strict order. On failure (HTTP error, timeout, stream abort), falls back to the next model.
 - **round_robin**: Smooth weighted round-robin (nginx-style). Each model has a `weight` (default: 1). The algorithm tracks per-model `currentWeight`, picks the highest, then subtracts the total — distributing proportionally without bursting to high-weight nodes. Unhealthy models are excluded.
+- **lowest_latency**: Always picks the model with the lowest average TTFB, computed via exponential moving average (EMA, α=0.3) over a configurable sliding window (default: 10 minutes). When no latency data exists (cold start), falls back to equal-weight round-robin.
 
 **Model configs** accept either a plain string (`"model-id"`) or an object:
 ```json
 { "id": "model-a", "weight": 5, "throttling": { "maxConcurrent": 10 } }
 ```
 Per-model `throttling` overrides composite-level defaults for that model only.
+
+**Latency tracking (lowest_latency strategy):**
+- TTFB is measured per-model on each successful composite request
+- Samples beyond the configurable `latencyWindowMs` (default: 600s) are pruned automatically
+- EMA smoothing (α=0.3) prevents noise from outliers affecting selection
 
 **Health tracking — three states:**
 | State | Trigger | Behavior |
@@ -182,9 +226,9 @@ Unhealthy models are probed after `cooldownMs` (configurable, default: 30s) by t
 
 **Capability intersection:** Composite model entries surfaced via the VS Code LM API are computed by intersecting the capabilities of all underlying models — the minimum `maxInputTokens`/`maxOutputTokens` and the boolean AND of `imageInput`/`toolCalling`/`promptCache`. This is the safe lower bound: any request fitting the advertised capabilities is guaranteed to fit every underlying candidate, so failover never gets blocked on capability mismatch.
 
-### 5. Model Registry (`model-registry.ts`)
+### 6. Model Registry (`model-registry.ts`)
 
-Single source of truth for all model metadata.
+Single source of truth for all built-in model metadata.
 
 Each entry includes:
 - Model ID, name, description
@@ -199,7 +243,7 @@ The registry is used for:
 - Cost computation (pricing × usage)
 - Capability flags (prompt cache support derived from cache-read pricing)
 
-### 6. Cost Computation (`llm-client.ts`)
+### 7. Cost Computation (`llm-client.ts`)
 
 Costs are computed from the registry's per-1K-token pricing × actual token usage:
 
@@ -213,18 +257,18 @@ cost = (uncached_prompt_tokens / 1000) × prompt_price
 
 Pricing is converted from per-1K-token form (registry) to per-1M-token form (Shofer convention) via `toPerMillionPricing()`.
 
-### 7. Secret Storage (`secret-storage.ts`)
+### 8. Secret Storage (`secret-storage.ts`)
 
 API keys are stored using VS Code's `SecretStorage` API under namespaced keys:
 
 ```
-shofer-router.provider.openai     → sk-...
-shofer-router.provider.anthropic  → sk-ant-...
-shofer-router.provider.deepseek   → sk-...
-...
+shofer-router.provider.openai        → sk-...
+shofer-router.provider.anthropic     → sk-ant-...
+shofer-router.provider.deepseek      → sk-...
+shofer-router.provider.custom.{id}   → custom provider API key
 ```
 
-The `onApiKeysChanged` listener detects external changes and triggers reload.
+The `onApiKeysChanged` listener detects external changes and triggers reload. Custom provider API keys are loaded by scanning `settings.json` for registered custom provider IDs and looking up each key in SecretStorage.
 
 ## Data Flow
 
@@ -238,24 +282,28 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 5. Build ChatCompletionRequest
 6. Check if model is composite (shofer/*)
    a. YES → CompositeService.sendCompositeRequest()
-      - Select candidates via strategy
+      - Select candidates via strategy (failover / round_robin / lowest_latency)
       - For each candidate: acquire throttle slot, send via ProviderRouter
+      - Track TTFB per model for lowest_latency strategy
       - On success: return response; on failure: try next candidate
    b. NO → ProviderRouter.sendStreamingRequest()
 7. ProviderRouter resolves provider from model ID
+   - Check customModelIndex first, then built-in registry
+   - For custom providers: build protocol handler from provider config
 8. Apply provider-specific request transformations
-9. Anthropic: custom Messages API path
+9. Anthropic / anthropic-compatible: custom Messages API path
+   Google / google-compatible: native Gemini API path
    Others: standard OpenAI-compatible HTTP POST to provider's /v1/chat/completions
 10. Parse SSE stream (data: {...}\n\n)
 11. Apply chunk transformers (MiniMax reasoning_details → reasoning_content, DeepSeek prompt_cache_hit_tokens mapping)
 12. For each chunk:
-    - Report reasoning_content as LanguageModelThinkingPart
-    - Report text content as LanguageModelTextPart
-    - Accumulate tool call deltas
-    - Emit tool_preparing markers
+     - Report reasoning_content as LanguageModelThinkingPart
+     - Report text content as LanguageModelTextPart
+     - Accumulate tool call deltas
+     - Emit tool_preparing markers
 13. On stream completion:
-    - Report accumulated tool calls as LanguageModelToolCallPart
-    - Compute and record cost in ledger
+     - Report accumulated tool calls as LanguageModelToolCallPart
+     - Compute and record cost in ledger
 ```
 
 ### Model Discovery Flow
@@ -264,9 +312,10 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 1. LanguageModelProvider.fetchModels()
 2. getProviderModelInfoList() reads from ALL_MODELS registry
 3. For each composite model: compute capability intersection from underlying models
-4. For each model: convert registry entry to ProviderModelInfo
-5. Fire onDidChangeLanguageModelChatInformation event
-6. VS Code picks up models via provideLanguageModelChatInformation()
+4. For each custom provider: convert CustomProviderModel → ProviderModelInfo
+5. For each model: convert registry entry to ProviderModelInfo
+6. Fire onDidChangeLanguageModelChatInformation event
+7. VS Code picks up models via provideLanguageModelChatInformation()
 ```
 
 ## Error Handling
@@ -289,13 +338,14 @@ The `onApiKeysChanged` listener detects external changes and triggers reload.
 - Orphaned tool messages → Dropped with warning
 - Out-of-order tool messages → Reordered automatically
 
-### 8. Metrics Collector (`metrics-collector.ts`)
+### 9. Metrics Collector (`metrics-collector.ts`)
 
 In-process, in-memory metrics aggregation with 5-minute aligned time windows, suitable for a VS Code extension.
 
 **Design rationale**: VS Code extensions cannot expose HTTP endpoints, so a Prometheus scrape endpoint is not feasible. Instead, metrics are aggregated in-memory and exposed via:
+- Webview dashboard with all 10 metric charts on a single scrollable page
 - Side-channel commands (`shofer.llm.getMetrics`, `shofer.llm.exportMetrics`, etc.)
-- Future: SQLite persistence, webview dashboard
+- SQLite persistence
 
 **Window structure**: Each 5-minute window aggregates per-model statistics:
 - Request counts by status (success/error/timeout/cancelled)
@@ -316,7 +366,7 @@ In-process, in-memory metrics aggregation with 5-minute aligned time windows, su
 
 **SQLite persistence** (`metrics-storage.ts`): Automatic persistence via sql.js (SQLite compiled to WebAssembly — pure TypeScript, no native addons). On each 5-minute window boundary, the closing window's aggregated stats and raw request entries are flushed to disk. On startup, recent windows (last 24h) are loaded back into memory. The database file lives in VS Code's `globalStorageUri`. Retention is 30 days with automatic pruning every 100 windows (~8.3 hours).
 
-### 9. Metrics Storage (`metrics-storage.ts`)
+### 10. Metrics Storage (`metrics-storage.ts`)
 
 SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for storing per-request entries and pre-aggregated window data.
 
@@ -335,6 +385,8 @@ SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for sto
 
 ### API Key Storage
 - API keys stored in VS Code's `SecretStorage` (backed by OS keychain on macOS, libsecret on Linux, Credential Vault on Windows)
+- Custom provider API keys stored under `shofer-router.provider.custom.{id}`
+- Custom provider metadata (non-sensitive) stored in `settings.json`
 - Keys are never written to disk in plaintext
 - Extension logs never include API key values
 
@@ -357,9 +409,20 @@ SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for sto
 ### Memory
 - Cost ledger bounded at 1024 entries (LRU eviction)
 - Tool call accumulation maps cleared after each completion
+- Latency trackers per model (small samples array + EMA float)
 - No persistent caches (no Redis dependency)
 
 ## Metrics & Observability
+
+### Dashboard
+
+The webview Metrics tab shows all 10 metric charts stacked on a single scrollable page:
+- Cost, Cost (Cumulative), Requests, Errors
+- Tokens (Total/Prompt/Completion)
+- Latency (TTFB/TTLB)
+- Cache Hit Ratio
+
+A sticky Table of Contents bar at the top provides anchor-link navigation to jump directly to any chart. The model picker is categorized into **Primary** and **Composite** groups with separate ALL toggles, preventing double-counting between composite models and their underlying primaries.
 
 ### Collected Metrics
 
@@ -407,10 +470,13 @@ Both primary models (e.g., `deepseek-v4-pro`) and composite models (e.g., `shofe
 
 | Command | Description |
 |---------|-------------|
-| `Shofer Router: Show Metrics` | Interactive model selection with current window stats |
+| `Shofer Router: Configure` | Open the full configuration dashboard |
+| `Shofer Router: Show Models` | View status and available models |
+| `Shofer Router: Show Metrics` | Open the metrics dashboard |
 | `Shofer Router: Show Model Stats` | Detailed stats for a specific model |
 | `Shofer Router: Export Metrics (Prometheus)` | Prometheus text format export |
 | `Shofer Router: Show Composite Distribution` | Load-balancing distribution for composite models |
+| `Shofer Router: Show Cost History` | Cost breakdown by model across a selected time range |
 
 ### Export Format
 
