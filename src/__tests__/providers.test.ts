@@ -368,3 +368,209 @@ describe('providers/openrouter', () => {
         assert.equal(req.extraBody, undefined);
     });
 });
+
+// ─── Custom providers (ProviderRouter) ──────────────────────────────
+
+import { ProviderRouter } from '../provider-client';
+import { CustomProviderConfig, ProviderType } from '../types';
+
+describe('providers/custom', () => {
+    let router: ProviderRouter;
+
+    function makeCustomProvider(overrides?: Partial<CustomProviderConfig>): CustomProviderConfig {
+        return {
+            id: 'my-bedrock',
+            label: 'AWS Bedrock',
+            protocol: 'openai-compatible',
+            endpointUrl: 'https://bedrock.example.com/v1',
+            models: [
+                { id: 'bedrock-claude', name: 'Claude via Bedrock', contextLength: 200000, maxOutputTokens: 65536, imageInput: true, toolCalling: true },
+                { id: 'bedrock-gpt', name: 'GPT via Bedrock', contextLength: 128000, maxOutputTokens: 16384, imageInput: false, toolCalling: true },
+            ],
+            defaultPricing: { prompt: 0.003, completion: 0.015 },
+            ...overrides,
+        };
+    }
+
+    function setupRouter(cfg: CustomProviderConfig): ProviderRouter {
+        const r = new ProviderRouter();
+        const map = new Map<string, CustomProviderConfig>();
+        map.set(cfg.id, cfg);
+        r.updateCustomProviders(map);
+        r.updateCustomApiKeys({ [cfg.id]: 'sk-test-key' });
+        return r;
+    }
+
+    describe('resolveProvider', () => {
+        it('resolves custom provider model by model ID', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+
+            const resolved = r.resolveProvider('bedrock-claude');
+            assert.ok(resolved);
+            assert.equal(resolved.modelId, 'bedrock-claude');
+            assert.equal(resolved.customProviderId, 'my-bedrock');
+            assert.equal(resolved.customProtocol, 'openai-compatible');
+            assert.equal(resolved.baseUrl, 'https://bedrock.example.com/v1');
+            assert.equal(resolved.provider, undefined); // no built-in provider
+        });
+
+        it('resolves second model from same provider', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+
+            const resolved = r.resolveProvider('bedrock-gpt');
+            assert.ok(resolved);
+            assert.equal(resolved.customProviderId, 'my-bedrock');
+        });
+
+        it('falls back to OpenRouter for unknown model', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+
+            const resolved = r.resolveProvider('nonexistent-model');
+            assert.ok(resolved);
+            assert.equal(resolved.provider, ProviderType.OpenRouter);
+            assert.equal(resolved.customProviderId, undefined);
+        });
+
+        it('prefers custom provider over built-in when model ID matches custom', () => {
+            // Register a custom provider that "shadows" a built-in model ID
+            const r = new ProviderRouter();
+            const map = new Map<string, CustomProviderConfig>();
+            map.set('shadow', {
+                id: 'shadow',
+                label: 'Shadow',
+                protocol: 'openai-compatible',
+                endpointUrl: 'https://shadow.example.com/v1',
+                models: [{ id: 'deepseek-v4-pro', name: 'Shadow DS', contextLength: 100000, maxOutputTokens: 32768, imageInput: false, toolCalling: true }],
+            });
+            r.updateCustomProviders(map);
+            r.updateCustomApiKeys({ shadow: 'sk-shadow' });
+
+            const resolved = r.resolveProvider('deepseek-v4-pro');
+            assert.ok(resolved);
+            assert.equal(resolved.customProviderId, 'shadow');
+            assert.equal(resolved.baseUrl, 'https://shadow.example.com/v1');
+        });
+
+        it('resolves composite first model through custom provider', () => {
+            const cfg = makeCustomProvider();
+            const r = new ProviderRouter();
+            const map = new Map<string, CustomProviderConfig>();
+            map.set(cfg.id, cfg);
+            r.updateCustomProviders(map);
+            r.updateCustomApiKeys({ [cfg.id]: 'sk-test-key' });
+            r.updateCompositeModels({
+                'shofer/bedrock': { strategy: 'failover', models: ['bedrock-claude', 'bedrock-gpt'] },
+            });
+
+            const resolved = r.resolveProvider('shofer/bedrock');
+            assert.ok(resolved);
+            assert.equal(resolved.customProviderId, 'my-bedrock');
+            assert.equal(resolved.modelId, 'bedrock-claude');
+        });
+    });
+
+    describe('getCustomProviderModels', () => {
+        it('returns all models from all custom providers', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+
+            const models = r.getCustomProviderModels();
+            assert.equal(models.length, 2);
+            assert.equal(models[0].model.id, 'bedrock-claude');
+            assert.equal(models[0].providerId, 'my-bedrock');
+            assert.equal(models[0].providerLabel, 'AWS Bedrock');
+            assert.deepEqual(models[0].pricing, { prompt: 0.003, completion: 0.015 });
+            assert.equal(models[1].model.id, 'bedrock-gpt');
+        });
+
+        it('returns empty array when no custom providers', () => {
+            const r = new ProviderRouter();
+            assert.deepEqual(r.getCustomProviderModels(), []);
+        });
+    });
+
+    describe('buildCustomHandler (via sendRequest)', () => {
+        it('uses openai-compatible passthrough handler', () => {
+            const cfg = makeCustomProvider({ protocol: 'openai-compatible' });
+            // buildCustomHandler is private — tested indirectly via routing
+            const r = setupRouter(cfg);
+            const resolved = r.resolveProvider('bedrock-claude');
+            assert.ok(resolved);
+            assert.equal(resolved.customProtocol, 'openai-compatible');
+        });
+
+        it('recognizes anthropic-compatible protocol', () => {
+            const cfg = makeCustomProvider({ protocol: 'anthropic-compatible' });
+            const r = setupRouter(cfg);
+            const resolved = r.resolveProvider('bedrock-claude');
+            assert.ok(resolved);
+            assert.equal(resolved.customProtocol, 'anthropic-compatible');
+        });
+
+        it('recognizes google-compatible protocol', () => {
+            const cfg = makeCustomProvider({ protocol: 'google-compatible' });
+            const r = setupRouter(cfg);
+            const resolved = r.resolveProvider('bedrock-claude');
+            assert.ok(resolved);
+            assert.equal(resolved.customProtocol, 'google-compatible');
+        });
+    });
+
+    describe('hasApiKeyForProvider', () => {
+        it('returns true for custom provider with key', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+            assert.ok(r.hasApiKeyForProvider('my-bedrock'));
+        });
+
+        it('returns false for custom provider without key', () => {
+            const cfg = makeCustomProvider();
+            const r = new ProviderRouter();
+            const map = new Map<string, CustomProviderConfig>();
+            map.set(cfg.id, cfg);
+            r.updateCustomProviders(map);
+            // No API key set
+            assert.ok(!r.hasApiKeyForProvider('my-bedrock'));
+        });
+
+        it('counts custom providers in getConfiguredProviderCount', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+            // Only custom provider has a key, no built-in keys
+            assert.equal(r.getConfiguredProviderCount(), 1);
+        });
+    });
+
+    describe('getApiKey / getCustomApiKey', () => {
+        it('getCustomApiKey returns key for custom provider', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+            assert.equal(r.getCustomApiKey('my-bedrock'), 'sk-test-key');
+        });
+
+        it('getCustomApiKey returns empty string for unknown provider', () => {
+            const r = new ProviderRouter();
+            assert.equal(r.getCustomApiKey('nonexistent'), '');
+        });
+    });
+
+    describe('updateCustomProviders clears old index', () => {
+        it('removes models when provider is replaced', () => {
+            const cfg = makeCustomProvider();
+            const r = setupRouter(cfg);
+
+            // Replace with empty provider
+            const map2 = new Map<string, CustomProviderConfig>();
+            map2.set('my-bedrock', { ...cfg, models: [] });
+            r.updateCustomProviders(map2);
+
+            const resolved = r.resolveProvider('bedrock-claude');
+            // Falls through to OpenRouter since custom model index no longer has it
+            assert.equal(resolved?.provider, ProviderType.OpenRouter);
+        });
+    });
+});
+

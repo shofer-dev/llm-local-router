@@ -222,6 +222,55 @@ export interface RouterConfig {
     debug: boolean;
 }
 
+// ─── Custom primary providers ────────────────────────────────────────
+
+/** Supported protocols for custom providers. */
+export type CustomProviderProtocol = 'openai-compatible' | 'anthropic-compatible' | 'google-compatible';
+
+/** A model entry within a custom provider. */
+export interface CustomProviderModel {
+    /** Model ID as expected by the provider's API (e.g., "llama-4-maverick"). */
+    id: string;
+    /** Human-readable display name. */
+    name: string;
+    /** Context length (max input tokens). */
+    contextLength: number;
+    /** Max output tokens. */
+    maxOutputTokens: number;
+    /** Whether the model supports image input. */
+    imageInput: boolean;
+    /** Whether the model supports tool calling. */
+    toolCalling: boolean;
+}
+
+/** Full configuration for a user-registered custom primary provider. */
+export interface CustomProviderConfig {
+    /** Unique provider ID (e.g., "my-openrouter"). Must not collide with built-in ProviderType values. */
+    id: string;
+    /** Human-readable label. */
+    label: string;
+    /** API protocol the provider speaks. */
+    protocol: CustomProviderProtocol;
+    /** Base URL for the provider's API (e.g., "https://api.example.com/v1"). */
+    endpointUrl: string;
+    /** Models exposed by this provider. */
+    models: CustomProviderModel[];
+    /**
+     * Default pricing for all models in this provider (USD per 1K tokens).
+     * Can be overridden per-request via the pricing overrides mechanism.
+     */
+    defaultPricing?: {
+        prompt?: number;
+        completion?: number;
+        cacheRead?: number;
+    };
+}
+
+export interface CustomProvidersMap {
+    [providerId: string]: CustomProviderConfig;
+}
+
+
 // ─── Model info (for VS Code LM API) ────────────────────────────────
 
 export interface ModelCapabilities {

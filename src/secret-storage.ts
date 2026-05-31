@@ -3,7 +3,10 @@
  *
  * Uses VSCode's SecretStorage API to securely persist provider API keys.
  * Keys are stored under namespaced keys: `shofer-router.provider.{name}`.
- * Mirrors the pattern recommended in VSCode extension docs.
+ *
+ * Custom provider API keys are stored under `shofer-router.provider.custom.{id}`.
+ * Custom provider metadata (label, protocol, endpoint, models, pricing) is stored
+ * in settings.json (shofer.router.customProviders) — NOT here.
  */
 
 import * as vscode from 'vscode';
@@ -60,6 +63,20 @@ export async function storeApiKey(
 /**
  * Delete an API key for a provider from SecretStorage.
  */
+export async function deleteApiKey(
+    context: vscode.ExtensionContext,
+    provider: string
+): Promise<void> {
+    const logger = getLogger();
+    try {
+        await context.secrets.delete(secretKey(provider));
+        logger.info(`Deleted API key for provider: ${provider}`);
+    } catch (err) {
+        logger.errorWithError(`Failed to delete API key for ${provider}`, err as Error);
+        throw err;
+    }
+}
+
 /**
  * Load all custom endpoint URLs from SecretStorage.
  * Stored under keys: shofer-router.provider.{name}.endpoint
@@ -85,18 +102,67 @@ export async function loadEndpointUrls(context: vscode.ExtensionContext): Promis
     return urls;
 }
 
-export async function deleteApiKey(
+// ─── Custom provider API keys (metadata is in settings.json) ────────
+
+/**
+ * Store an API key for a custom provider in SecretStorage.
+ * Keys are stored under `shofer-router.provider.custom.{id}`.
+ */
+export async function storeCustomProviderApiKey(
     context: vscode.ExtensionContext,
-    provider: string
+    providerId: string,
+    key: string
 ): Promise<void> {
+    await context.secrets.store(secretKey(`custom.${providerId}`), key);
+}
+
+/**
+ * Delete an API key for a custom provider.
+ */
+export async function deleteCustomProviderApiKey(
+    context: vscode.ExtensionContext,
+    providerId: string
+): Promise<void> {
+    await context.secrets.delete(secretKey(`custom.${providerId}`));
+}
+
+/**
+ * Load API keys for all custom providers.
+ *
+ * Scans SecretStorage for keys matching `shofer-router.provider.custom.*`
+ * and returns a map of provider ID → API key.
+ *
+ * NOTE: This does NOT read the custom provider metadata from settings.json —
+ * it only returns keys that are already present in SecretStorage.
+ */
+export async function loadCustomProviderApiKeys(context: vscode.ExtensionContext): Promise<Record<string, string>> {
     const logger = getLogger();
+    const keys: Record<string, string> = {};
+
+    // We iterate the built-in providers plus look for custom.* keys.
+    // Since SecretStorage doesn't support listing keys, we load the custom
+    // provider IDs from settings.json and check each one.
     try {
-        await context.secrets.delete(secretKey(provider));
-        logger.info(`Deleted API key for provider: ${provider}`);
+        const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
+        if (raw && raw.trim()) {
+            const providers = JSON.parse(raw) as Record<string, unknown>;
+            for (const providerId of Object.keys(providers)) {
+                try {
+                    const value = await context.secrets.get(secretKey(`custom.${providerId}`));
+                    if (value) {
+                        keys[providerId] = value;
+                        logger.debug(`Loaded API key for custom provider: ${providerId}`);
+                    }
+                } catch (err) {
+                    logger.errorWithError(`Failed to load API key for custom provider ${providerId}`, err as Error);
+                }
+            }
+        }
     } catch (err) {
-        logger.errorWithError(`Failed to delete API key for ${provider}`, err as Error);
-        throw err;
+        logger.errorWithError('Failed to parse customProviders from settings', err as Error);
     }
+
+    return keys;
 }
 
 /**

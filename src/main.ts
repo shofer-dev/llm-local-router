@@ -11,7 +11,8 @@ import * as vscode from 'vscode';
 import { LanguageModelProvider, RouterConfig } from './language-model-provider';
 import { RouterConfigProvider } from './router-config-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
-import { loadApiKeys, loadEndpointUrls, onApiKeysChanged } from './secret-storage';
+import { loadApiKeys, loadEndpointUrls, loadCustomProviderApiKeys, onApiKeysChanged } from './secret-storage';
+import { CustomProviderConfig } from './types';
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
 import { startMetricsServer, stopMetricsServer } from './metrics-server';
@@ -575,6 +576,24 @@ async function loadCompositeModels(context: vscode.ExtensionContext): Promise<vo
     }
 }
 
+/**
+ * Load custom primary providers from SecretStorage into the LanguageModelProvider.
+ */
+async function loadCustomProvidersIntoProvider(context: vscode.ExtensionContext, provider: LanguageModelProvider): Promise<void> {
+    const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
+    let customs: Record<string, CustomProviderConfig> = {};
+    if (raw && raw.trim()) {
+        try {
+            customs = JSON.parse(raw);
+        } catch { /* ignore parse errors */ }
+    }
+    const customKeys = await loadCustomProviderApiKeys(context);
+    const customMap = new Map<string, CustomProviderConfig>(Object.entries(customs));
+    provider.updateCustomProviders(customMap, customKeys);
+    getLogger().info(`Loaded ${customMap.size} custom providers with ${Object.keys(customKeys).length} API keys`);
+}
+
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const wsConfig = vscode.workspace.getConfiguration('shofer.router');
     const debugEnabled = wsConfig.get('debug', false);
@@ -601,6 +620,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     languageModelProvider = new LanguageModelProvider(config);
     languageModelProvider.updateApiKeys(apiKeys as Record<string, string | undefined>);
     languageModelProvider.updateEndpointUrls(endpointUrls);
+
+    // Load custom providers
+    await loadCustomProvidersIntoProvider(context, languageModelProvider);
 
     await loadCompositeModels(context);
 

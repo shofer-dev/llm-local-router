@@ -5,10 +5,10 @@
  * request transformations, and routes to the correct API endpoint with the
  * correct API key.
  *
- * the per-provider service files.
+ * Supports both built-in providers (ProviderType enum) and user-registered
+ * custom providers (openai-compatible, anthropic-compatible, google-compatible).
  */
 
-import * as vscode from 'vscode';
 import {
     ProviderType,
     ProviderApiKeys,
@@ -16,6 +16,8 @@ import {
     ChatCompletionRequest,
     ChatCompletionResponse,
     CompositeModelConfig,
+    CustomProviderConfig,
+    CustomProviderModel,
 } from './types';
 import { getModelById, getProviderForModel } from './model-registry';
 import {
@@ -79,8 +81,14 @@ interface ProviderHandler {
 
 export class ProviderRouter {
     private apiKeys: ProviderApiKeys = {};
+    /** API keys for custom providers (providerId → key). */
+    private customApiKeys: Record<string, string> = {};
     private endpointUrls: Record<string, string> = {};
     private compositeModels: Record<string, CompositeModelConfig> = {};
+    /** Registry of user-registered custom primary providers. */
+    private customProviders: Map<string, CustomProviderConfig> = new Map();
+    /** Reverse index: model ID → custom provider ID. */
+    private customModelIndex: Map<string, string> = new Map();
     private handlerCache = new Map<ProviderType, ProviderHandler>();
 
     constructor() {
@@ -150,12 +158,60 @@ export class ProviderRouter {
         this.apiKeys = keys as ProviderApiKeys;
     }
 
+    /** Update custom provider API keys (providerId → key). */
+    updateCustomApiKeys(keys: Record<string, string>): void {
+        this.customApiKeys = keys;
+    }
+
     updateEndpointUrls(urls: Record<string, string>): void {
         this.endpointUrls = urls;
     }
 
     updateCompositeModels(models: Record<string, CompositeModelConfig>): void {
         this.compositeModels = models;
+    }
+
+    /**
+     * Set the full list of user-registered custom providers and rebuild
+     * the reverse model→provider index.
+     */
+    updateCustomProviders(providers: Map<string, CustomProviderConfig>): void {
+        this.customProviders = providers;
+        this.customModelIndex.clear();
+        for (const [providerId, cfg] of providers) {
+            for (const model of cfg.models) {
+                this.customModelIndex.set(model.id, providerId);
+            }
+        }
+    }
+
+    /**
+     * Look up a custom provider config by model ID.
+     */
+    getCustomProviderForModel(modelId: string): { providerId: string; config: CustomProviderConfig } | undefined {
+        const providerId = this.customModelIndex.get(modelId);
+        if (!providerId) return undefined;
+        const config = this.customProviders.get(providerId);
+        if (!config) return undefined;
+        return { providerId, config };
+    }
+
+    /**
+     * Get all custom provider models as a flat list with pricing info.
+     */
+    getCustomProviderModels(): Array<{ model: CustomProviderModel; providerId: string; providerLabel: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number } }> {
+        const result: Array<{ model: CustomProviderModel; providerId: string; providerLabel: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number } }> = [];
+        for (const [providerId, cfg] of this.customProviders) {
+            for (const model of cfg.models) {
+                result.push({
+                    model,
+                    providerId,
+                    providerLabel: cfg.label,
+                    pricing: cfg.defaultPricing,
+                });
+            }
+        }
+        return result;
     }
 
     /**
@@ -167,8 +223,16 @@ export class ProviderRouter {
     }
 
     /**
+     * Get the API key for a custom provider by ID.
+     */
+    getCustomApiKey(providerId: string): string {
+        return this.customApiKeys[providerId] ?? '';
+    }
+
+    /**
      * Determine the resolved provider for a model ID.
      * Composite models (shofer/*) are handled by the composite layer, not here.
+     * Custom providers are resolved first, then the built-in registry.
      */
     /**
      * Resolve the effective base URL for a provider, preferring custom over default.
@@ -177,13 +241,39 @@ export class ProviderRouter {
         return this.endpointUrls[provider] || PROVIDER_BASE_URLS[provider];
     }
 
-    resolveProvider(modelId: string): { provider: ProviderType; modelId: string; baseUrl: string } | undefined {
+    /**
+     * Resolve routing info for a model ID. Returns both built-in and custom
+     * provider routing information.
+     */
+    resolveProvider(modelId: string): {
+        provider?: ProviderType;
+        modelId: string;
+        baseUrl: string;
+        /** If set, this is a custom provider — use custom send path instead of handlerCache. */
+        customProviderId?: string;
+        customProtocol?: string;
+    } | undefined {
         // Check if it's a composite model
         if (modelId.startsWith('shofer/') && this.compositeModels[modelId]) {
             // Return the first model's provider as a hint (composite layer overrides)
             const comp = this.compositeModels[modelId];
             const firstEntry = comp.models[0];
             const firstModelId = typeof firstEntry === 'string' ? firstEntry : firstEntry.id;
+
+            // Check custom providers first
+            const customForFirst = this.customModelIndex.get(firstModelId);
+            if (customForFirst) {
+                const customCfg = this.customProviders.get(customForFirst);
+                if (customCfg) {
+                    return {
+                        modelId: firstModelId,
+                        baseUrl: customCfg.endpointUrl,
+                        customProviderId: customForFirst,
+                        customProtocol: customCfg.protocol,
+                    };
+                }
+            }
+
             const provider = getProviderForModel(firstModelId);
             if (provider) {
                 return {
@@ -195,6 +285,21 @@ export class ProviderRouter {
             return undefined;
         }
 
+        // Check custom providers first
+        const customProviderId = this.customModelIndex.get(modelId);
+        if (customProviderId) {
+            const customCfg = this.customProviders.get(customProviderId);
+            if (customCfg) {
+                return {
+                    modelId,
+                    baseUrl: customCfg.endpointUrl,
+                    customProviderId,
+                    customProtocol: customCfg.protocol,
+                };
+            }
+        }
+
+        // Check built-in registry
         const provider = getProviderForModel(modelId);
         if (!provider) {
             // Unknown model — fall back to OpenRouter
@@ -213,6 +318,37 @@ export class ProviderRouter {
     }
 
     /**
+     * Build a ProviderHandler from a custom provider config based on its protocol.
+     */
+    private buildCustomHandler(protocol: string): ProviderHandler {
+        switch (protocol) {
+            case 'anthropic-compatible':
+                return {
+                    preparer: prepareAnthropicRequest,
+                    customSend: async (apiKey, req, onChunk, abortController) => {
+                        const anthropicReq = prepareAnthropicRequest(req);
+                        return sendAnthropicRequest(apiKey, anthropicReq, onChunk, abortController);
+                    },
+                };
+            case 'google-compatible':
+                return {
+                    preparer: (_req) => { /* handled by customSend */ },
+                    customSend: async (apiKey, req, onChunk, abortController) => {
+                        if (req.stream) {
+                            return sendGeminiStreamingRequest(apiKey, req, onChunk, abortController);
+                        }
+                        return sendGeminiNonStreamingRequest(apiKey, req, abortController);
+                    },
+                };
+            case 'openai-compatible':
+            default:
+                return {
+                    preparer: (_req) => { /* pure passthrough */ },
+                };
+        }
+    }
+
+    /**
      * Send a non-streaming chat completion request through the appropriate provider.
      */
     async sendRequest(
@@ -225,16 +361,37 @@ export class ProviderRouter {
             throw new Error(`Unknown model: ${modelId}`);
         }
 
-        const handler = this.handlerCache.get(resolved.provider)!;
-        const apiKey = this.getApiKey(resolved.provider);
-
-        // Clone and prepare request
         const prepared = deepCloneRequest(request);
         prepared.model = resolved.modelId;
+
+        // Route through custom provider if applicable
+        if (resolved.customProviderId) {
+            const apiKey = this.getCustomApiKey(resolved.customProviderId);
+            const handler = this.buildCustomHandler(resolved.customProtocol || 'openai-compatible');
+            handler.preparer(prepared);
+
+            if (handler.customSend) {
+                return handler.customSend(apiKey, prepared, () => {}, abortController);
+            }
+
+            const response = await sendNonStreamingRequest(
+                resolved.baseUrl,
+                apiKey,
+                prepared,
+                abortController,
+            );
+            if (handler.chunkTransformer) {
+                handler.chunkTransformer(response);
+            }
+            return response;
+        }
+
+        // Built-in provider path
+        const handler = this.handlerCache.get(resolved.provider!)!;
+        const apiKey = this.getApiKey(resolved.provider!);
         handler.preparer(prepared);
 
         if (handler.customSend) {
-            // Custom path (e.g., Anthropic)
             return handler.customSend(apiKey, prepared, () => {}, abortController);
         }
 
@@ -245,7 +402,6 @@ export class ProviderRouter {
             abortController,
         );
 
-        // Apply chunk transformer if present
         if (handler.chunkTransformer) {
             handler.chunkTransformer(response);
         }
@@ -267,19 +423,44 @@ export class ProviderRouter {
             throw new Error(`Unknown model: ${modelId}`);
         }
 
-        const handler = this.handlerCache.get(resolved.provider)!;
-        const apiKey = this.getApiKey(resolved.provider);
-
-        // Clone and prepare request
         const prepared = deepCloneRequest(request);
         prepared.model = resolved.modelId;
+
+        // Route through custom provider if applicable
+        if (resolved.customProviderId) {
+            const apiKey = this.getCustomApiKey(resolved.customProviderId);
+            const handler = this.buildCustomHandler(resolved.customProtocol || 'openai-compatible');
+            handler.preparer(prepared);
+
+            if (handler.customSend) {
+                return handler.customSend(apiKey, prepared, onChunk, abortController);
+            }
+
+            const wrappedOnChunk = handler.chunkTransformer
+                ? (chunk: ChatCompletionResponse) => {
+                      handler.chunkTransformer!(chunk);
+                      onChunk(chunk);
+                  }
+                : onChunk;
+
+            return sendStreamingRequest(
+                resolved.baseUrl,
+                apiKey,
+                prepared,
+                wrappedOnChunk,
+                abortController,
+            );
+        }
+
+        // Built-in provider path
+        const handler = this.handlerCache.get(resolved.provider!)!;
+        const apiKey = this.getApiKey(resolved.provider!);
         handler.preparer(prepared);
 
         if (handler.customSend) {
             return handler.customSend(apiKey, prepared, onChunk, abortController);
         }
 
-        // Wrap onChunk with transformer if present
         const wrappedOnChunk = handler.chunkTransformer
             ? (chunk: ChatCompletionResponse) => {
                   handler.chunkTransformer!(chunk);
@@ -297,25 +478,36 @@ export class ProviderRouter {
     }
 
     /**
-     * Check if we have API keys for at least one provider.
+     * Check if we have API keys for at least one provider (built-in or custom).
      */
     hasAnyApiKey(): boolean {
-        return Object.values(this.apiKeys).some(k => k && k.length > 0);
+        const hasBuiltIn = Object.values(this.apiKeys).some(k => k && k.length > 0);
+        const hasCustom = Object.values(this.customApiKeys).some(k => k && k.length > 0);
+        return hasBuiltIn || hasCustom;
     }
 
     /**
-     * Check if a specific provider has an API key configured.
+     * Check if a specific provider (built-in or custom) has an API key configured.
      */
     hasApiKeyForProvider(provider: string): boolean {
-        const key = (this.apiKeys as Record<string, string | undefined>)[provider];
-        return !!key && key.length > 0;
+        // Check built-in
+        const builtInKey = (this.apiKeys as Record<string, string | undefined>)[provider];
+        if (builtInKey && builtInKey.length > 0) return true;
+
+        // Check custom
+        const customKey = this.customApiKeys[provider];
+        if (customKey && customKey.length > 0) return true;
+
+        return false;
     }
 
     /**
-     * Count how many providers have API keys configured.
+     * Count how many providers have API keys configured (built-in + custom).
      */
     getConfiguredProviderCount(): number {
-        return Object.values(this.apiKeys).filter(k => k && k.length > 0).length;
+        const builtIn = Object.values(this.apiKeys).filter(k => k && k.length > 0).length;
+        const custom = Object.values(this.customApiKeys).filter(k => k && k.length > 0).length;
+        return builtIn + custom;
     }
 }
 

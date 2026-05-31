@@ -23,7 +23,8 @@ import { LanguageModelProvider } from './language-model-provider';
 import { ALL_MODELS } from './model-registry';
 import { getMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
-import { storeApiKey, deleteApiKey } from './secret-storage';
+import { storeApiKey, deleteApiKey, storeCustomProviderApiKey, deleteCustomProviderApiKey } from './secret-storage';
+import { CustomProviderConfig, CustomProvidersMap } from './types';
 import { ProviderType } from './types';
 import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution, ProviderModelInfo } from './types';
 import {
@@ -145,7 +146,10 @@ type HostMessage =
   | { type: 'statusUpdate'; status: StatusPayload }
   | { type: 'providerConfigSaved'; provider: string }
   | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] }
-  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] };
+  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
+  | { type: 'initCustomProviders'; customProviders: CustomProviderConfig[] }
+  | { type: 'customProviderSaved'; provider: CustomProviderConfig }
+  | { type: 'customProviderDeleted'; providerId: string };
 
 type WebviewMessage =
   | { type: 'webviewReady' }
@@ -154,6 +158,8 @@ type WebviewMessage =
   | { type: 'exportConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'importConfig' }
   | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number } }
+  | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
+  | { type: 'deleteCustomProvider'; providerId: string }
   | { type: 'queryMetrics'; metric: string; modelIds: string[]; since: string; until: string };
 
 // ─── Constants ─────────────────────────────────────────────────────
@@ -263,6 +269,12 @@ export class RouterConfigProvider {
       case 'saveProvider':
         await this.handleSaveProvider(message.provider, message.apiKey, message.endpointUrl, message.pricing);
         break;
+      case 'saveCustomProvider':
+        await this.handleSaveCustomProvider(message.provider, message.apiKey);
+        break;
+      case 'deleteCustomProvider':
+        await this.handleDeleteCustomProvider(message.providerId);
+        break;
       case 'queryMetrics':
         await this.handleQueryMetrics(message.metric, message.modelIds, message.since, message.until);
         break;
@@ -282,6 +294,7 @@ export class RouterConfigProvider {
     });
     this.panel.webview.postMessage({ type: 'statusUpdate', status });
     this.sendProviderConfig();
+    await this.sendCustomProviders();
   }
 
   private async buildStatusPayload(): Promise<StatusPayload> {
@@ -462,6 +475,116 @@ export class RouterConfigProvider {
       vscode.window.showErrorMessage(`Failed to save ${provider} configuration: ${message}`);
     }
   }
+
+  // ─── Custom provider config ──────────────────────────────────────
+
+  private async sendCustomProviders(): Promise<void> {
+    if (!this.panel) return;
+    try {
+      const customProviders = this.loadCustomProvidersFromSettings();
+      this.panel.webview.postMessage({
+        type: 'initCustomProviders',
+        customProviders: Object.values(customProviders),
+      });
+    } catch (err) {
+      (await import('./logger')).getLogger().warning(`Failed to send custom providers: ${err}`);
+    }
+  }
+
+  private async handleSaveCustomProvider(provider: CustomProviderConfig, apiKey: string): Promise<void> {
+    const logger = (await import('./logger')).getLogger();
+    try {
+      // Validate provider ID — must not collide with built-in ProviderType values
+      const builtInProviders = ['openai', 'anthropic', 'google', 'deepseek', 'minimax', 'moonshot', 'xiaomi', 'zhipu', 'openrouter'];
+      if (builtInProviders.includes(provider.id)) {
+        throw new Error(`Provider ID "${provider.id}" collides with a built-in provider. Choose a different ID.`);
+      }
+
+      // Load existing, then update/add
+      const customProviders = this.loadCustomProvidersFromSettings();
+      customProviders[provider.id] = provider;
+      await this.saveCustomProvidersToSettings(customProviders);
+
+      // Store or delete API key
+      if (apiKey.trim()) {
+        await storeCustomProviderApiKey(this.context, provider.id, apiKey.trim());
+      } else {
+        await deleteCustomProviderApiKey(this.context, provider.id);
+      }
+
+      // Reload into LanguageModelProvider
+      await this.reloadCustomProviders();
+      await this.languageModelProvider.fetchModels();
+
+      this.panel?.webview.postMessage({ type: 'customProviderSaved', provider });
+      logger.info(`Saved custom provider: ${provider.id} (${provider.label})`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to save custom provider ${provider.id}: ${message}`);
+      vscode.window.showErrorMessage(`Failed to save custom provider: ${message}`);
+    }
+  }
+
+  private async handleDeleteCustomProvider(providerId: string): Promise<void> {
+    const logger = (await import('./logger')).getLogger();
+    try {
+      // Remove from custom providers map
+      const customProviders = this.loadCustomProvidersFromSettings();
+      delete customProviders[providerId];
+      await this.saveCustomProvidersToSettings(customProviders);
+
+      // Delete API key
+      await deleteCustomProviderApiKey(this.context, providerId);
+
+      // Reload into LanguageModelProvider
+      await this.reloadCustomProviders();
+      await this.languageModelProvider.fetchModels();
+
+      this.panel?.webview.postMessage({ type: 'customProviderDeleted', providerId });
+      logger.info(`Deleted custom provider: ${providerId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to delete custom provider ${providerId}: ${message}`);
+      vscode.window.showErrorMessage(`Failed to delete custom provider: ${message}`);
+    }
+  }
+
+  /**
+   * Reload custom providers from SecretStorage into the LanguageModelProvider.
+   */
+  private async reloadCustomProviders(): Promise<void> {
+    const { loadCustomProviderApiKeys } = await import('./secret-storage');
+    const customs = this.loadCustomProvidersFromSettings();
+    const customKeys = await loadCustomProviderApiKeys(this.context);
+    const customMap = new Map<string, CustomProviderConfig>(Object.entries(customs));
+    this.languageModelProvider.updateCustomProviders(customMap, customKeys);
+  }
+
+  /**
+   * Load custom providers from the shofer.router.customProviders setting.
+   */
+  private loadCustomProvidersFromSettings(): CustomProvidersMap {
+    const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
+    if (raw && raw.trim()) {
+      try {
+        return JSON.parse(raw) as CustomProvidersMap;
+      } catch { /* ignore parse errors */ }
+    }
+    return {};
+  }
+
+  /**
+   * Save custom providers to the shofer.router.customProviders workspace setting.
+   */
+  private async saveCustomProvidersToSettings(providers: CustomProvidersMap): Promise<void> {
+    const json = JSON.stringify(providers, null, 2);
+    await vscode.workspace.getConfiguration('shofer.router').update(
+      'customProviders',
+      Object.keys(providers).length > 0 ? json : '',
+      vscode.ConfigurationTarget.Workspace,
+    );
+  }
+
 
   // ─── Save / Validate / Export / Import ──────────────────────────
 

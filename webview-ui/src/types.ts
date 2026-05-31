@@ -155,6 +155,33 @@ export interface ProviderConfigEntry {
   defaultPricing?: ProviderPricing;
 }
 
+// ─── Custom providers (webview-side) ──────────────────────────────
+
+/** Protocol choices for custom providers. */
+export type CustomProviderProtocol = 'openai-compatible' | 'anthropic-compatible' | 'google-compatible';
+
+export interface CustomProviderModel {
+  id: string;
+  name: string;
+  contextLength: number;
+  maxOutputTokens: number;
+  imageInput: boolean;
+  toolCalling: boolean;
+}
+
+export interface CustomProviderConfig {
+  id: string;
+  label: string;
+  protocol: CustomProviderProtocol;
+  endpointUrl: string;
+  models: CustomProviderModel[];
+  defaultPricing?: {
+    prompt?: number;
+    completion?: number;
+    cacheRead?: number;
+  };
+}
+
 // ─── Host → Webview messages ────────────────────────────────────
 
 export type HostMessage =
@@ -171,7 +198,10 @@ export type HostMessage =
   | { type: 'statusUpdate'; status: StatusPayload }
   | { type: 'providerConfigSaved'; provider: string }
   | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] }
-  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] };
+  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
+  | { type: 'initCustomProviders'; customProviders: CustomProviderConfig[] }
+  | { type: 'customProviderSaved'; provider: CustomProviderConfig }
+  | { type: 'customProviderDeleted'; providerId: string };
 
 // ─── Webview → Host messages ────────────────────────────────────
 
@@ -183,4 +213,6 @@ export type WebviewMessage =
   | { type: 'importConfig' }
   | { type: 'testModel'; modelId: string }
   | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing }
+  | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
+  | { type: 'deleteCustomProvider'; providerId: string }
   | { type: 'queryMetrics'; metric: string; modelIds: string[]; since: string; until: string };

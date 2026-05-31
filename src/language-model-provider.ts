@@ -29,6 +29,7 @@ import {
     ErrorType,
 } from './types';
 import { getProviderModelInfoList, toPerMillionPricing } from './llm-client';
+import { CustomProviderConfig, CustomProviderModel } from './types';
 import { ALL_MODELS, getProviderForModel } from './model-registry';
 import { getLogger, Logger } from './logger';
 import { getMetricsCollector, classifyError } from './metrics-collector';
@@ -83,6 +84,14 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
     /**
      * Update custom provider endpoint URLs from SecretStorage.
      */
+    /**
+     * Update custom provider configurations and their API keys.
+     */
+    updateCustomProviders(providers: Map<string, CustomProviderConfig>, apiKeys: Record<string, string>): void {
+        this.router.updateCustomProviders(providers);
+        this.router.updateCustomApiKeys(apiKeys);
+    }
+
     updateEndpointUrls(urls: Record<string, string>): void {
         this.router.updateEndpointUrls(urls);
     }
@@ -156,6 +165,33 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         };
     }
 
+    /**
+     * Convert a custom provider model to a ProviderModelInfo entry.
+     */
+    private customModelToProviderInfo(model: CustomProviderModel, providerId: string, providerLabel: string, pricing?: { prompt?: number; completion?: number; cacheRead?: number }): ProviderModelInfo {
+        const pricingPerMillion = pricing
+            ? {
+                inputPrice: (pricing.prompt ?? 0) * 1000,
+                outputPrice: (pricing.completion ?? 0) * 1000,
+                cacheReadsPrice: (pricing.cacheRead ?? 0) * 1000,
+              }
+            : undefined;
+        return {
+            id: model.id,
+            name: model.name,
+            family: providerId,
+            version: '1.0',
+            maxInputTokens: model.contextLength,
+            maxOutputTokens: model.maxOutputTokens,
+            capabilities: {
+                imageInput: model.imageInput,
+                toolCalling: model.toolCalling,
+                promptCache: false,
+            },
+            pricing: pricingPerMillion,
+        };
+    }
+
     async fetchModels(): Promise<ProviderModelInfo[]> {
         const models = getProviderModelInfoList();
 
@@ -163,6 +199,12 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         for (const compositeId of this.composite.getCompositeModelIds()) {
             const info = this.computeCompositeModelInfo(compositeId);
             if (info) models.push(info);
+        }
+
+        // Append custom provider model entries
+        const customModels = this.router.getCustomProviderModels();
+        for (const cm of customModels) {
+            models.push(this.customModelToProviderInfo(cm.model, cm.providerId, cm.providerLabel, cm.pricing));
         }
 
         this.setAvailableModels(models);
@@ -191,7 +233,9 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         const models = allModels.filter(m => {
             if (m.id.startsWith('shofer/')) return true;
             const provider = getProviderForModel(m.id);
-            return provider ? this.router.hasApiKeyForProvider(provider) : false;
+            if (provider) return this.router.hasApiKeyForProvider(provider);
+            // Check if it's a custom provider model (family = custom provider ID)
+            return this.router.hasApiKeyForProvider(m.family);
         });
 
         return models.map((model, index) => ({
