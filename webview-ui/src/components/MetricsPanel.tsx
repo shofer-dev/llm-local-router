@@ -109,7 +109,8 @@ const COLORS = [
   '#4dd0e1', '#fff176', '#f06292', '#a1887f', '#90a4ae',
 ];
 
-const ALL_MODEL_KEY_COL = 'ALL';
+const ALL_PRIMARY = '__ALL_PRIMARY__';
+const ALL_COMPOSITE = '__ALL_COMPOSITE__';
 
 function formatTick(value: number, metricKey: string): string {
   if (metricKey === 'cost' || metricKey === 'cost_cumulative') return `$${value.toFixed(4)}`;
@@ -125,6 +126,11 @@ function tooltipVal(value: number, metricKey: string): string {
   return String(Math.round(value as number));
 }
 
+/** Classify a model ID as primary or composite. */
+function isComposite(modelId: string): boolean {
+  return modelId.startsWith('shofer/');
+}
+
 // ─── Single-chart sub-component ───────────────────────────────────
 
 function MetricChart({
@@ -137,10 +143,30 @@ function MetricChart({
   visibleModels: string[];
   loading: boolean;
 }) {
-  const modelColors = new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]]));
-  const allLineKeys = modelsInData.length <= 1 ? modelsInData : [ALL_MODEL_KEY_COL, ...modelsInData];
-  const allColors = new Map(allLineKeys.map((k, i) => [k, k === ALL_MODEL_KEY_COL ? '#ffffff' : COLORS[i % COLORS.length]]));
-  const visibleKeysVal = visibleModels.length === 0 ? allLineKeys : allLineKeys.filter(k => visibleModels.includes(k));
+  const primaryKeys = modelsInData.filter(m => !isComposite(m));
+  const compositeKeys = modelsInData.filter(m => isComposite(m));
+
+  // Build line keys: ALL_PRIMARY, ALL_COMPOSITE, then individual models
+  const aggKeys: string[] = [];
+  if (primaryKeys.length > 0) aggKeys.push(ALL_PRIMARY);
+  if (compositeKeys.length > 0) aggKeys.push(ALL_COMPOSITE);
+  const allLineKeys = [...aggKeys, ...modelsInData];
+
+  const allColors = new Map<string, string>();
+  // Fixed colors for aggregate lines
+  allColors.set(ALL_PRIMARY, '#ffffff');
+  allColors.set(ALL_COMPOSITE, '#ff9800');
+  for (let i = 0; i < modelsInData.length; i++) {
+    allColors.set(modelsInData[i], COLORS[i % COLORS.length]);
+  }
+
+  // visibleModels: if empty, show all aggregate lines and all models
+  const visibleKeysVal = React.useMemo(() => {
+    if (visibleModels.length === 0) {
+      return allLineKeys;
+    }
+    return allLineKeys.filter(k => visibleModels.includes(k));
+  }, [visibleModels, allLineKeys]);
 
   const chartData = React.useMemo(() => {
     const windowMap = new Map<string, Record<string, number>>();
@@ -150,8 +176,8 @@ function MetricChart({
     }
     const windows = [...windowMap.keys()].sort();
 
-    function aggregate(row: Record<string, number | string>): number {
-      const vals = Object.values(row).filter((v): v is number => typeof v === 'number');
+    function sumValues(ids: string[], row: Record<string, number | string>): number {
+      const vals = ids.map(id => row[id] as number | undefined).filter((v): v is number => typeof v === 'number');
       if (vals.length === 0) return 0;
       if (metric.key === 'latency_ttfb' || metric.key === 'latency_ttlb' || metric.key === 'cache_hit_ratio') {
         return vals.reduce((s, v) => s + v, 0) / vals.length;
@@ -164,28 +190,38 @@ function MetricChart({
       return { windowStart: w, ...vals };
     });
 
+    const buildRows = (rows: Array<Record<string, number | string>>) =>
+      rows.map(row => {
+        const out: Record<string, number | string> = { windowStart: row.windowStart };
+        if (primaryKeys.length > 0) out[ALL_PRIMARY] = sumValues(primaryKeys, row);
+        if (compositeKeys.length > 0) out[ALL_COMPOSITE] = sumValues(compositeKeys, row);
+        return out;
+      });
+
     if (metric.key === 'cost_cumulative') {
       const acc = new Map<string, number>();
-      return raw.map(row => {
+      return buildRows(raw).map(row => {
         const out: Record<string, number | string> = { windowStart: row.windowStart };
+        // Accumulate per-model cumulative totals
         for (const mid of modelsInData) {
-          const d = (row[mid] as number | undefined) ?? 0;
+          const d = (raw.find(r => r.windowStart === row.windowStart)?.[mid] as number | undefined) ?? 0;
           const r = (acc.get(mid) ?? 0) + d;
           acc.set(mid, r);
           out[mid] = r;
         }
-        const allR = (acc.get(ALL_MODEL_KEY_COL) ?? 0) + aggregate(row);
-        acc.set(ALL_MODEL_KEY_COL, allR);
-        out[ALL_MODEL_KEY_COL] = allR;
+        // Aggregate keys derive from model accumulators
+        if (primaryKeys.length > 0) {
+          out[ALL_PRIMARY] = primaryKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
+        }
+        if (compositeKeys.length > 0) {
+          out[ALL_COMPOSITE] = compositeKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
+        }
         return out as Record<string, number | string> & { windowStart: string };
       });
     }
 
-    return raw.map(row => ({
-      ...row,
-      [ALL_MODEL_KEY_COL]: aggregate(row),
-    })) as unknown as Array<Record<string, number | string> & { windowStart: string }>;
-  }, [points, metric.key, modelsInData]);
+    return buildRows(raw) as unknown as Array<Record<string, number | string> & { windowStart: string }>;
+  }, [points, metric.key, modelsInData, primaryKeys, compositeKeys]);
 
   if (points.length === 0 && !loading) return null;
 
@@ -227,8 +263,8 @@ function MetricChart({
               {allLineKeys.map(key => (
                 <Line key={key} type="monotone" dataKey={key} name={key}
                   stroke={allColors.get(key)!}
-                  strokeWidth={key === ALL_MODEL_KEY_COL ? 2.5 : 1.5}
-                  strokeDasharray={key === ALL_MODEL_KEY_COL ? '5 3' : undefined}
+                  strokeWidth={key === ALL_PRIMARY || key === ALL_COMPOSITE ? 2.5 : 1.5}
+                  strokeDasharray={key === ALL_PRIMARY ? '7 4' : key === ALL_COMPOSITE ? '10 4 2 4' : undefined}
                   hide={!visibleKeysVal.includes(key)} dot={false} activeDot={{ r: 3 }}
                   connectNulls isAnimationActive={false} />
               ))}
@@ -247,7 +283,9 @@ function MetricChart({
 
 /**
  * Metrics dashboard showing all metric charts on a single page
- * with anchor-link navigation (Table of Contents style) at the top.
+ * with a categorized model picker: Primary models and Composite
+ * models are split into separate groups with per-group ALL toggles,
+ * preventing double-counting.
  */
 export default function MetricsPanel({ metrics: _metrics }: Props) {
   const [timeRange, setTimeRange] = React.useState(24);
@@ -272,14 +310,12 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
     const until = new Date().toISOString();
     setLoading(true);
 
-    // Collect responses sequentially via counter
     const keys = METRICS.map(m => m.key);
     const collected: Record<string, TimeSeriesPoint[]> = {};
     let received = 0;
 
     const unsub = onMessage((msg: any) => {
       if (msg.type === 'metricsQueryResponse') {
-        // Match response by order — the host responds in request order
         if (received < keys.length) {
           collected[keys[received]] = msg.data;
           received++;
@@ -291,7 +327,6 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
       }
     });
 
-    // Fire all queries
     const id = setTimeout(() => {
       for (const m of METRICS) {
         postMessage({ type: 'queryMetrics', metric: m.key, modelIds: [], since, until });
@@ -303,16 +338,36 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
 
   const allPoints = Object.values(allData).flat();
   const modelsInData = React.useMemo(() => [...new Set(allPoints.map(d => d.modelId))].sort(), [allPoints]);
+  const primaryKeys = modelsInData.filter(m => !isComposite(m));
+  const compositeKeys = modelsInData.filter(m => isComposite(m));
+
   const modelColors = new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]]));
-  const allLineKeys = modelsInData.length <= 1 ? modelsInData : [ALL_MODEL_KEY_COL, ...modelsInData];
-  const visibleCount = visibleModels.length === 0 ? allLineKeys.length : visibleModels.length;
+
+  // Build the full list of selectable keys: ALL_PRIMARY, ALL_COMPOSITE, then individual models
+  const allSelectableKeys = React.useMemo(() => {
+    const keys: string[] = [];
+    if (primaryKeys.length > 0) keys.push(ALL_PRIMARY);
+    if (compositeKeys.length > 0) keys.push(ALL_COMPOSITE);
+    keys.push(...modelsInData);
+    return keys;
+  }, [primaryKeys, compositeKeys, modelsInData]);
+
+  const visibleCount = visibleModels.length === 0 ? allSelectableKeys.length : visibleModels.length;
 
   const toggleModel = (id: string) => {
     setVisibleModels(prev => {
-      if (id === ALL_MODEL_KEY_COL) {
-        return prev.includes(ALL_MODEL_KEY_COL) ? prev.filter(m => m !== ALL_MODEL_KEY_COL) : [...prev, ALL_MODEL_KEY_COL];
+      if (id === ALL_PRIMARY) {
+        return prev.includes(ALL_PRIMARY)
+          ? prev.filter(m => m !== ALL_PRIMARY)
+          : [...prev, ALL_PRIMARY];
       }
-      const next = prev.length === 0 ? allLineKeys : [...prev];
+      if (id === ALL_COMPOSITE) {
+        return prev.includes(ALL_COMPOSITE)
+          ? prev.filter(m => m !== ALL_COMPOSITE)
+          : [...prev, ALL_COMPOSITE];
+      }
+      // Individual model: toggle it. Start from "all visible" if nothing selected.
+      const next = prev.length === 0 ? allSelectableKeys : [...prev];
       if (next.includes(id)) return next.filter(m => m !== id);
       return [...next, id];
     });
@@ -340,21 +395,67 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
           <span style={styles.ctrlLabel}>Lines</span>
           <div style={{ position: 'relative' }} ref={pickerRef}>
             <button style={styles.pickerBtn} onClick={() => setShowModelPicker(!showModelPicker)}>
-              {visibleModels.length === 0 ? `All (${allLineKeys.length})` : `${visibleCount} of ${allLineKeys.length}`}
+              {visibleModels.length === 0 ? `All (${allSelectableKeys.length})` : `${visibleCount} of ${allSelectableKeys.length}`}
               {showModelPicker ? ' ▴' : ' ▾'}
             </button>
             {showModelPicker && (
               <div style={styles.dropdown}>
-                {allLineKeys.map(m => {
-                  const vis = visibleModels.length === 0 || visibleModels.includes(m);
-                  return (
-                    <div key={m} style={{ ...styles.opt, fontWeight: vis ? 600 : 400 }} onClick={() => toggleModel(m)}>
-                      <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, marginRight: 6,
-                        backgroundColor: modelColors.get(m) ?? '#888', flexShrink: 0, opacity: vis ? 1 : 0.3 }}/>
-                      {m}
+                {/* Primary section */}
+                {primaryKeys.length > 0 && (
+                  <>
+                    <div style={styles.catHeader}>
+                      <span style={styles.catLabel}>Primary</span>
+                      <button
+                        style={{
+                          ...styles.catToggle,
+                          fontWeight: visibleModels.length === 0 || visibleModels.includes(ALL_PRIMARY) ? 600 : 400,
+                          opacity: visibleModels.length === 0 || visibleModels.includes(ALL_PRIMARY) ? 1 : 0.5,
+                        }}
+                        onClick={(e) => { e.stopPropagation(); toggleModel(ALL_PRIMARY); }}
+                      >
+                        ALL
+                      </button>
                     </div>
-                  );
-                })}
+                    {primaryKeys.map(m => {
+                      const vis = visibleModels.length === 0 || visibleModels.includes(m);
+                      return (
+                        <div key={m} style={{ ...styles.opt, fontWeight: vis ? 600 : 400, paddingLeft: 18 }} onClick={() => toggleModel(m)}>
+                          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, marginRight: 6,
+                            backgroundColor: modelColors.get(m) ?? '#888', flexShrink: 0, opacity: vis ? 1 : 0.3 }}/>
+                          {m}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {/* Composite section */}
+                {compositeKeys.length > 0 && (
+                  <>
+                    <div style={styles.catHeader}>
+                      <span style={styles.catLabel}>Composite</span>
+                      <button
+                        style={{
+                          ...styles.catToggle,
+                          fontWeight: visibleModels.length === 0 || visibleModels.includes(ALL_COMPOSITE) ? 600 : 400,
+                          opacity: visibleModels.length === 0 || visibleModels.includes(ALL_COMPOSITE) ? 1 : 0.5,
+                        }}
+                        onClick={(e) => { e.stopPropagation(); toggleModel(ALL_COMPOSITE); }}
+                      >
+                        ALL
+                      </button>
+                    </div>
+                    {compositeKeys.map(m => {
+                      const vis = visibleModels.length === 0 || visibleModels.includes(m);
+                      return (
+                        <div key={m} style={{ ...styles.opt, fontWeight: vis ? 600 : 400, paddingLeft: 18 }} onClick={() => toggleModel(m)}>
+                          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, marginRight: 6,
+                            backgroundColor: modelColors.get(m) ?? '#888', flexShrink: 0, opacity: vis ? 1 : 0.3 }}/>
+                          {m}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -367,7 +468,10 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
         {!loading && (
           <span style={styles.sumItem}>
             Windows: <strong>{Object.values(allData)[0]?.length ?? 0}</strong>
-            &nbsp;|&nbsp; Models: <strong>{modelsInData.length}</strong>
+            &nbsp;|&nbsp;
+            Primary: <strong>{primaryKeys.length}</strong>
+            &nbsp;|&nbsp;
+            Composite: <strong>{compositeKeys.length}</strong>
           </span>
         )}
       </div>
@@ -415,7 +519,10 @@ const styles: Record<string, React.CSSProperties> = {
   timeBtn: { padding: '2px 8px', fontSize: '11px', border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))', borderRadius: '3px', background: 'none', color: 'var(--vscode-descriptionForeground, #999)', cursor: 'pointer', fontFamily: 'var(--vscode-font-family)' },
   timeActive: { padding: '2px 8px', fontSize: '11px', border: '1px solid var(--vscode-focusBorder, #007acc)', borderRadius: '3px', background: 'var(--vscode-list-activeSelectionBackground)', color: 'var(--vscode-foreground)', cursor: 'pointer', fontWeight: 600, fontFamily: 'var(--vscode-font-family)' },
   pickerBtn: { padding: '2px 8px', fontSize: '11px', border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))', borderRadius: '3px', background: 'none', color: 'var(--vscode-foreground)', cursor: 'pointer', fontFamily: 'var(--vscode-font-family)' },
-  dropdown: { position: 'absolute', top: '100%', left: 0, marginTop: '4px', minWidth: '200px', maxHeight: '300px', overflowY: 'auto', background: 'var(--vscode-dropdown-background)', border: '1px solid var(--vscode-dropdown-border)', borderRadius: '3px', zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' },
+  dropdown: { position: 'absolute', top: '100%', left: 0, marginTop: '4px', minWidth: '260px', maxHeight: '400px', overflowY: 'auto', background: 'var(--vscode-dropdown-background)', border: '1px solid var(--vscode-dropdown-border)', borderRadius: '3px', zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' },
+  catHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.15))', background: 'var(--vscode-sideBar-background)' },
+  catLabel: { fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--vscode-descriptionForeground, #999)' },
+  catToggle: { padding: '1px 8px', fontSize: '10px', border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))', borderRadius: '3px', background: 'none', color: 'var(--vscode-foreground)', cursor: 'pointer', fontFamily: 'var(--vscode-font-family)' },
   opt: { padding: '4px 10px', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center' },
   summary: { display: 'flex', gap: '16px', flexWrap: 'wrap', padding: '4px 0 8px', borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.15))', marginBottom: '8px' },
   sumItem: { fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)' },
