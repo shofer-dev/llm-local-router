@@ -286,12 +286,26 @@ export default function ProvidersPanel({ providers }: Props) {
         setSaved(true);
         setShowAddCustom(false);
         setEditingCustomId(null);
+        // Update the custom providers list so the new/edited provider appears
+        setCustomProviders((prev) => {
+          const idx = prev.findIndex((cp) => cp.id === msg.provider.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = msg.provider;
+            return next;
+          }
+          return [...prev, msg.provider];
+        });
+        // Select the newly saved provider in the left panel
+        setSelectedId(msg.provider.id);
         setTimeout(() => setSaved(false), 2000);
       } else if (msg.type === 'customProviderDeleted') {
         setSaving(false);
         setSaved(true);
         setShowAddCustom(false);
         setEditingCustomId(null);
+        // Remove the deleted provider from the custom providers list
+        setCustomProviders((prev) => prev.filter((cp) => cp.id !== msg.providerId));
         if (selectedId === msg.providerId) {
           setSelectedId(providers.length > 0 ? providers[0].id : null);
         }
