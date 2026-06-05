@@ -745,19 +745,7 @@ export default function ProvidersPanel({ providers }: Props) {
                     {cp.models.length} model{cp.models.length !== 1 ? 's' : ''}
                   </div>
                 </div>
-                <button
-                  className="vscode-button"
-                  onClick={(e) => { e.stopPropagation(); handleDeleteCustom(cp.id); }}
-                  style={{
-                    padding: '2px 6px',
-                    fontSize: '12px',
-                    flexShrink: 0,
-                    marginLeft: '8px',
-                  }}
-                  title="Delete custom provider"
-                >
-                  🗑
-                </button>
+true
               </div>
             );
           })
