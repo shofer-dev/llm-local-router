@@ -75,6 +75,20 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
 
   return (
     <div style={{ padding: '12px', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        <button className="vscode-button" onClick={handleSubmit} disabled={saving}>
+          {saving ? 'Saving...' : saved ? '✓ Saved' : '💾 Save Custom Provider'}
+        </button>
+        <button className="vscode-button" onClick={onCancel} style={{ background: 'var(--vscode-button-secondaryBackground)' }}>
+          Cancel
+        </button>
+        {onDelete && (
+          <button className="vscode-button" onClick={onDelete} style={{ background: 'var(--vscode-inputValidation-errorBackground, #5a1d1d)', marginLeft: 'auto' }}>
+            🗑 Delete
+          </button>
+        )}
+      </div>
+
       <div style={{ marginBottom: '12px' }}>
         <label style={formStyles.fieldLabel}>Provider ID</label>
         <input
@@ -207,19 +221,6 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-        <button className="vscode-button" onClick={handleSubmit} disabled={saving}>
-          {saving ? 'Saving...' : saved ? '✓ Saved' : '💾 Save Custom Provider'}
-        </button>
-        <button className="vscode-button" onClick={onCancel} style={{ background: 'var(--vscode-button-secondaryBackground)' }}>
-          Cancel
-        </button>
-        {onDelete && (
-          <button className="vscode-button" onClick={onDelete} style={{ background: 'var(--vscode-inputValidation-errorBackground, #5a1d1d)', marginLeft: 'auto' }}>
-            🗑 Delete
-          </button>
-        )}
-      </div>
     </div>
   );
 };
