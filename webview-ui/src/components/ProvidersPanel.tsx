@@ -745,7 +745,6 @@ export default function ProvidersPanel({ providers }: Props) {
                     {cp.models.length} model{cp.models.length !== 1 ? 's' : ''}
                   </div>
                 </div>
-true
               </div>
             );
           })

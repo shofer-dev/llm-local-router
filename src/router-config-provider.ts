@@ -516,13 +516,12 @@ export class RouterConfigProvider {
       const verifyRead = await this.loadCustomProvidersFromSettings();
       logger.info(`[customProvider:save] verify re-read — count=${Object.keys(verifyRead).length} hasKey=${!!verifyRead[provider.id]}`);
 
-      // Store or delete API key
+      // Store API key if provided; otherwise keep existing (don't delete on edit)
       if (apiKey.trim()) {
         await storeCustomProviderApiKey(this.context, provider.id, apiKey.trim());
         logger.info(`[customProvider:save] stored API key for ${provider.id}`);
       } else {
-        await deleteCustomProviderApiKey(this.context, provider.id);
-        logger.info(`[customProvider:save] deleted API key for ${provider.id} (empty key provided)`);
+        logger.info(`[customProvider:save] no API key provided — keeping existing key if any`);
       }
 
       // Reload into LanguageModelProvider
