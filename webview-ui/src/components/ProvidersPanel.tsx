@@ -432,8 +432,11 @@ export default function ProvidersPanel({ providers }: Props) {
   };
 
   const handleDeleteCustom = (providerId: string) => {
-    if (!confirm(`Delete custom provider "${providerId}" and all its models?`)) return;
-    setSaving(true);
+    // Confirmation is handled host-side via vscode.window.showWarningMessage:
+    // the browser `window.confirm()` is a no-op inside VS Code webviews, which
+    // previously made the Delete button appear unresponsive. We intentionally
+    // do not flip `saving` here — if the user cancels the host-side modal no
+    // reply is sent, so flipping it would leave the Save button stuck disabled.
     postMessage({ type: 'deleteCustomProvider', providerId });
   };
 

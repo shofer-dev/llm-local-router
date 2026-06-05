@@ -544,6 +544,25 @@ export class RouterConfigProvider {
     try {
       // Remove from custom providers map
       const customProviders = await this.loadCustomProvidersFromSettings();
+
+      // Confirm with the user before destroying config + stored API key.
+      // The confirmation lives here (not in the webview) because the browser
+      // `window.confirm()` is a no-op inside VS Code webviews.
+      const target = customProviders[providerId];
+      if (!target) {
+        logger.warning(`[customProvider:delete] provider not found: ${providerId}`);
+        return;
+      }
+      const choice = await vscode.window.showWarningMessage(
+        `Delete custom provider "${target.label}" and all its models?`,
+        { modal: true, detail: 'This also removes its stored API key. This cannot be undone.' },
+        'Delete',
+      );
+      if (choice !== 'Delete') {
+        logger.info(`[customProvider:delete] cancelled by user: ${providerId}`);
+        return;
+      }
+
       delete customProviders[providerId];
       await this.saveCustomProvidersToSettings(customProviders);
 
