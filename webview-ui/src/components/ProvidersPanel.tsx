@@ -28,7 +28,6 @@ interface CustomProviderFormProps {
  */
 const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving, saved, onSave, onCancel, onDelete, onFormChange }) => {
   const [id, setId] = React.useState(initial?.id ?? '');
-  const [label, setLabel] = React.useState(initial?.label ?? '');
   const [protocol, setProtocol] = React.useState<CustomProviderProtocol>(initial?.protocol ?? 'openai-compatible');
   const [endpointUrl, setEndpointUrl] = React.useState(initial?.endpointUrl ?? '');
   const [apiKey, setApiKey] = React.useState('');
@@ -39,7 +38,6 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
   // Single model fields
   const firstModel = initial?.models?.[0];
   const [modelId, setModelId] = React.useState(firstModel?.id ?? '');
-  const [modelName, setModelName] = React.useState(firstModel?.name ?? '');
   const [contextLength, setContextLength] = React.useState(firstModel?.contextLength?.toString() ?? '131072');
   const [maxOutputTokens, setMaxOutputTokens] = React.useState(firstModel?.maxOutputTokens?.toString() ?? '16384');
   const [imageInput, setImageInput] = React.useState(firstModel?.imageInput ?? false);
@@ -48,7 +46,7 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
   const [modelError, setModelError] = React.useState('');
 
   const handleSubmit = () => {
-    if (!id.trim() || !label.trim() || !endpointUrl.trim()) return;
+    if (!id.trim() || !endpointUrl.trim()) return;
     if (!modelId.trim()) {
       setModelError('Model ID is required.');
       return;
@@ -57,7 +55,7 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
 
     const model: CustomProviderModel = {
       id: modelId.trim(),
-      name: modelName.trim() || modelId.trim(),
+      name: modelId.trim(),
       contextLength: parseInt(contextLength, 10) || 131072,
       maxOutputTokens: parseInt(maxOutputTokens, 10) || 16384,
       imageInput,
@@ -67,7 +65,7 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
 
     const cfg: CustomProviderConfig = {
       id: id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
-      label: label.trim(),
+      label: id.trim(),
       protocol,
       endpointUrl: endpointUrl.trim(),
       models: [model],
@@ -113,18 +111,6 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
         <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
           Unique ID (lowercase, a-z, 0-9, -, _). Cannot be changed after creation.
         </div>
-      </div>
-
-      <div style={{ marginBottom: '12px' }}>
-        <label style={formStyles.fieldLabel}>Label</label>
-        <input
-          type="text"
-          className="vscode-input"
-          style={{ width: '100%' }}
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="My Provider"
-        />
       </div>
 
       <div style={{ marginBottom: '12px' }}>
@@ -231,21 +217,6 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
             onChange={(e) => setModelId(e.target.value)}
             placeholder="my-model-v1"
           />
-        </div>
-
-        <div style={{ marginBottom: '8px' }}>
-          <label style={formStyles.subLabel}>Display Name</label>
-          <input
-            type="text"
-            className="vscode-input"
-            style={{ width: '100%' }}
-            value={modelName}
-            onChange={(e) => setModelName(e.target.value)}
-            placeholder="My Model"
-          />
-          <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
-            Optional. Defaults to model ID if empty.
-          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
