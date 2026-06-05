@@ -485,7 +485,7 @@ export class RouterConfigProvider {
   private async sendCustomProviders(): Promise<void> {
     if (!this.panel) return;
     try {
-      const customProviders = this.loadCustomProvidersFromSettings();
+      const customProviders = await this.loadCustomProvidersFromSettings();
       this.panel.webview.postMessage({
         type: 'initCustomProviders',
         customProviders: Object.values(customProviders),
