@@ -152,6 +152,7 @@ type HostMessage =
   | { type: 'customProviderDeleted'; providerId: string };
 
 type WebviewMessage =
+  | { type: 'requestCustomProviders' }
   | { type: 'webviewReady' }
   | { type: 'saveConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'validateConfig'; compositeModels: WebviewCompositeModel[] }
@@ -265,6 +266,9 @@ export class RouterConfigProvider {
         break;
       case 'importConfig':
         await this.handleImport();
+        break;
+      case 'requestCustomProviders':
+        await this.sendCustomProviders();
         break;
       case 'saveProvider':
         await this.handleSaveProvider(message.provider, message.apiKey, message.endpointUrl, message.pricing);

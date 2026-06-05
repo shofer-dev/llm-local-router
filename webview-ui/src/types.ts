@@ -218,4 +218,5 @@ export type WebviewMessage =
   | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
   | { type: 'deleteCustomProvider'; providerId: string }
+  | { type: 'requestCustomProviders' }
   | { type: 'queryMetrics'; metric: string; modelIds: string[]; since: string; until: string };

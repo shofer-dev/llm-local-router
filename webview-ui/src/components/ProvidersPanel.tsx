@@ -326,6 +326,14 @@ export default function ProvidersPanel({ providers }: Props) {
     setForms(init);
   }, [providers]);
 
+  // Request custom providers when this component mounts
+  // (the initCustomProviders message may have been sent before this
+  // component was rendered — it only mounts when the user navigates to
+  // Config → Primary Providers).
+  React.useEffect(() => {
+    postMessage({ type: 'requestCustomProviders' });
+  }, []);
+
   React.useEffect(() => {
     const unsub = onMessage((msg) => {
       if (msg.type === 'providerConfigSaved') {
@@ -337,6 +345,7 @@ export default function ProvidersPanel({ providers }: Props) {
         }));
         setTimeout(() => setSaved(false), 2000);
       } else if (msg.type === 'initCustomProviders') {
+        console.log('[customProvider:webview] initCustomProviders received:', msg.customProviders);
         setCustomProviders(msg.customProviders);
       } else if (msg.type === 'customProviderSaved') {
         setSaving(false);
