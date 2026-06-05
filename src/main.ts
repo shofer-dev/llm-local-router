@@ -580,17 +580,25 @@ async function loadCompositeModels(context: vscode.ExtensionContext): Promise<vo
  * Load custom primary providers from SecretStorage into the LanguageModelProvider.
  */
 async function loadCustomProvidersIntoProvider(context: vscode.ExtensionContext, provider: LanguageModelProvider): Promise<void> {
+    const logger = getLogger();
     const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
+    logger.info(`[customProvider:init] raw settings value length=${raw?.length ?? 0} hasContent=${!!raw?.trim()}`);
     let customs: Record<string, CustomProviderConfig> = {};
     if (raw && raw.trim()) {
         try {
             customs = JSON.parse(raw);
-        } catch { /* ignore parse errors */ }
+            logger.info(`[customProvider:init] parsed ${Object.keys(customs).length} providers: ${JSON.stringify(Object.keys(customs))}`);
+        } catch (err) {
+            logger.warning(`[customProvider:init] JSON parse error: ${err}`);
+        }
+    } else {
+        logger.info(`[customProvider:init] no custom providers in settings`);
     }
     const customKeys = await loadCustomProviderApiKeys(context);
+    logger.info(`[customProvider:init] loaded ${Object.keys(customKeys).length} API keys: ${JSON.stringify(Object.keys(customKeys))}`);
     const customMap = new Map<string, CustomProviderConfig>(Object.entries(customs));
     provider.updateCustomProviders(customMap, customKeys);
-    getLogger().info(`Loaded ${customMap.size} custom providers with ${Object.keys(customKeys).length} API keys`);
+    logger.info(`[customProvider:init] Loaded ${customMap.size} custom providers with ${Object.keys(customKeys).length} API keys`);
 }
 
 

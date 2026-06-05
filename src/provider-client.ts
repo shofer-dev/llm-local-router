@@ -178,11 +178,14 @@ export class ProviderRouter {
     updateCustomProviders(providers: Map<string, CustomProviderConfig>): void {
         this.customProviders = providers;
         this.customModelIndex.clear();
+        getLogger().info(`[customProvider:router] updateCustomProviders — ${providers.size} providers, ids: ${JSON.stringify([...providers.keys()])}`);
         for (const [providerId, cfg] of providers) {
             for (const model of cfg.models) {
                 this.customModelIndex.set(model.id, providerId);
+                getLogger().info(`[customProvider:router] model index: ${model.id} → ${providerId}`);
             }
         }
+        getLogger().info(`[customProvider:router] model index size: ${this.customModelIndex.size}`);
     }
 
     /**

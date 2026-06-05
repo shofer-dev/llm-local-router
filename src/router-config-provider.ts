@@ -493,34 +493,45 @@ export class RouterConfigProvider {
 
   private async handleSaveCustomProvider(provider: CustomProviderConfig, apiKey: string): Promise<void> {
     const logger = (await import('./logger')).getLogger();
+    logger.info(`[customProvider:save] START — id=${provider.id} label=${provider.label} protocol=${provider.protocol} endpointUrl=${provider.endpointUrl} modelsCount=${provider.models?.length ?? 0} hasApiKey=${!!apiKey?.trim()}`);
     try {
       // Validate provider ID — must not collide with built-in ProviderType values
       const builtInProviders = ['openai', 'anthropic', 'google', 'deepseek', 'minimax', 'moonshot', 'xiaomi', 'zhipu', 'openrouter'];
       if (builtInProviders.includes(provider.id)) {
+        logger.warning(`[customProvider:save] REJECTED — id=${provider.id} collides with built-in provider`);
         throw new Error(`Provider ID "${provider.id}" collides with a built-in provider. Choose a different ID.`);
       }
 
       // Load existing, then update/add
-      const customProviders = this.loadCustomProvidersFromSettings();
+      const customProviders = await this.loadCustomProvidersFromSettings();
+      logger.info(`[customProvider:save] loaded existing providers count=${Object.keys(customProviders).length}`);
       customProviders[provider.id] = provider;
       await this.saveCustomProvidersToSettings(customProviders);
+      logger.info(`[customProvider:save] saved to settings — total providers now=${Object.keys(customProviders).length}`);
+      // Verify the write took effect
+      const verifyRead = await this.loadCustomProvidersFromSettings();
+      logger.info(`[customProvider:save] verify re-read — count=${Object.keys(verifyRead).length} hasKey=${!!verifyRead[provider.id]}`);
 
       // Store or delete API key
       if (apiKey.trim()) {
         await storeCustomProviderApiKey(this.context, provider.id, apiKey.trim());
+        logger.info(`[customProvider:save] stored API key for ${provider.id}`);
       } else {
         await deleteCustomProviderApiKey(this.context, provider.id);
+        logger.info(`[customProvider:save] deleted API key for ${provider.id} (empty key provided)`);
       }
 
       // Reload into LanguageModelProvider
+      logger.info(`[customProvider:save] reloading into LanguageModelProvider...`);
       await this.reloadCustomProviders();
       await this.languageModelProvider.fetchModels();
+      logger.info(`[customProvider:save] fetchModels complete`);
 
       this.panel?.webview.postMessage({ type: 'customProviderSaved', provider });
-      logger.info(`Saved custom provider: ${provider.id} (${provider.label})`);
+      logger.info(`[customProvider:save] DONE — id=${provider.id} (${provider.label})`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to save custom provider ${provider.id}: ${message}`);
+      logger.error(`[customProvider:save] FAILED — id=${provider.id}: ${message}`);
       vscode.window.showErrorMessage(`Failed to save custom provider: ${message}`);
     }
   }
@@ -529,7 +540,7 @@ export class RouterConfigProvider {
     const logger = (await import('./logger')).getLogger();
     try {
       // Remove from custom providers map
-      const customProviders = this.loadCustomProvidersFromSettings();
+      const customProviders = await this.loadCustomProvidersFromSettings();
       delete customProviders[providerId];
       await this.saveCustomProvidersToSettings(customProviders);
 
@@ -554,7 +565,7 @@ export class RouterConfigProvider {
    */
   private async reloadCustomProviders(): Promise<void> {
     const { loadCustomProviderApiKeys } = await import('./secret-storage');
-    const customs = this.loadCustomProvidersFromSettings();
+    const customs = await this.loadCustomProvidersFromSettings();
     const customKeys = await loadCustomProviderApiKeys(this.context);
     const customMap = new Map<string, CustomProviderConfig>(Object.entries(customs));
     this.languageModelProvider.updateCustomProviders(customMap, customKeys);
@@ -563,12 +574,18 @@ export class RouterConfigProvider {
   /**
    * Load custom providers from the shofer.router.customProviders setting.
    */
-  private loadCustomProvidersFromSettings(): CustomProvidersMap {
+  private async loadCustomProvidersFromSettings(): Promise<CustomProvidersMap> {
     const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
     if (raw && raw.trim()) {
       try {
-        return JSON.parse(raw) as CustomProvidersMap;
-      } catch { /* ignore parse errors */ }
+        const parsed = JSON.parse(raw) as CustomProvidersMap;
+        (await import('./logger')).getLogger().info(`[customProvider] loadCustomProvidersFromSettings — raw length=${raw.length} keys=${JSON.stringify(Object.keys(parsed))}`);
+        return parsed;
+      } catch (err) {
+        (await import('./logger')).getLogger().warning(`[customProvider] loadCustomProvidersFromSettings — JSON parse error: ${err}`);
+      }
+    } else {
+      (await import('./logger')).getLogger().info(`[customProvider] loadCustomProvidersFromSettings — empty/undefined raw value`);
     }
     return {};
   }
@@ -577,12 +594,15 @@ export class RouterConfigProvider {
    * Save custom providers to the shofer.router.customProviders workspace setting.
    */
   private async saveCustomProvidersToSettings(providers: CustomProvidersMap): Promise<void> {
+    const logger = (await import('./logger')).getLogger();
     const json = JSON.stringify(providers, null, 2);
+    logger.info(`[customProvider] saveCustomProvidersToSettings — writing ${Object.keys(providers).length} providers, json=${json.length} bytes`);
     await vscode.workspace.getConfiguration('shofer.router').update(
       'customProviders',
       Object.keys(providers).length > 0 ? json : '',
       vscode.ConfigurationTarget.Workspace,
     );
+    logger.info(`[customProvider] saveCustomProvidersToSettings — write complete`);
   }
 
 
