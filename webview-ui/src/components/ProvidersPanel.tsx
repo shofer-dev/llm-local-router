@@ -342,7 +342,8 @@ export default function ProvidersPanel({ providers }: Props) {
         setSaving(false);
         setSaved(true);
         setShowAddCustom(false);
-        setEditingCustomId(null);
+        // Keep the edit form open after save, transitioning from "add" to "edit" mode
+        setEditingCustomId(msg.provider.id);
         // Update the custom providers list so the new/edited provider appears
         setCustomProviders((prev) => {
           const idx = prev.findIndex((cp) => cp.id === msg.provider.id);
@@ -453,6 +454,7 @@ export default function ProvidersPanel({ providers }: Props) {
             <span style={{ fontSize: '13px', fontWeight: 600 }}>New Custom Provider</span>
           </div>
           <CustomProviderForm
+            key="new"
             saving={saving}
             saved={saved}
             onSave={handleSaveCustom}
@@ -478,6 +480,7 @@ export default function ProvidersPanel({ providers }: Props) {
             <span style={{ fontSize: '13px', fontWeight: 600 }}>Edit: {selectedCustom.label}</span>
           </div>
           <CustomProviderForm
+            key={selectedCustom.id}
             initial={selectedCustom}
             saving={saving}
             saved={saved}
