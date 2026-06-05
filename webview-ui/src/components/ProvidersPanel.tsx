@@ -746,13 +746,10 @@ export default function ProvidersPanel({ providers }: Props) {
                   </div>
                 </div>
                 <button
+                  className="vscode-button"
                   onClick={(e) => { e.stopPropagation(); handleDeleteCustom(cp.id); }}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--vscode-descriptionForeground, #999)',
-                    cursor: 'pointer',
-                    padding: '2px 4px',
+                    padding: '2px 6px',
                     fontSize: '12px',
                     flexShrink: 0,
                     marginLeft: '8px',
