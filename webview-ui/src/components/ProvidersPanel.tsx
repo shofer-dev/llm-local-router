@@ -35,32 +35,42 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
   const [promptPrice, setPromptPrice] = React.useState(initial?.defaultPricing?.prompt?.toString() ?? '');
   const [completionPrice, setCompletionPrice] = React.useState(initial?.defaultPricing?.completion?.toString() ?? '');
   const [cacheReadPrice, setCacheReadPrice] = React.useState(initial?.defaultPricing?.cacheRead?.toString() ?? '');
-  const [modelsJson, setModelsJson] = React.useState(
-    initial ? JSON.stringify(initial.models, null, 2) : '[\n  {"id": "model-id", "name": "Model Name", "contextLength": 131072, "maxOutputTokens": 16384, "imageInput": false, "toolCalling": true, "thinking": false}\n]'
-  );
-  const [jsonError, setJsonError] = React.useState('');
+
+  // Single model fields
+  const firstModel = initial?.models?.[0];
+  const [modelId, setModelId] = React.useState(firstModel?.id ?? '');
+  const [modelName, setModelName] = React.useState(firstModel?.name ?? '');
+  const [contextLength, setContextLength] = React.useState(firstModel?.contextLength?.toString() ?? '131072');
+  const [maxOutputTokens, setMaxOutputTokens] = React.useState(firstModel?.maxOutputTokens?.toString() ?? '16384');
+  const [imageInput, setImageInput] = React.useState(firstModel?.imageInput ?? false);
+  const [toolCalling, setToolCalling] = React.useState(firstModel?.toolCalling ?? true);
+  const [thinking, setThinking] = React.useState(firstModel?.thinking ?? false);
+  const [modelError, setModelError] = React.useState('');
 
   const handleSubmit = () => {
     if (!id.trim() || !label.trim() || !endpointUrl.trim()) return;
-    let models: CustomProviderModel[];
-    try {
-      models = JSON.parse(modelsJson);
-      if (!Array.isArray(models) || models.length === 0) {
-        setJsonError('Models must be a non-empty array.');
-        return;
-      }
-    } catch {
-      setJsonError('Invalid JSON format.');
+    if (!modelId.trim()) {
+      setModelError('Model ID is required.');
       return;
     }
-    setJsonError('');
+    setModelError('');
+
+    const model: CustomProviderModel = {
+      id: modelId.trim(),
+      name: modelName.trim() || modelId.trim(),
+      contextLength: parseInt(contextLength, 10) || 131072,
+      maxOutputTokens: parseInt(maxOutputTokens, 10) || 16384,
+      imageInput,
+      toolCalling,
+      thinking,
+    };
 
     const cfg: CustomProviderConfig = {
       id: id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
       label: label.trim(),
       protocol,
       endpointUrl: endpointUrl.trim(),
-      models,
+      models: [model],
       defaultPricing: promptPrice || completionPrice || cacheReadPrice
         ? {
             prompt: promptPrice ? parseFloat(promptPrice) : undefined,
@@ -206,18 +216,93 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
       </div>
 
       <div style={{ marginBottom: '12px' }}>
-        <label style={formStyles.fieldLabel}>
-          Models
-          {jsonError && <span style={{ color: 'var(--vscode-errorForeground, #f48771)', marginLeft: '8px', fontWeight: 400, textTransform: 'none' }}>{jsonError}</span>}
+        <label style={{ ...formStyles.fieldLabel, marginBottom: '6px' }}>
+          Model
+          {modelError && <span style={{ color: 'var(--vscode-errorForeground, #f48771)', marginLeft: '8px', fontWeight: 400, textTransform: 'none' }}>{modelError}</span>}
         </label>
-        <textarea
-          className="vscode-input"
-          style={{ width: '100%', minHeight: '150px', fontFamily: 'monospace', fontSize: '12px' }}
-          value={modelsJson}
-          onChange={(e) => { setModelsJson(e.target.value); setJsonError(''); }}
-        />
-        <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
-          JSON array of model objects. Each model needs: id, name, contextLength, maxOutputTokens, imageInput, toolCalling.
+
+        <div style={{ marginBottom: '8px' }}>
+          <label style={formStyles.subLabel}>Model ID</label>
+          <input
+            type="text"
+            className="vscode-input"
+            style={{ width: '100%' }}
+            value={modelId}
+            onChange={(e) => setModelId(e.target.value)}
+            placeholder="my-model-v1"
+          />
+        </div>
+
+        <div style={{ marginBottom: '8px' }}>
+          <label style={formStyles.subLabel}>Display Name</label>
+          <input
+            type="text"
+            className="vscode-input"
+            style={{ width: '100%' }}
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
+            placeholder="My Model"
+          />
+          <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
+            Optional. Defaults to model ID if empty.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+          <div style={{ flex: '1 1 120px' }}>
+            <label style={formStyles.subLabel}>Context Length</label>
+            <input
+              type="number"
+              className="vscode-input"
+              style={{ width: '100%' }}
+              value={contextLength}
+              onChange={(e) => setContextLength(e.target.value)}
+              placeholder="131072"
+              step="1"
+              min="1"
+            />
+          </div>
+          <div style={{ flex: '1 1 120px' }}>
+            <label style={formStyles.subLabel}>Max Output Tokens</label>
+            <input
+              type="number"
+              className="vscode-input"
+              style={{ width: '100%' }}
+              value={maxOutputTokens}
+              onChange={(e) => setMaxOutputTokens(e.target.value)}
+              placeholder="16384"
+              step="1"
+              min="1"
+            />
+          </div>
+        </div>
+
+        <label style={{ ...formStyles.subLabel, marginBottom: '4px' }}>Capabilities</label>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={imageInput}
+              onChange={(e) => setImageInput(e.target.checked)}
+            />
+            Image Input
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={toolCalling}
+              onChange={(e) => setToolCalling(e.target.checked)}
+            />
+            Tool Calling
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={thinking}
+              onChange={(e) => setThinking(e.target.checked)}
+            />
+            Thinking
+          </label>
         </div>
       </div>
 
