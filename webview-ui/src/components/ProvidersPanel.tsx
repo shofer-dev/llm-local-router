@@ -91,7 +91,15 @@ const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving
           Cancel
         </button>
         {onDelete && (
-          <button className="vscode-button" onClick={onDelete} style={{ background: 'var(--vscode-inputValidation-errorBackground, #5a1d1d)', marginLeft: 'auto' }}>
+          <button
+            className="vscode-button"
+            onClick={onDelete}
+            style={{
+              background: 'var(--vscode-statusBarItem-errorBackground, #c42b1c)',
+              color: 'var(--vscode-statusBarItem-errorForeground, #ffffff)',
+              marginLeft: 'auto',
+            }}
+          >
             🗑 Delete
           </button>
         )}
