@@ -234,8 +234,12 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             if (m.id.startsWith('shofer/')) return true;
             const provider = getProviderForModel(m.id);
             if (provider) return this.router.hasApiKeyForProvider(provider);
-            // Check if it's a custom provider model (family = custom provider ID)
-            return this.router.hasApiKeyForProvider(m.family);
+            // Custom provider models (family = custom provider ID). A custom
+            // provider is user-registered, so its presence in the config is the
+            // opt-in signal to expose it — unlike built-in providers it may
+            // legitimately have no API key (e.g. a local endpoint). Fall back to
+            // the API-key check for robustness if it is not (yet) registered.
+            return this.router.isCustomProvider(m.family) || this.router.hasApiKeyForProvider(m.family);
         });
 
         return models.map((model, index) => ({

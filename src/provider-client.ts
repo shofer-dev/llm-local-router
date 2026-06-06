@@ -505,6 +505,18 @@ export class ProviderRouter {
     }
 
     /**
+     * Check whether a provider ID refers to a registered custom provider.
+     *
+     * Custom providers are user-registered, so their presence in the config is
+     * the opt-in signal to expose them via the VS Code LM API — unlike built-in
+     * providers, a custom provider may legitimately have no stored API key
+     * (e.g. a local endpoint).
+     */
+    isCustomProvider(providerId: string): boolean {
+        return this.customProviders.has(providerId);
+    }
+
+    /**
      * Count how many providers have API keys configured (built-in + custom).
      */
     getConfiguredProviderCount(): number {
