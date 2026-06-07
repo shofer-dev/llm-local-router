@@ -1,0 +1,14 @@
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+if [ "$branch" = "main" ]; then
+  echo "You can't push directly to main - please check out a branch."
+  exit 1
+fi
+
+# Run tsc to catch type errors.
+npx tsc --skipLibCheck --noEmit
+
+# Run all test suites.
+# A single failure blocks the push.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+"$REPO_ROOT/run-tests.sh"

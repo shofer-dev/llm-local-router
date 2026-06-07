@@ -171,6 +171,7 @@
     }
   },
   "scripts": {
+    "prepare": "husky",
     "compile": "tsc -p ./tsconfig.json",
     "watch": "tsc -p ./tsconfig.json --watch",
     "package": "npm run compile && npx @vscode/vsce package"
@@ -182,8 +183,9 @@
     "@types/node": "^22.10.0",
     "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.96.0",
-    "typescript": "^5.7.2",
-    "@vscode/vsce": "^3.2.2"
+    "@vscode/vsce": "^3.2.2",
+    "husky": "^9.1.7",
+    "typescript": "^5.7.2"
   },
   "overrides": {
     "encoding-sniffer": "0.2.1"
