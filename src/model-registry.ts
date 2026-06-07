@@ -244,14 +244,242 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         pricing: $(0.0005, 0.001),
         imageInput: false, toolCalling: true,
     },
+    // ═══ Mistral ═══
+    {
+        id: 'mistral-large-latest', name: 'Mistral Large',
+        description: "Mistral's flagship model for complex reasoning and agentic coding with native function calling",
+        contextLength: 262_144, maxOutputTokens: 131_072,
+        provider: ProviderType.Mistral,
+        pricing: $(0.002, 0.006),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'codestral-latest', name: 'Codestral',
+        description: "Mistral's specialized coding model optimized for code generation and completion",
+        contextLength: 262_144, maxOutputTokens: 131_072,
+        provider: ProviderType.Mistral,
+        pricing: $(0.001, 0.003),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'pixtral-large-latest', name: 'Pixtral Large',
+        description: "Mistral's multimodal model with vision capabilities",
+        contextLength: 131_072, maxOutputTokens: 131_072,
+        provider: ProviderType.Mistral,
+        pricing: $(0.002, 0.006),
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ xAI ═══
+    {
+        id: 'grok-4', name: 'Grok 4',
+        description: "xAI's flagship large language model for reasoning and coding",
+        contextLength: 1_000_000, maxOutputTokens: 131_072,
+        provider: ProviderType.XAI,
+        pricing: $(0.003, 0.015),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'grok-4-mini', name: 'Grok 4 Mini',
+        description: "xAI's small, fast model for efficient reasoning and coding tasks",
+        contextLength: 1_000_000, maxOutputTokens: 131_072,
+        provider: ProviderType.XAI,
+        pricing: $(0.0006, 0.003),
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ AWS Bedrock ═══
+    {
+        id: 'anthropic.claude-sonnet-4-20250514-v1:0', name: 'Bedrock Claude Sonnet 4',
+        description: 'AWS Bedrock Claude Sonnet 4 via Converse API',
+        contextLength: 200_000, maxOutputTokens: 65_536,
+        provider: ProviderType.Bedrock,
+        pricing: $(0.003, 0.015, 0.0003, 0.00375),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'anthropic.claude-opus-4-20250514-v1:0', name: 'Bedrock Claude Opus 4',
+        description: 'AWS Bedrock Claude Opus 4 via Converse API',
+        contextLength: 200_000, maxOutputTokens: 65_536,
+        provider: ProviderType.Bedrock,
+        pricing: $(0.015, 0.075, 0.0015, 0.01875),
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ Vertex AI (Gemini) ═══
+    // Note: These share the same model IDs as Google Gemini — the provider
+    // routing distinguishes by ProviderType, not model ID. The index below
+    // prefers the first (Google) entry for bare-ID lookups; Vertex entries
+    // are accessible via "vertex/gemini-3-pro-preview" key form.
+    {
+        id: 'gemini-3-pro-preview', name: 'Vertex Gemini 3 Pro',
+        description: 'Google Vertex AI Gemini 3 Pro model for thinking and agentic coding',
+        contextLength: 1_048_576, maxOutputTokens: 65_536,
+        provider: ProviderType.Vertex,
+        pricing: { prompt: 0.002, completion: 0.012, promptAbove200K: 0.004, completionAbove200K: 0.018, contextCacheRead: 0.0002, discount: 0.5 },
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'gemini-3-flash-preview', name: 'Vertex Gemini 3 Flash',
+        description: 'Google Vertex AI Gemini 3 Flash for speed with frontier intelligence',
+        contextLength: 1_048_576, maxOutputTokens: 65_536,
+        provider: ProviderType.Vertex,
+        pricing: { prompt: 0.0005, completion: 0.003, contextCacheRead: 0.00005, discount: 0.5 },
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ Anthropic Vertex ═══
+    {
+        id: 'claude-sonnet-4-20250514', name: 'Vertex Claude Sonnet 4',
+        description: 'Anthropic Claude Sonnet 4 via Google Cloud Vertex AI',
+        contextLength: 200_000, maxOutputTokens: 65_536,
+        provider: ProviderType.AnthropicVertex,
+        pricing: $(0.003, 0.015, 0.0003, 0.00375),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'claude-opus-4-20250514', name: 'Vertex Claude Opus 4',
+        description: 'Anthropic Claude Opus 4 via Google Cloud Vertex AI',
+        contextLength: 200_000, maxOutputTokens: 65_536,
+        provider: ProviderType.AnthropicVertex,
+        pricing: $(0.015, 0.075, 0.0015, 0.01875),
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ Ollama ═══
+    {
+        id: 'llama4-maverick', name: 'Llama 4 Maverick',
+        description: 'Meta Llama 4 Maverick (via Ollama) — 17B active params, MoE architecture',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.Ollama,
+        pricing: { prompt: 0, completion: 0 },
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'qwen3-coder', name: 'Qwen 3 Coder',
+        description: 'Alibaba Qwen 3 Coder (via Ollama) — specialized for code generation',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.Ollama,
+        pricing: { prompt: 0, completion: 0 },
+        imageInput: false, toolCalling: true,
+    },
+
+    // ═══ LM Studio ═══
+    {
+        id: 'lmstudio-default', name: 'LM Studio Model',
+        description: 'Local model hosted by LM Studio (OpenAI-compatible)',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.LmStudio,
+        pricing: { prompt: 0, completion: 0 },
+        imageInput: false, toolCalling: true,
+    },
+
+    // ═══ Fireworks AI ═══
+    {
+        id: 'accounts/fireworks/models/llama-v3p3-70b-instruct', name: 'Llama 3.3 70B (Fireworks)',
+        description: 'Meta Llama 3.3 70B via Fireworks AI — fast, cost-effective inference',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.Fireworks,
+        pricing: $(0.0009, 0.0009),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'accounts/fireworks/models/deepseek-v3', name: 'DeepSeek V3 (Fireworks)',
+        description: 'DeepSeek V3 via Fireworks AI',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.Fireworks,
+        pricing: $(0.001, 0.001),
+        imageInput: false, toolCalling: true,
+    },
+
+    // ═══ SambaNova ═══
+    {
+        id: 'Meta-Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B (SambaNova)',
+        description: 'Meta Llama 3.3 70B via SambaNova — high throughput inference',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.SambaNova,
+        pricing: $(0.0006, 0.0012),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'DeepSeek-V3-0324', name: 'DeepSeek V3 (SambaNova)',
+        description: 'DeepSeek V3 via SambaNova',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.SambaNova,
+        pricing: $(0.001, 0.001),
+        imageInput: false, toolCalling: true,
+    },
+
+    // ═══ Baseten ═══
+    {
+        id: 'deepseek-r1', name: 'DeepSeek R1 (Baseten)',
+        description: 'DeepSeek R1 reasoning model via Baseten inference',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.Baseten,
+        pricing: $(0.001, 0.001),
+        imageInput: false, toolCalling: true,
+    },
+
+    // ═══ Requesty ═══
+    {
+        id: 'requesty-default', name: 'Requesty Router',
+        description: 'Requesty LLM router — proxies to multiple underlying providers',
+        contextLength: 200_000, maxOutputTokens: 32_768,
+        provider: ProviderType.Requesty,
+        pricing: $(0.001, 0.003),
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ Unbound ═══
+    {
+        id: 'unbound-default', name: 'Unbound Router',
+        description: 'Unbound LLM router — proxies to multiple underlying providers',
+        contextLength: 200_000, maxOutputTokens: 32_768,
+        provider: ProviderType.Unbound,
+        pricing: $(0.001, 0.003),
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ Vercel AI Gateway ═══
+    {
+        id: 'vercel-ai-gateway-default', name: 'Vercel AI Gateway',
+        description: 'Vercel AI Gateway — proxies to multiple underlying providers',
+        contextLength: 200_000, maxOutputTokens: 32_768,
+        provider: ProviderType.VercelAiGateway,
+        pricing: $(0.001, 0.003),
+        imageInput: true, toolCalling: true,
+    },
+
+    // ═══ Z.ai ═══
+    {
+        id: 'glm-4.7-zai', name: 'GLM-4.7 (Z.ai)',
+        description: 'Zhipu GLM-4.7 via Z.ai international API with turn-level thinking',
+        contextLength: 200_000, maxOutputTokens: 131_072,
+        provider: ProviderType.ZAi,
+        pricing: $(0.0008, 0.0016),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'glm-5-zai', name: 'GLM-5 (Z.ai)',
+        description: 'Zhipu GLM-5 via Z.ai international API with interleaved thinking',
+        contextLength: 200_000, maxOutputTokens: 131_072,
+        provider: ProviderType.ZAi,
+        pricing: $(0.001, 0.002),
+        imageInput: false, toolCalling: true,
+    },
 ];
 
 // ─── Lookup helpers ──────────────────────────────────────────────────
 
 const modelIndex = new Map<string, ModelRegistryEntry>();
 for (const m of ALL_MODELS) {
-    modelIndex.set(m.id, m);
-    // Also index by "provider/id" form
+    // Index by bare id only once (first entry wins) so duplicates from
+    // different providers (e.g. Vertex sharing Google model IDs) don't
+    // silently clobber the primary entry.
+    if (!modelIndex.has(m.id)) {
+        modelIndex.set(m.id, m);
+    }
+    // Always index by "provider/id" form for full disambiguation.
     modelIndex.set(`${m.provider}/${m.id}`, m);
 }
 

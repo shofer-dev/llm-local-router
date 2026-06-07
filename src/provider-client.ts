@@ -43,19 +43,46 @@ import {
     getGoogleBaseUrl,
 } from './providers/google';
 import { getOpenRouterBaseUrl } from './providers/openrouter';
+import { prepareMistralRequest, getMistralBaseUrl } from './providers/mistral';
+import { prepareXAIRequest, getXAIBaseUrl } from './providers/xai';
+import { prepareBedrockRequest, getBedrockBaseUrl } from './providers/bedrock';
+import { prepareVertexRequest, getVertexBaseUrl } from './providers/vertex';
+import { prepareOllamaRequest, getOllamaBaseUrl } from './providers/ollama';
+import { prepareLmStudioRequest, getLmStudioBaseUrl } from './providers/lmstudio';
+import { prepareFireworksRequest, getFireworksBaseUrl } from './providers/fireworks';
+import { prepareSambaNovaRequest, getSambaNovaBaseUrl } from './providers/sambanova';
+import { prepareBasetenRequest, getBasetenBaseUrl } from './providers/baseten';
+import { prepareRequestyRequest, getRequestyBaseUrl } from './providers/requesty';
+import { prepareUnboundRequest, getUnboundBaseUrl } from './providers/unbound';
+import { prepareVercelAiGatewayRequest, getVercelAiGatewayBaseUrl } from './providers/vercel-ai-gateway';
+import { prepareZAiRequest, getZAiBaseUrl } from './providers/zai';
 
 // ─── Provider endpoint configuration ───────────────────────────────
 
 const PROVIDER_BASE_URLS: Record<ProviderType, string> = {
     [ProviderType.OpenAI]: 'https://api.openai.com/v1',
     [ProviderType.Anthropic]: 'https://api.anthropic.com/v1',
-    [ProviderType.Google]: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    [ProviderType.Google]: 'https://generativelanguage.googleapis.com/v1beta',
     [ProviderType.DeepSeek]: 'https://api.deepseek.com/v1',
     [ProviderType.MiniMax]: 'https://api.minimax.io/v1',
     [ProviderType.Moonshot]: 'https://api.moonshot.cn/v1',
     [ProviderType.Xiaomi]: 'https://api.xiaomimimo.com/v1',
     [ProviderType.Zhipu]: 'https://open.bigmodel.cn/api/paas/v4',
     [ProviderType.OpenRouter]: 'https://openrouter.ai/api/v1',
+    [ProviderType.Mistral]: 'https://api.mistral.ai/v1',
+    [ProviderType.XAI]: 'https://api.x.ai/v1',
+    [ProviderType.Bedrock]: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+    [ProviderType.Vertex]: 'https://us-central1-aiplatform.googleapis.com/v1',
+    [ProviderType.AnthropicVertex]: 'https://us-central1-aiplatform.googleapis.com/v1',
+    [ProviderType.Ollama]: 'http://localhost:11434/v1',
+    [ProviderType.LmStudio]: 'http://localhost:1234/v1',
+    [ProviderType.Fireworks]: 'https://api.fireworks.ai/inference/v1',
+    [ProviderType.SambaNova]: 'https://api.sambanova.ai/v1',
+    [ProviderType.Baseten]: 'https://inference.baseten.co/v1',
+    [ProviderType.Requesty]: 'https://api.requesty.ai/v1',
+    [ProviderType.Unbound]: 'https://api.getunbound.ai/v1',
+    [ProviderType.VercelAiGateway]: 'https://ai-gateway.vercel.sh/v1',
+    [ProviderType.ZAi]: 'https://api.z.ai/v1',
 };
 
 /**
@@ -151,6 +178,86 @@ export class ProviderRouter {
         // OpenRouter: pure passthrough
         this.handlerCache.set(ProviderType.OpenRouter, {
             preparer: (_req) => { /* no-op */ },
+        });
+
+        // Mistral: OpenAI-compatible
+        this.handlerCache.set(ProviderType.Mistral, {
+            preparer: prepareMistralRequest,
+        });
+
+        // xAI (Grok): OpenAI-compatible
+        this.handlerCache.set(ProviderType.XAI, {
+            preparer: prepareXAIRequest,
+        });
+
+        // Bedrock: AWS-native Converse API (custom send path)
+        this.handlerCache.set(ProviderType.Bedrock, {
+            preparer: prepareBedrockRequest,
+        });
+
+        // Vertex AI (Gemini): Reuses Google Gemini native API
+        this.handlerCache.set(ProviderType.Vertex, {
+            preparer: prepareVertexRequest,
+            customSend: async (apiKey, req, onChunk, abortController) => {
+                if (req.stream) {
+                    return sendGeminiStreamingRequest(apiKey, req, onChunk, abortController);
+                }
+                return sendGeminiNonStreamingRequest(apiKey, req, abortController);
+            },
+        });
+
+        // Anthropic Vertex: Reuses Anthropic Messages API
+        this.handlerCache.set(ProviderType.AnthropicVertex, {
+            preparer: prepareAnthropicRequest,
+            customSend: async (apiKey, req, onChunk, abortController) => {
+                const anthropicReq = prepareAnthropicRequest(req);
+                return sendAnthropicRequest(apiKey, anthropicReq, onChunk, abortController);
+            },
+        });
+
+        // Ollama: OpenAI-compatible
+        this.handlerCache.set(ProviderType.Ollama, {
+            preparer: prepareOllamaRequest,
+        });
+
+        // LM Studio: OpenAI-compatible
+        this.handlerCache.set(ProviderType.LmStudio, {
+            preparer: prepareLmStudioRequest,
+        });
+
+        // Fireworks: OpenAI-compatible
+        this.handlerCache.set(ProviderType.Fireworks, {
+            preparer: prepareFireworksRequest,
+        });
+
+        // SambaNova: OpenAI-compatible
+        this.handlerCache.set(ProviderType.SambaNova, {
+            preparer: prepareSambaNovaRequest,
+        });
+
+        // Baseten: OpenAI-compatible
+        this.handlerCache.set(ProviderType.Baseten, {
+            preparer: prepareBasetenRequest,
+        });
+
+        // Requesty: OpenAI-compatible router
+        this.handlerCache.set(ProviderType.Requesty, {
+            preparer: prepareRequestyRequest,
+        });
+
+        // Unbound: OpenAI-compatible router
+        this.handlerCache.set(ProviderType.Unbound, {
+            preparer: prepareUnboundRequest,
+        });
+
+        // Vercel AI Gateway: OpenAI-compatible proxying
+        this.handlerCache.set(ProviderType.VercelAiGateway, {
+            preparer: prepareVercelAiGatewayRequest,
+        });
+
+        // Z.ai: OpenAI-compatible with thinking support
+        this.handlerCache.set(ProviderType.ZAi, {
+            preparer: prepareZAiRequest,
         });
     }
 

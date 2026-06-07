@@ -50,11 +50,15 @@ describe('model-registry', () => {
             }
         });
 
-        it('all model ids are unique', () => {
-            const ids = new Set<string>();
+        it('all model ids are unique within each provider', () => {
+            // Same model IDs may appear under different providers (e.g.
+            // Vertex shares Google Gemini model IDs).  Duplicates are
+            // allowed across providers but must be unique per provider.
+            const seen = new Map<string, ProviderType>();
             for (const m of ALL_MODELS) {
-                assert.ok(!ids.has(m.id), `duplicate model id: ${m.id}`);
-                ids.add(m.id);
+                const key = `${m.provider}/${m.id}`;
+                assert.ok(!seen.has(key), `duplicate model id within provider: ${m.provider}/${m.id}`);
+                seen.set(key, m.provider);
             }
         });
     });

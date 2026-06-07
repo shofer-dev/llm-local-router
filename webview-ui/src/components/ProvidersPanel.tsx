@@ -303,6 +303,7 @@ export default function ProvidersPanel({ providers }: Props) {
     providers.length > 0 ? providers[0].id : null,
   );
   const [forms, setForms] = React.useState<Record<string, ProviderForm>>({});
+  const [advancedForms, setAdvancedForms] = React.useState<Record<string, Record<string, string>>>({});
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
 
@@ -322,6 +323,7 @@ export default function ProvidersPanel({ providers }: Props) {
   // Initialize forms from provider config
   React.useEffect(() => {
     const init: Record<string, ProviderForm> = {};
+    const advInit: Record<string, Record<string, string>> = {};
     for (const p of providers) {
       init[p.id] = {
         apiKey: '',
@@ -330,8 +332,17 @@ export default function ProvidersPanel({ providers }: Props) {
         completionPrice: p.pricing?.completion?.toString() ?? '',
         cacheReadPrice: p.pricing?.cacheRead?.toString() ?? '',
       };
+      if (p.advancedFields) {
+        advInit[p.id] = p.advancedValues ?? {};
+        for (const af of p.advancedFields) {
+          if (!advInit[p.id][af.key]) {
+            advInit[p.id][af.key] = '';
+          }
+        }
+      }
     }
     setForms(init);
+    setAdvancedForms(advInit);
   }, [providers]);
 
   // Request custom providers when this component mounts
@@ -419,12 +430,15 @@ export default function ProvidersPanel({ providers }: Props) {
           }
         : undefined;
 
+    const advValues = advancedForms[selectedId];
+
     postMessage({
       type: 'saveProvider',
       provider: selectedId,
       apiKey: form.apiKey,
       endpointUrl: form.endpointUrl,
       pricing,
+      advancedValues: advValues,
     });
   };
 
@@ -454,6 +468,15 @@ export default function ProvidersPanel({ providers }: Props) {
     f: { apiKey: string; endpointUrl: string; promptPrice: string; completionPrice: string; cacheReadPrice: string }
   ) => {
     setForms(prev => ({ ...prev, [cfgId]: f }));
+  };
+
+  /** Update an advanced field value for the selected provider. */
+  const updateAdvancedField = (providerId: string, key: string, value: string) => {
+    setAdvancedForms((prev) => ({
+      ...prev,
+      [providerId]: { ...(prev[providerId] ?? {}), [key]: value },
+    }));
+    setSaved(false);
   };
 
   // ─── Determine what to show in the right panel ──────────────────
@@ -615,6 +638,30 @@ export default function ProvidersPanel({ providers }: Props) {
                 Leave blank to use default pricing from the model registry.
               </div>
             </div>
+
+            {selected.advancedFields && selected.advancedFields.length > 0 && (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ ...formStyles.fieldLabel, marginBottom: '6px' }}>
+                  Advanced Configuration
+                </label>
+                {selected.advancedFields.map((af) => (
+                  <div key={af.key} style={{ marginBottom: '8px' }}>
+                    <label style={formStyles.subLabel}>{af.label}</label>
+                    <input
+                      type={af.type === 'password' ? 'password' : 'text'}
+                      className="vscode-input"
+                      style={{ width: '100%' }}
+                      value={(advancedForms[selected.id]?.[af.key]) ?? ''}
+                      onChange={(e) => updateAdvancedField(selected.id, af.key, e.target.value)}
+                      placeholder={af.placeholder}
+                    />
+                    <div style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
+                      {af.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div style={{
               padding: '8px',

@@ -155,6 +155,16 @@ export interface ProviderConfigEntry {
   pricing?: ProviderPricing;
   /** Default pricing from the registry (USD per 1M tokens) */
   defaultPricing?: ProviderPricing;
+  /** Additional provider-specific configuration fields shown in the UI */
+  advancedFields?: Array<{
+    key: string;
+    label: string;
+    placeholder: string;
+    type: 'text' | 'password' | 'number';
+    description: string;
+  }>;
+  /** User-set values for advanced fields */
+  advancedValues?: Record<string, string>;
 }
 
 // ─── Custom providers (webview-side) ──────────────────────────────
@@ -215,7 +225,7 @@ export type WebviewMessage =
   | { type: 'exportConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'importConfig' }
   | { type: 'testModel'; modelId: string }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing }
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing; advancedValues?: Record<string, string> }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
   | { type: 'deleteCustomProvider'; providerId: string }
   | { type: 'requestCustomProviders' }

@@ -36,7 +36,7 @@ import {
 
 // ─── Provider defaults ──────────────────────────────────────────────
 
-const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string }> = {
+const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string; advancedFields?: Array<{ key: string; label: string; placeholder: string; type: 'text' | 'password' | 'number'; description: string }> }> = {
   openai: { label: 'OpenAI', defaultEndpoint: 'https://api.openai.com/v1' },
   anthropic: { label: 'Anthropic', defaultEndpoint: 'https://api.anthropic.com/v1' },
   google: { label: 'Google Gemini', defaultEndpoint: 'https://generativelanguage.googleapis.com/v1beta' },
@@ -46,6 +46,63 @@ const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string
   xiaomi: { label: 'Xiaomi MiMo', defaultEndpoint: 'https://api.xiaomimimo.com/v1' },
   zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://open.bigmodel.cn/api/paas/v4' },
   openrouter: { label: 'OpenRouter', defaultEndpoint: 'https://openrouter.ai/api/v1' },
+  mistral: { label: 'Mistral AI', defaultEndpoint: 'https://api.mistral.ai/v1' },
+  xai: { label: 'xAI (Grok)', defaultEndpoint: 'https://api.x.ai/v1' },
+  bedrock: {
+    label: 'AWS Bedrock',
+    defaultEndpoint: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+    advancedFields: [
+      { key: 'awsRegion', label: 'AWS Region', placeholder: 'us-east-1', type: 'text', description: 'AWS region for Bedrock API (e.g., us-east-1, us-west-2)' },
+      { key: 'awsAccessKey', label: 'AWS Access Key ID', placeholder: 'AKIA...', type: 'text', description: 'AWS IAM access key for Bedrock authentication' },
+      { key: 'awsSecretKey', label: 'AWS Secret Access Key', placeholder: '(stored securely)', type: 'password', description: 'AWS IAM secret key. Stored via SecretStorage.' },
+      { key: 'awsCustomArn', label: 'Custom ARN (optional)', placeholder: 'arn:aws:bedrock:...', type: 'text', description: 'Custom model ARN for cross-region inference or provisioned throughput' },
+    ],
+  },
+  vertex: {
+    label: 'Google Vertex AI',
+    defaultEndpoint: 'https://us-central1-aiplatform.googleapis.com/v1',
+    advancedFields: [
+      { key: 'vertexProjectId', label: 'GCP Project ID', placeholder: 'my-project', type: 'text', description: 'Google Cloud project ID for Vertex AI' },
+      { key: 'vertexRegion', label: 'GCP Region', placeholder: 'us-central1', type: 'text', description: 'Google Cloud region for Vertex AI (e.g., us-central1, europe-west4)' },
+      { key: 'vertexCredentials', label: 'Service Account JSON', placeholder: 'Paste JSON key or leave empty for ADC', type: 'password', description: 'Service account JSON key. Leave empty to use Application Default Credentials.' },
+    ],
+  },
+  'anthropic-vertex': {
+    label: 'Anthropic (Vertex)',
+    defaultEndpoint: 'https://us-east5-aiplatform.googleapis.com/v1',
+    advancedFields: [
+      { key: 'vertexProjectId', label: 'GCP Project ID', placeholder: 'my-project', type: 'text', description: 'Google Cloud project ID' },
+      { key: 'vertexRegion', label: 'GCP Region', placeholder: 'us-east5', type: 'text', description: 'Google Cloud region for Anthropic on Vertex' },
+      { key: 'vertexCredentials', label: 'Service Account JSON', placeholder: 'Paste JSON key or leave empty for ADC', type: 'password', description: 'Service account JSON key.' },
+    ],
+  },
+  ollama: {
+    label: 'Ollama (Local)',
+    defaultEndpoint: 'http://localhost:11434/v1',
+    advancedFields: [
+      { key: 'ollamaNumCtx', label: 'Context Size (num_ctx)', placeholder: '2048', type: 'number', description: 'Override Ollama model context window size (num_ctx parameter)' },
+    ],
+  },
+  lmstudio: {
+    label: 'LM Studio (Local)',
+    defaultEndpoint: 'http://localhost:1234/v1',
+    advancedFields: [
+      { key: 'lmStudioDraftModelId', label: 'Draft Model ID (optional)', placeholder: 'draft-model-id', type: 'text', description: 'Draft model for speculative decoding (LM Studio feature)' },
+    ],
+  },
+  fireworks: { label: 'Fireworks AI', defaultEndpoint: 'https://api.fireworks.ai/inference/v1' },
+  sambanova: { label: 'SambaNova', defaultEndpoint: 'https://api.sambanova.ai/v1' },
+  baseten: { label: 'Baseten', defaultEndpoint: 'https://inference.baseten.co/v1' },
+  requesty: { label: 'Requesty Router', defaultEndpoint: 'https://api.requesty.ai/v1' },
+  unbound: { label: 'Unbound Router', defaultEndpoint: 'https://api.getunbound.ai/v1' },
+  'vercel-ai-gateway': { label: 'Vercel AI Gateway', defaultEndpoint: 'https://ai-gateway.vercel.sh/v1' },
+  zai: {
+    label: 'Z.ai (Zhipu Intl.)',
+    defaultEndpoint: 'https://api.z.ai/v1',
+    advancedFields: [
+      { key: 'zaiApiLine', label: 'API Line', placeholder: 'international_coding', type: 'text', description: 'Z.ai API routing line: "international_coding" (default) or "china_coding"' },
+    ],
+  },
 };
 
 /** The tab to show when opening the webview panel. */
@@ -100,6 +157,10 @@ interface ProviderConfigEntry {
   modelCount: number;
   pricing?: { prompt?: number; completion?: number; cacheRead?: number };
   defaultPricing?: { prompt?: number; completion?: number; cacheRead?: number };
+  /** Additional provider-specific configuration fields shown in the UI */
+  advancedFields?: Array<{ key: string; label: string; placeholder: string; type: 'text' | 'password' | 'number'; description: string }>;
+  /** User-set values for advanced fields */
+  advancedValues?: Record<string, string>;
 }
 
 interface MetricsPayload {
@@ -158,7 +219,7 @@ type WebviewMessage =
   | { type: 'validateConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'exportConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'importConfig' }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number } }
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number }; advancedValues?: Record<string, string> }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
   | { type: 'deleteCustomProvider'; providerId: string }
   | { type: 'queryMetrics'; metric: string; modelIds: string[]; since: string; until: string };
@@ -271,7 +332,7 @@ export class RouterConfigProvider {
         await this.sendCustomProviders();
         break;
       case 'saveProvider':
-        await this.handleSaveProvider(message.provider, message.apiKey, message.endpointUrl, message.pricing);
+        await this.handleSaveProvider(message.provider, message.apiKey, message.endpointUrl, message.pricing, message.advancedValues);
         break;
       case 'saveCustomProvider':
         await this.handleSaveCustomProvider(message.provider, message.apiKey);
@@ -436,6 +497,8 @@ export class RouterConfigProvider {
         const ep = await this.context.secrets.get(`shofer-router.provider.${id}.endpoint`);
         const pricingRaw = await this.context.secrets.get(`shofer-router.provider.${id}.pricing`);
         const pricing = pricingRaw ? JSON.parse(pricingRaw) : undefined;
+        const advancedRaw = await this.context.secrets.get(`shofer-router.provider.${id}.advanced`);
+        const advancedValues = advancedRaw ? JSON.parse(advancedRaw) : undefined;
         const modelCount = models.filter(m => {
           for (const entry of ALL_MODELS) if (entry.id === m.id && entry.provider === id) return true;
           return false;
@@ -446,15 +509,21 @@ export class RouterConfigProvider {
           completion: (registryEntry.pricing.completion ?? 0) * 1000,
           cacheRead: (registryEntry.pricing.contextCacheRead ?? 0) * 1000,
         } : undefined;
-        providers.push({ id, label: def.label, hasApiKey: !!key, endpointUrl: ep || def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint, modelCount, pricing, defaultPricing });
+        providers.push({ id, label: def.label, hasApiKey: !!key, endpointUrl: ep || def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint, modelCount, pricing, defaultPricing, advancedFields: def.advancedFields, advancedValues });
       } catch {
-        providers.push({ id, label: def.label, hasApiKey: false, endpointUrl: def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint, modelCount: 0 });
+        providers.push({ id, label: def.label, hasApiKey: false, endpointUrl: def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint, modelCount: 0, advancedFields: def.advancedFields });
       }
     }
     this.panel.webview.postMessage({ type: 'initProviderConfig', providers });
   }
 
-  private async handleSaveProvider(provider: string, apiKey: string, endpointUrl: string, pricing?: { prompt?: number; completion?: number; cacheRead?: number }): Promise<void> {
+  private async handleSaveProvider(
+    provider: string,
+    apiKey: string,
+    endpointUrl: string,
+    pricing?: { prompt?: number; completion?: number; cacheRead?: number },
+    advancedValues?: Record<string, string>,
+  ): Promise<void> {
     const logger = (await import('./logger')).getLogger();
     try {
       if (apiKey.trim()) { await storeApiKey(this.context, provider, apiKey.trim()); logger.info(`Saved API key for ${provider}`); }
@@ -466,6 +535,14 @@ export class RouterConfigProvider {
       const pKey = `shofer-router.provider.${provider}.pricing`;
       if (pricing && (pricing.prompt || pricing.completion || pricing.cacheRead)) { await this.context.secrets.store(pKey, JSON.stringify(pricing)); logger.info(`Saved pricing overrides for ${provider}`); }
       else { await this.context.secrets.delete(pKey); }
+      // Save advanced field values
+      const advKey = `shofer-router.provider.${provider}.advanced`;
+      if (advancedValues && Object.keys(advancedValues).some(k => advancedValues[k]?.trim())) {
+        await this.context.secrets.store(advKey, JSON.stringify(advancedValues));
+        logger.info(`Saved advanced config for ${provider}`);
+      } else {
+        await this.context.secrets.delete(advKey);
+      }
       const { loadApiKeys, loadEndpointUrls } = await import('./secret-storage');
       const keys = await loadApiKeys(this.context);
       const eps = await loadEndpointUrls(this.context);
