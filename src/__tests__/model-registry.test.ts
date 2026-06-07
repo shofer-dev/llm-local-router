@@ -18,8 +18,8 @@ import { ProviderType } from '../types';
 
 describe('model-registry', () => {
     describe('ALL_MODELS', () => {
-        it('contains at least 25 models', () => {
-            assert.ok(ALL_MODELS.length >= 25, `expected >= 25, got ${ALL_MODELS.length}`);
+        it('contains at least 45 models', () => {
+            assert.ok(ALL_MODELS.length >= 45, `expected >= 45, got ${ALL_MODELS.length}`);
         });
 
         it('every model has a non-empty id', () => {
@@ -91,7 +91,7 @@ describe('model-registry', () => {
             assert.equal(getModelById(''), undefined);
         });
 
-        // Spot-check one model from each provider
+        // Spot-check one model from each provider (built-in + new)
         const spotChecks: Array<[string, ProviderType]> = [
             ['gpt-5.4-mini', ProviderType.OpenAI],
             ['claude-haiku-4-5', ProviderType.Anthropic],
@@ -102,6 +102,29 @@ describe('model-registry', () => {
             ['mimo-v2-flash', ProviderType.Xiaomi],
             ['glm-4.5', ProviderType.Zhipu],
         ];
+        const newProviderChecks: Array<[string, ProviderType]> = [
+            ['mistral-large-latest', ProviderType.Mistral],
+            ['grok-4', ProviderType.XAI],
+            ['anthropic.claude-sonnet-4-20250514-v1:0', ProviderType.Bedrock],
+            ['claude-opus-4-20250514', ProviderType.AnthropicVertex],
+            ['claude-opus-4-7', ProviderType.Anthropic],
+            ['llama4-maverick', ProviderType.Ollama],
+            ['lmstudio-default', ProviderType.LmStudio],
+            ['accounts/fireworks/models/llama-v3p3-70b-instruct', ProviderType.Fireworks],
+            ['Meta-Llama-3.3-70B-Instruct', ProviderType.SambaNova],
+            ['deepseek-r1', ProviderType.Baseten],
+            ['requesty-default', ProviderType.Requesty],
+            ['unbound-default', ProviderType.Unbound],
+            ['vercel-ai-gateway-default', ProviderType.VercelAiGateway],
+            ['glm-4.7-zai', ProviderType.ZAi],
+        ];
+        for (const [id, expectedProvider] of newProviderChecks) {
+            it(`finds ${id} → ${expectedProvider}`, () => {
+                const m = getModelById(id);
+                assert.ok(m, `${id} not found`);
+                assert.equal(m.provider, expectedProvider);
+            });
+        }
 
         for (const [id, expectedProvider] of spotChecks) {
             it(`finds ${id} → ${expectedProvider}`, () => {
@@ -139,6 +162,21 @@ describe('model-registry', () => {
         it('returns Zhipu models', () => {
             const models = getModelsByProvider(ProviderType.Zhipu);
             assert.equal(models.length, 5);
+        });
+
+        it('returns Mistral models', () => {
+            const models = getModelsByProvider(ProviderType.Mistral);
+            assert.equal(models.length, 3);
+        });
+
+        it('returns Bedrock models', () => {
+            const models = getModelsByProvider(ProviderType.Bedrock);
+            assert.equal(models.length, 2);
+        });
+
+        it('returns Ollama models', () => {
+            const models = getModelsByProvider(ProviderType.Ollama);
+            assert.equal(models.length, 2);
         });
 
         it('returns empty array for unknown provider', () => {

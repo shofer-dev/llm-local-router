@@ -369,6 +369,236 @@ describe('providers/openrouter', () => {
     });
 });
 
+// ─── Mistral ───────────────────────────────────────────────────────
+
+import { prepareMistralRequest } from '../providers/mistral';
+
+describe('providers/mistral', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'mistral-large-latest',
+            messages: [{ role: MessageRole.User, content: 'hello' }],
+            maxTokens: 4096,
+            temperature: 0.7,
+        };
+        prepareMistralRequest(req);
+        assert.equal(req.extraBody, undefined);
+        assert.equal(req.model, 'mistral-large-latest');
+    });
+});
+
+// ─── xAI ───────────────────────────────────────────────────────────
+
+import { prepareXAIRequest } from '../providers/xai';
+
+describe('providers/xai', () => {
+    it('is a no-op passthrough for Grok models', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'grok-4',
+            messages: [{ role: MessageRole.User, content: 'hello' }],
+        };
+        prepareXAIRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── Bedrock ───────────────────────────────────────────────────────
+
+import { prepareBedrockRequest } from '../providers/bedrock';
+
+describe('providers/bedrock', () => {
+    it('injects anthropic_version into extraBody', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+            messages: [],
+        };
+        prepareBedrockRequest(req);
+        assert.ok(req.extraBody);
+        assert.equal(req.extraBody!.anthropic_version, 'bedrock-2023-05-31');
+    });
+});
+
+// ─── Ollama ────────────────────────────────────────────────────────
+
+import { prepareOllamaRequest } from '../providers/ollama';
+
+describe('providers/ollama', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'llama4-maverick',
+            messages: [{ role: MessageRole.User, content: 'hello' }],
+        };
+        prepareOllamaRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── LM Studio ─────────────────────────────────────────────────────
+
+import { prepareLmStudioRequest } from '../providers/lmstudio';
+
+describe('providers/lmstudio', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'lmstudio-default',
+            messages: [{ role: MessageRole.User, content: 'test' }],
+        };
+        prepareLmStudioRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── Fireworks ─────────────────────────────────────────────────────
+
+import { prepareFireworksRequest } from '../providers/fireworks';
+
+describe('providers/fireworks', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
+            messages: [],
+        };
+        prepareFireworksRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── SambaNova ─────────────────────────────────────────────────────
+
+import { prepareSambaNovaRequest } from '../providers/sambanova';
+
+describe('providers/sambanova', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'Meta-Llama-3.3-70B-Instruct',
+            messages: [],
+        };
+        prepareSambaNovaRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── Baseten ───────────────────────────────────────────────────────
+
+import { prepareBasetenRequest } from '../providers/baseten';
+
+describe('providers/baseten', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'deepseek-r1',
+            messages: [],
+        };
+        prepareBasetenRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── Requesty ──────────────────────────────────────────────────────
+
+import { prepareRequestyRequest } from '../providers/requesty';
+
+describe('providers/requesty', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'requesty-default',
+            messages: [],
+        };
+        prepareRequestyRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── Unbound ───────────────────────────────────────────────────────
+
+import { prepareUnboundRequest } from '../providers/unbound';
+
+describe('providers/unbound', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'unbound-default',
+            messages: [],
+        };
+        prepareUnboundRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── Vercel AI Gateway ────────────────────────────────────────────
+
+import { prepareVercelAiGatewayRequest } from '../providers/vercel-ai-gateway';
+
+describe('providers/vercel-ai-gateway', () => {
+    it('is a no-op passthrough', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'vercel-ai-gateway-default',
+            messages: [],
+        };
+        prepareVercelAiGatewayRequest(req);
+        assert.equal(req.extraBody, undefined);
+    });
+});
+
+// ─── Z.ai ──────────────────────────────────────────────────────────
+
+import { prepareZAiRequest } from '../providers/zai';
+
+describe('providers/zai', () => {
+    it('enables thinking for GLM-4.7 models', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'glm-4.7-zai',
+            messages: [],
+        };
+        prepareZAiRequest(req);
+        assert.ok(req.extraBody);
+        assert.deepEqual(req.extraBody!.thinking, { type: 'enabled' });
+    });
+
+    it('enables thinking for GLM-5 models', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'glm-5-zai',
+            messages: [],
+        };
+        prepareZAiRequest(req);
+        assert.ok(req.extraBody);
+        assert.deepEqual(req.extraBody!.thinking, { type: 'enabled' });
+    });
+
+    it('does not enable thinking for non-GLM models', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'some-other-model',
+            messages: [],
+        };
+        prepareZAiRequest(req);
+        assert.equal(req.extraBody?.thinking, undefined);
+    });
+
+    it('preserves existing extraBody fields when enabling thinking', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'glm-5-zai',
+            messages: [],
+            extraBody: { custom_param: 'value' },
+        };
+        prepareZAiRequest(req);
+        assert.deepEqual(req.extraBody!.thinking, { type: 'enabled' });
+        assert.equal(req.extraBody!.custom_param, 'value');
+    });
+});
+
 // ─── Custom providers (ProviderRouter) ──────────────────────────────
 
 import { ProviderRouter } from '../provider-client';
