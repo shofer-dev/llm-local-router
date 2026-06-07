@@ -16,6 +16,20 @@ export enum ProviderType {
     Xiaomi = 'xiaomi',
     Zhipu = 'zhipu',
     OpenRouter = 'openrouter',
+    Mistral = 'mistral',
+    XAI = 'xai',
+    Bedrock = 'bedrock',
+    Vertex = 'vertex',
+    AnthropicVertex = 'anthropic-vertex',
+    Ollama = 'ollama',
+    LmStudio = 'lmstudio',
+    Fireworks = 'fireworks',
+    SambaNova = 'sambanova',
+    Baseten = 'baseten',
+    Requesty = 'requesty',
+    Unbound = 'unbound',
+    VercelAiGateway = 'vercel-ai-gateway',
+    ZAi = 'zai',
 }
 
 // ─── Model registry ─────────────────────────────────────────────────
@@ -132,6 +146,10 @@ export interface UsageInfo {
     costUsd?: number;
     cachedTokens?: number;
     cacheCreationTokens?: number;
+    /** Tokens consumed by cached content reads (Gemini context caching). */
+    cacheReadTokens?: number;
+    /** Tokens consumed by thinking/reasoning (Gemini thinking models). */
+    reasoningTokens?: number;
 }
 
 export interface ChatCompletionResponse {

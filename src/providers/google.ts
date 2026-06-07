@@ -132,6 +132,10 @@ interface GeminiUsageMetadata {
     promptTokenCount: number;
     candidatesTokenCount: number;
     totalTokenCount: number;
+    /** Tokens consumed by cached (context-cached) content reads (Gemini 2.x). */
+    cachedContentTokenCount?: number;
+    /** Tokens consumed by thinking/reasoning (Gemini 2.x+ thinking models). */
+    thoughtsTokenCount?: number;
 }
 
 interface GeminiResponse {
@@ -182,7 +186,7 @@ function roleToGemini(role: MessageRole): string {
     switch (role) {
         case MessageRole.User: return 'user';
         case MessageRole.Assistant: return 'model';
-        case MessageRole.Tool: return 'function';
+        case MessageRole.Tool: return 'user'; // Gemini has no "function" role — functionResponse parts go inside user messages
         default: return 'user';
     }
 }
@@ -191,7 +195,6 @@ function roleFromGemini(role: string | undefined): MessageRole {
     switch (role) {
         case 'user': return MessageRole.User;
         case 'model': return MessageRole.Assistant;
-        case 'function': return MessageRole.Tool;
         default: return MessageRole.User;
     }
 }
@@ -202,34 +205,39 @@ function roleFromGemini(role: string | undefined): MessageRole {
 function messageToGeminiContent(msg: ChatMessage): GeminiContent {
     const parts: GeminiPart[] = [];
 
+    const isToolResult = msg.role === MessageRole.Tool;
+
     // Handle content (text or multimodal)
-    if (typeof msg.content === 'string') {
-        if (msg.content.trim()) {
-            parts.push({ text: msg.content });
-        }
-    } else if (Array.isArray(msg.content)) {
-        for (const part of msg.content) {
-            if (part.type === 'text' && part.text) {
-                parts.push({ text: part.text });
-            } else if (part.type === 'image_url' && part.image_url?.url) {
-                const url = part.image_url.url;
-                if (url.startsWith('data:')) {
-                    // data:image/png;base64,...
-                    const commaIdx = url.indexOf(',');
-                    const mimeType = url.substring(5, commaIdx).split(';')[0];
-                    const base64data = url.substring(commaIdx + 1);
-                    parts.push({
-                        inlineData: { mimeType, data: base64data },
-                    });
-                } else {
-                    // Regular URL
-                    const mimeType = url.endsWith('.png') ? 'image/png'
-                        : url.endsWith('.jpg') || url.endsWith('.jpeg') ? 'image/jpeg'
-                        : url.endsWith('.gif') ? 'image/gif'
-                        : 'image/png';
-                    parts.push({
-                        fileData: { mimeType, fileUri: url },
-                    });
+    // For tool results, the content goes inside functionResponse — skip standalone text parts.
+    if (!isToolResult) {
+        if (typeof msg.content === 'string') {
+            if (msg.content.trim()) {
+                parts.push({ text: msg.content });
+            }
+        } else if (Array.isArray(msg.content)) {
+            for (const part of msg.content) {
+                if (part.type === 'text' && part.text) {
+                    parts.push({ text: part.text });
+                } else if (part.type === 'image_url' && part.image_url?.url) {
+                    const url = part.image_url.url;
+                    if (url.startsWith('data:')) {
+                        // data:image/png;base64,...
+                        const commaIdx = url.indexOf(',');
+                        const mimeType = url.substring(5, commaIdx).split(';')[0];
+                        const base64data = url.substring(commaIdx + 1);
+                        parts.push({
+                            inlineData: { mimeType, data: base64data },
+                        });
+                    } else {
+                        // Regular URL
+                        const mimeType = url.endsWith('.png') ? 'image/png'
+                            : url.endsWith('.jpg') || url.endsWith('.jpeg') ? 'image/jpeg'
+                            : url.endsWith('.gif') ? 'image/gif'
+                            : 'image/png';
+                        parts.push({
+                            fileData: { mimeType, fileUri: url },
+                        });
+                    }
                 }
             }
         }
@@ -251,15 +259,17 @@ function messageToGeminiContent(msg: ChatMessage): GeminiContent {
     }
 
     // Handle tool response
-    if (msg.role === MessageRole.Tool && msg.toolCallId) {
+    if (isToolResult && msg.toolCallId) {
         // Gemini needs the function name — extract from content or use toolCallId as name
         // The function name comes from the preceding function call
         const functionName = (msg as any).functionName || msg.toolCallId;
+        const responseContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
         parts.push({
             functionResponse: {
                 name: functionName,
                 response: {
-                    content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+                    name: functionName,
+                    content: responseContent,
                 },
             },
         });
@@ -491,6 +501,8 @@ async function parseGeminiStream(
     let promptTokens = 0;
     let completionTokens = 0;
     let totalTokens = 0;
+    let cacheReadTokens = 0;
+    let reasoningTokens = 0;
 
     try {
         while (true) {
@@ -520,6 +532,8 @@ async function parseGeminiStream(
                         promptTokens = geminiChunk.usageMetadata.promptTokenCount;
                         completionTokens = Math.max(completionTokens, geminiChunk.usageMetadata.candidatesTokenCount);
                         totalTokens = geminiChunk.usageMetadata.totalTokenCount;
+                        cacheReadTokens = Math.max(cacheReadTokens, geminiChunk.usageMetadata.cachedContentTokenCount ?? 0);
+                        reasoningTokens = Math.max(reasoningTokens, geminiChunk.usageMetadata.thoughtsTokenCount ?? 0);
                     }
 
                     // Process candidates
@@ -596,6 +610,8 @@ async function parseGeminiStream(
             promptTokens,
             completionTokens,
             totalTokens,
+            cacheReadTokens,
+            reasoningTokens,
         };
 
         return {
@@ -659,6 +675,8 @@ function geminiToOpenAIResponse(
         promptTokens: geminiResp.usageMetadata.promptTokenCount,
         completionTokens: geminiResp.usageMetadata.candidatesTokenCount,
         totalTokens: geminiResp.usageMetadata.totalTokenCount,
+        cacheReadTokens: geminiResp.usageMetadata.cachedContentTokenCount,
+        reasoningTokens: geminiResp.usageMetadata.thoughtsTokenCount,
     } : undefined;
 
     return {
