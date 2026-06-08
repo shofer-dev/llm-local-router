@@ -107,7 +107,7 @@ describe('model-registry', () => {
             ['grok-4', ProviderType.XAI],
             ['anthropic.claude-sonnet-4-20250514-v1:0', ProviderType.Bedrock],
             ['claude-opus-4-20250514', ProviderType.AnthropicVertex],
-            ['claude-opus-4-7', ProviderType.Anthropic],
+            ['claude-opus-4-8', ProviderType.Anthropic],
             ['llama4-maverick', ProviderType.Ollama],
             ['lmstudio-default', ProviderType.LmStudio],
             ['accounts/fireworks/models/llama-v3p3-70b-instruct', ProviderType.Fireworks],
@@ -189,8 +189,8 @@ describe('model-registry', () => {
             assert.equal(getProviderForModel('deepseek-v4-pro'), ProviderType.DeepSeek);
         });
 
-        it('resolves claude-opus-4-7 → Anthropic', () => {
-            assert.equal(getProviderForModel('claude-opus-4-7'), ProviderType.Anthropic);
+        it('resolves claude-opus-4-8 → Anthropic', () => {
+            assert.equal(getProviderForModel('claude-opus-4-8'), ProviderType.Anthropic);
         });
 
         it('resolves mimo-v2-pro → Xiaomi', () => {

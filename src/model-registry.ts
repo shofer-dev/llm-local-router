@@ -64,8 +64,8 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
 
     // ═══ Anthropic ═══
     {
-        id: 'claude-opus-4-7', name: 'Claude Opus 4.7',
-        description: "Anthropic's most capable generally available model for complex reasoning and agentic coding, with adaptive thinking and 1M context",
+        id: 'claude-opus-4-8', name: 'Claude Opus 4.8',
+        description: "Anthropic's most capable generally available model (Opus 4.8) for complex reasoning and agentic coding, with adaptive thinking and 1M context",
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.Anthropic,
         pricing: $(0.005, 0.025, 0.0005, 0.00625, 0.5),

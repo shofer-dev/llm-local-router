@@ -24,7 +24,7 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 | Provider | Models | API Key |
 |----------|--------|---------|
 | OpenAI | gpt-5.5, gpt-5.5-pro, gpt-5.4, gpt-5.4-mini, gpt-5.4-nano | `openai` |
-| Anthropic | claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5 | `anthropic` |
+| Anthropic | claude-opus-4-8, claude-sonnet-4-6, claude-haiku-4-5 | `anthropic` |
 | Google | gemini-3.1-pro-preview, gemini-3-flash-preview, gemini-3.1-flash-lite-preview | `google` |
 | DeepSeek | deepseek-v4-pro, deepseek-v4-flash | `deepseek` |
 | MiniMax | MiniMax-M2.7, MiniMax-M2.5 | `minimax` |
