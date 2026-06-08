@@ -11,7 +11,8 @@ import * as vscode from 'vscode';
 import { LanguageModelProvider, RouterConfig } from './language-model-provider';
 import { RouterConfigProvider } from './router-config-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
-import { loadApiKeys, loadEndpointUrls, loadCustomProviderApiKeys, onApiKeysChanged } from './secret-storage';
+import { loadApiKeys, loadEndpointUrls, loadCustomProviderApiKeys, loadModelPricingOverrides, onApiKeysChanged } from './secret-storage';
+import { setModelPricingOverrides } from './llm-client';
 import { CustomProviderConfig } from './types';
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
@@ -625,6 +626,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const apiKeys = await loadApiKeys(context);
     const endpointUrls = await loadEndpointUrls(context);
 
+    // Load per-model pricing overrides into the runtime cost engine
+    try {
+        const overrides = await loadModelPricingOverrides(context);
+        setModelPricingOverrides(overrides);
+        logger.info(`Loaded per-model pricing overrides (${Object.keys(overrides).length} models)`);
+    } catch (err) {
+        logger.warning(`Failed to load model pricing overrides: ${err}`);
+    }
+
     languageModelProvider = new LanguageModelProvider(config);
     languageModelProvider.updateApiKeys(apiKeys as Record<string, string | undefined>);
     languageModelProvider.updateEndpointUrls(endpointUrls);
@@ -689,6 +699,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const eps = await loadEndpointUrls(context);
         languageModelProvider?.updateApiKeys(keys as Record<string, string | undefined>);
         languageModelProvider?.updateEndpointUrls(eps);
+        // Reload per-model pricing overrides on SecretStorage change
+        try {
+            const overrides = await loadModelPricingOverrides(context);
+            setModelPricingOverrides(overrides);
+        } catch (err) {
+            logger.warning(`Failed to reload model pricing overrides on secrets change: ${err}`);
+        }
         await languageModelProvider?.fetchModels();
         connectHealthChecker();
         if (config.enabled && !isConnected) {

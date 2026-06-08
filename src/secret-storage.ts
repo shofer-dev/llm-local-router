@@ -166,6 +166,46 @@ export async function loadCustomProviderApiKeys(context: vscode.ExtensionContext
 }
 
 /**
+ * Load all per-model pricing overrides from SecretStorage across all providers.
+ *
+ * Reads `shofer-router.provider.{providerId}.modelPricing` for every built-in
+ * provider and returns a flat map of modelId → { prompt?, completion?, cacheRead? }
+ * where values are in USD per 1M tokens (the form stored by the Config panel).
+ * Converted to per-1K-token form compatible with ModelPricing.
+ */
+export async function loadModelPricingOverrides(
+    context: vscode.ExtensionContext,
+): Promise<Record<string, { prompt?: number; completion?: number; contextCacheRead?: number; contextCacheWrite?: number }>> {
+    const logger = getLogger();
+    const result: Record<string, { prompt?: number; completion?: number; contextCacheRead?: number; contextCacheWrite?: number }> = {};
+    const providers = Object.values(ProviderType);
+
+    for (const provider of providers) {
+        try {
+            const raw = await context.secrets.get(`${SECRET_KEY_PREFIX}${provider}.modelPricing`);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw) as Record<string, { prompt?: number; completion?: number; cacheRead?: number; cacheWrite?: number }>;
+            for (const [modelId, override] of Object.entries(parsed)) {
+                if (!override || !(override.prompt || override.completion || override.cacheRead)) continue;
+                // Convert from per-1M (stored) to per-1K (ModelPricing) form
+                const pricing: { prompt?: number; completion?: number; contextCacheRead?: number; contextCacheWrite?: number } = {};
+                if (override.prompt !== undefined && override.prompt > 0) pricing.prompt = override.prompt / 1000;
+                if (override.completion !== undefined && override.completion > 0) pricing.completion = override.completion / 1000;
+                if (override.cacheRead !== undefined && override.cacheRead > 0) pricing.contextCacheRead = override.cacheRead / 1000;
+                if (override.cacheWrite !== undefined && override.cacheWrite > 0) pricing.contextCacheWrite = override.cacheWrite / 1000;
+                if (Object.keys(pricing).length > 0) {
+                    result[modelId] = pricing;
+                }
+            }
+        } catch (err) {
+            logger.errorWithError(`Failed to load model pricing overrides for ${provider}`, err as Error);
+        }
+    }
+
+    return result;
+}
+
+/**
  * Register a listener for SecretStorage changes.
  * Returns a disposable that should be added to context.subscriptions.
  */

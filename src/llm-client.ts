@@ -22,6 +22,49 @@ import {
 } from './types';
 import { getModelById, ALL_MODELS } from './model-registry';
 import { getLogger } from './logger';
+import type { ModelPricing } from './types';
+
+// ─── Per-model pricing overrides (runtime cost engine) ───────────────
+
+/**
+ * Module-level mutable map of per-model pricing overrides loaded from
+ * SecretStorage. Keys are model IDs (e.g. "gpt-5.5"), values are partial
+ * ModelPricing entries in USD per 1K tokens.
+ *
+ * Populated by {@link setModelPricingOverrides} at SecretStorage load time
+ * and after every Config panel save.
+ */
+const modelPricingOverrides = new Map<string, ModelPricing>();
+
+/**
+ * Overwrite the in-memory per-model pricing overrides from a batch load.
+ * Called after SecretStorage is read at startup and after Config panel save.
+ * Keys are model IDs; values are pricing entries in the same per-1K-token
+ * format as ModelPricing.
+ */
+export function setModelPricingOverrides(overrides: Record<string, ModelPricing>): void {
+    modelPricingOverrides.clear();
+    for (const [modelId, pricing] of Object.entries(overrides)) {
+        if (pricing && (pricing.prompt || pricing.completion || pricing.contextCacheRead || pricing.contextCacheWrite)) {
+            modelPricingOverrides.set(modelId, pricing);
+        }
+    }
+}
+
+/** Clear all per-model pricing overrides. */
+export function clearModelPricingOverrides(): void {
+    modelPricingOverrides.clear();
+}
+
+/**
+ * Resolve the effective pricing for a model: per-model override wins,
+ * otherwise fall back to the static ALL_MODELS registry entry.
+ */
+export function getEffectivePricing(modelId: string): ModelPricing | undefined {
+    const override = modelPricingOverrides.get(modelId);
+    if (override) return override;
+    return getModelById(modelId)?.pricing;
+}
 
 export class LLMClientError extends Error {
     constructor(message: string) {
@@ -40,10 +83,8 @@ export function computeCost(
     cachedTokens?: number,
     cacheCreationTokens?: number,
 ): number {
-    const model = getModelById(modelId);
-    if (!model || !model.pricing) return 0;
-
-    const p = model.pricing;
+    const p = getEffectivePricing(modelId);
+    if (!p) return 0;
 
     // Compute input cost: cached tokens at cache-read rate, remaining at prompt rate
     const effectiveCached = cachedTokens ?? 0;
@@ -73,10 +114,8 @@ export function computeCost(
  * for Shofer compatibility.
  */
 export function toPerMillionPricing(modelId: string): ModelPricingPerMillion | undefined {
-    const model = getModelById(modelId);
-    if (!model) return undefined;
-
-    const p = model.pricing;
+    const p = getEffectivePricing(modelId);
+    if (!p) return undefined;
     const toPerM = (v: number | undefined): number | undefined =>
         v !== undefined && v > 0 ? v * 1000 : undefined;
 
