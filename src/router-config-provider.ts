@@ -148,6 +148,13 @@ interface StatusPayload {
   models: ModelInfo[];
 }
 
+interface ModelConfigEntry {
+  id: string;
+  name: string;
+  defaultPricing?: { prompt?: number; completion?: number; cacheRead?: number };
+  pricingOverride?: { prompt?: number; completion?: number; cacheRead?: number };
+}
+
 interface ProviderConfigEntry {
   id: string;
   label: string;
@@ -155,7 +162,11 @@ interface ProviderConfigEntry {
   endpointUrl: string;
   defaultEndpoint: string;
   modelCount: number;
+  /** Per-model entries with registry-default and override pricing. */
+  models: ModelConfigEntry[];
+  /** Legacy provider-level pricing overrides (deprecated; prefer per-model). Also used for custom providers. */
   pricing?: { prompt?: number; completion?: number; cacheRead?: number };
+  /** Legacy provider-level defaultPricing (first model's). Kept for backward compat. */
   defaultPricing?: { prompt?: number; completion?: number; cacheRead?: number };
   /** Additional provider-specific configuration fields shown in the UI */
   advancedFields?: Array<{ key: string; label: string; placeholder: string; type: 'text' | 'password' | 'number'; description: string }>;
@@ -219,7 +230,7 @@ type WebviewMessage =
   | { type: 'validateConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'exportConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'importConfig' }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number }; advancedValues?: Record<string, string> }
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number }; modelPricing?: Record<string, { prompt?: number; completion?: number; cacheRead?: number }>; advancedValues?: Record<string, string> }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
   | { type: 'deleteCustomProvider'; providerId: string }
   | { type: 'queryMetrics'; metric: string; modelIds: string[]; since: string; until: string };
@@ -332,7 +343,7 @@ export class RouterConfigProvider {
         await this.sendCustomProviders();
         break;
       case 'saveProvider':
-        await this.handleSaveProvider(message.provider, message.apiKey, message.endpointUrl, message.pricing, message.advancedValues);
+        await this.handleSaveProvider(message.provider, message.apiKey, message.endpointUrl, message.pricing, message.modelPricing, message.advancedValues);
         break;
       case 'saveCustomProvider':
         await this.handleSaveCustomProvider(message.provider, message.apiKey);
@@ -485,6 +496,31 @@ export class RouterConfigProvider {
 
   // ─── Provider config ─────────────────────────────────────────────
 
+  /**
+   * Build the per-model list for a provider from the ALL_MODELS registry.
+   * Pricing is converted from per-1K-token (registry) to per-1M-token (webview).
+   */
+  private async buildModelConfigEntries(providerId: string): Promise<ModelConfigEntry[]> {
+    const registryModels = ALL_MODELS.filter(e => e.provider === providerId);
+    // Load per-model pricing overrides from SecretStorage
+    let modelPricingOverrides: Record<string, { prompt?: number; completion?: number; cacheRead?: number }> = {};
+    try {
+      const raw = await this.context.secrets.get(`shofer-router.provider.${providerId}.modelPricing`);
+      if (raw) modelPricingOverrides = JSON.parse(raw);
+    } catch { /* not set yet */ }
+
+    return registryModels.map(m => ({
+      id: m.id,
+      name: m.name,
+      defaultPricing: m.pricing ? {
+        prompt: (m.pricing.prompt ?? 0) * 1000,
+        completion: (m.pricing.completion ?? 0) * 1000,
+        cacheRead: (m.pricing.contextCacheRead ?? 0) * 1000,
+      } : undefined,
+      pricingOverride: modelPricingOverrides[m.id],
+    }));
+  }
+
   private async sendProviderConfig(): Promise<void> {
     if (!this.panel) return;
     const providerIds = Object.keys(PROVIDER_DEFAULTS);
@@ -509,9 +545,20 @@ export class RouterConfigProvider {
           completion: (registryEntry.pricing.completion ?? 0) * 1000,
           cacheRead: (registryEntry.pricing.contextCacheRead ?? 0) * 1000,
         } : undefined;
-        providers.push({ id, label: def.label, hasApiKey: !!key, endpointUrl: ep || def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint, modelCount, pricing, defaultPricing, advancedFields: def.advancedFields, advancedValues });
+        providers.push({
+          id, label: def.label, hasApiKey: !!key,
+          endpointUrl: ep || def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint,
+          modelCount, pricing, defaultPricing,
+          advancedFields: def.advancedFields, advancedValues,
+          models: await this.buildModelConfigEntries(id),
+        });
       } catch {
-        providers.push({ id, label: def.label, hasApiKey: false, endpointUrl: def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint, modelCount: 0, advancedFields: def.advancedFields });
+        providers.push({
+          id, label: def.label, hasApiKey: false,
+          endpointUrl: def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint,
+          modelCount: 0, models: [],
+          advancedFields: def.advancedFields,
+        });
       }
     }
     this.panel.webview.postMessage({ type: 'initProviderConfig', providers });
@@ -522,6 +569,7 @@ export class RouterConfigProvider {
     apiKey: string,
     endpointUrl: string,
     pricing?: { prompt?: number; completion?: number; cacheRead?: number },
+    modelPricing?: Record<string, { prompt?: number; completion?: number; cacheRead?: number }>,
     advancedValues?: Record<string, string>,
   ): Promise<void> {
     const logger = (await import('./logger')).getLogger();
@@ -535,6 +583,12 @@ export class RouterConfigProvider {
       const pKey = `shofer-router.provider.${provider}.pricing`;
       if (pricing && (pricing.prompt || pricing.completion || pricing.cacheRead)) { await this.context.secrets.store(pKey, JSON.stringify(pricing)); logger.info(`Saved pricing overrides for ${provider}`); }
       else { await this.context.secrets.delete(pKey); }
+      // Per-model pricing overrides
+      if (modelPricing && Object.keys(modelPricing).length > 0) {
+        const mpKey = `shofer-router.provider.${provider}.modelPricing`;
+        await this.context.secrets.store(mpKey, JSON.stringify(modelPricing));
+        logger.info(`Saved per-model pricing overrides for ${provider} (${Object.keys(modelPricing).length} models)`);
+      }
       // Save advanced field values
       const advKey = `shofer-router.provider.${provider}.advanced`;
       if (advancedValues && Object.keys(advancedValues).some(k => advancedValues[k]?.trim())) {

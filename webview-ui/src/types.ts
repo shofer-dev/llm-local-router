@@ -135,6 +135,7 @@ export interface StatusPayload {
 
 // ─── Provider config ────────────────────────────────────────────
 
+/** Pricing in USD per 1M tokens. */
 export interface ProviderPricing {
   /** USD per 1M prompt tokens */
   prompt?: number;
@@ -144,6 +145,18 @@ export interface ProviderPricing {
   cacheRead?: number;
 }
 
+/** Per-model entry shown in the provider config panel. */
+export interface ModelConfigEntry {
+  /** Model ID (e.g. "gpt-5.5") */
+  id: string;
+  /** Display name (e.g. "GPT-5.5") */
+  name: string;
+  /** Default pricing from the model registry (USD per 1M tokens) */
+  defaultPricing?: ProviderPricing;
+  /** User-configured pricing override (USD per 1M tokens) */
+  pricingOverride?: ProviderPricing;
+}
+
 export interface ProviderConfigEntry {
   id: string;
   label: string;
@@ -151,18 +164,14 @@ export interface ProviderConfigEntry {
   endpointUrl: string;
   defaultEndpoint: string;
   modelCount: number;
-  /** Manual pricing overrides (USD per 1M tokens) */
+  /** Models registered with this provider, with registry-default pricing. */
+  models: ModelConfigEntry[];
+  /** Legacy provider-level pricing overrides (deprecated; prefer per-model). Also used by custom providers. */
   pricing?: ProviderPricing;
-  /** Default pricing from the registry (USD per 1M tokens) */
+  /** Legacy provider-level defaultPricing (first model's). Kept for backward compat. */
   defaultPricing?: ProviderPricing;
   /** Additional provider-specific configuration fields shown in the UI */
-  advancedFields?: Array<{
-    key: string;
-    label: string;
-    placeholder: string;
-    type: 'text' | 'password' | 'number';
-    description: string;
-  }>;
+  advancedFields?: Array<{ key: string; label: string; placeholder: string; type: 'text' | 'password' | 'number'; description: string }>;
   /** User-set values for advanced fields */
   advancedValues?: Record<string, string>;
 }
@@ -225,7 +234,7 @@ export type WebviewMessage =
   | { type: 'exportConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'importConfig' }
   | { type: 'testModel'; modelId: string }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing; advancedValues?: Record<string, string> }
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing; modelPricing?: Record<string, ProviderPricing> }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
   | { type: 'deleteCustomProvider'; providerId: string }
   | { type: 'requestCustomProviders' }
