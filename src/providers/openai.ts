@@ -36,15 +36,14 @@ export function prepareOpenAIRequest(req: ChatCompletionRequest): void {
             req.extraBody = {};
         }
         req.extraBody.max_completion_tokens = req.maxTokens;
-        // Don't send both; remove the standard max_tokens from the top-level
-        // (the llm-client buildRequestBody will forward extraBody keys)
+        // Clear maxTokens so buildRequestBody does not emit both
+        // max_tokens (top-level) and max_completion_tokens (extraBody).
+        req.maxTokens = undefined;
     }
 
     // Forward reasoning_effort for o-series models
-    if (req.reasoningEffort && !req.extraBody) {
-        req.extraBody = {};
-    }
-    if (req.reasoningEffort && req.extraBody) {
+    if (req.reasoningEffort) {
+        if (!req.extraBody) req.extraBody = {};
         req.extraBody.reasoning_effort = req.reasoningEffort;
     }
 }

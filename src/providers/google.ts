@@ -53,7 +53,6 @@ import {
 } from '../types';
 import { LLMClientError } from '../llm-client';
 import { getLogger } from '../logger';
-import { getModelById } from '../model-registry';
 
 // ─── Gemini native API types ─────────────────────────────────────────
 

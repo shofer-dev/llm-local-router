@@ -19,7 +19,7 @@ import {
     CustomProviderConfig,
     CustomProviderModel,
 } from './types';
-import { getModelById, getProviderForModel } from './model-registry';
+import { getProviderForModel } from './model-registry';
 import {
     sendNonStreamingRequest,
     sendStreamingRequest,
@@ -27,35 +27,30 @@ import {
 import { getLogger } from './logger';
 import {
     prepareAnthropicRequest,
-    transformAnthropicResponse,
-    getAnthropicBaseUrl,
 } from './providers/anthropic';
-import { prepareOpenAIRequest, getOpenAIBaseUrl } from './providers/openai';
-import { prepareDeepSeekRequest, transformDeepSeekStreamChunk, getDeepSeekBaseUrl } from './providers/deepseek';
-import { prepareMiniMaxRequest, transformMiniMaxStreamChunk, getMiniMaxBaseUrl } from './providers/minimax';
-import { prepareMoonshotRequest, getMoonshotBaseUrl } from './providers/moonshot';
-import { prepareXiaomiRequest, getXiaomiBaseUrl } from './providers/xiaomi';
-import { prepareZhipuRequest, getZhipuBaseUrl } from './providers/zhipu';
+import { prepareOpenAIRequest } from './providers/openai';
+import { prepareDeepSeekRequest, transformDeepSeekStreamChunk } from './providers/deepseek';
+import { prepareMiniMaxRequest, transformMiniMaxStreamChunk } from './providers/minimax';
+import { prepareMoonshotRequest } from './providers/moonshot';
+import { prepareXiaomiRequest } from './providers/xiaomi';
+import { prepareZhipuRequest } from './providers/zhipu';
 import {
-    prepareGoogleRequest,
     sendGeminiStreamingRequest,
     sendGeminiNonStreamingRequest,
-    getGoogleBaseUrl,
 } from './providers/google';
-import { getOpenRouterBaseUrl } from './providers/openrouter';
-import { prepareMistralRequest, getMistralBaseUrl } from './providers/mistral';
-import { prepareXAIRequest, getXAIBaseUrl } from './providers/xai';
-import { prepareBedrockRequest, getBedrockBaseUrl } from './providers/bedrock';
-import { prepareVertexRequest, getVertexBaseUrl } from './providers/vertex';
-import { prepareOllamaRequest, getOllamaBaseUrl } from './providers/ollama';
-import { prepareLmStudioRequest, getLmStudioBaseUrl } from './providers/lmstudio';
-import { prepareFireworksRequest, getFireworksBaseUrl } from './providers/fireworks';
-import { prepareSambaNovaRequest, getSambaNovaBaseUrl } from './providers/sambanova';
-import { prepareBasetenRequest, getBasetenBaseUrl } from './providers/baseten';
-import { prepareRequestyRequest, getRequestyBaseUrl } from './providers/requesty';
-import { prepareUnboundRequest, getUnboundBaseUrl } from './providers/unbound';
-import { prepareVercelAiGatewayRequest, getVercelAiGatewayBaseUrl } from './providers/vercel-ai-gateway';
-import { prepareZAiRequest, getZAiBaseUrl } from './providers/zai';
+import { prepareMistralRequest } from './providers/mistral';
+import { prepareXAIRequest } from './providers/xai';
+import { prepareBedrockRequest } from './providers/bedrock';
+import { prepareVertexRequest } from './providers/vertex';
+import { prepareOllamaRequest } from './providers/ollama';
+import { prepareLmStudioRequest } from './providers/lmstudio';
+import { prepareFireworksRequest } from './providers/fireworks';
+import { prepareSambaNovaRequest } from './providers/sambanova';
+import { prepareBasetenRequest } from './providers/baseten';
+import { prepareRequestyRequest } from './providers/requesty';
+import { prepareUnboundRequest } from './providers/unbound';
+import { prepareVercelAiGatewayRequest } from './providers/vercel-ai-gateway';
+import { prepareZAiRequest } from './providers/zai';
 
 // ─── Provider endpoint configuration ───────────────────────────────
 

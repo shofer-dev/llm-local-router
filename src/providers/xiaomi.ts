@@ -59,6 +59,9 @@ export function prepareXiaomiRequest(req: ChatCompletionRequest): void {
     if (req.maxTokens !== undefined) {
         if (!req.extraBody) req.extraBody = {};
         req.extraBody.max_completion_tokens = req.maxTokens;
+        // Clear maxTokens so buildRequestBody does not emit both
+        // max_tokens (top-level) and max_completion_tokens (extraBody).
+        req.maxTokens = undefined;
     }
 
     // Convert reasoning_details → reasoning_content for multi-turn tool calls.

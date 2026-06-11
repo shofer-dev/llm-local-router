@@ -7,7 +7,7 @@
 
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { ChatCompletionRequest, ChatCompletionResponse, MessageRole } from '../types';
+import { ChatCompletionRequest, ChatCompletionResponse, ChatMessage, MessageRole } from '../types';
 
 // ─── OpenAI ────────────────────────────────────────────────────────
 
@@ -15,7 +15,7 @@ import { prepareOpenAIRequest } from '../providers/openai';
 
 describe('providers/openai', () => {
     describe('prepareOpenAIRequest', () => {
-        it('remaps max_tokens → max_completion_tokens for GPT-5.5', () => {
+        it('remaps max_tokens → max_completion_tokens for GPT-5.5 and clears maxTokens', () => {
             const req: ChatCompletionRequest = {
                 conversationId: 'test',
                 model: 'gpt-5.5',
@@ -25,9 +25,12 @@ describe('providers/openai', () => {
             prepareOpenAIRequest(req);
             assert.ok(req.extraBody);
             assert.equal(req.extraBody!.max_completion_tokens, 4096);
+            // maxTokens must be cleared to avoid sending both max_tokens
+            // (top-level) and max_completion_tokens (extraBody) to the API
+            assert.equal(req.maxTokens, undefined);
         });
 
-        it('remaps max_tokens for GPT-5.4-mini', () => {
+        it('remaps max_tokens for GPT-5.4-mini and clears maxTokens', () => {
             const req: ChatCompletionRequest = {
                 conversationId: 'test',
                 model: 'gpt-5.4-mini',
@@ -37,6 +40,7 @@ describe('providers/openai', () => {
             prepareOpenAIRequest(req);
             assert.ok(req.extraBody);
             assert.equal(req.extraBody!.max_completion_tokens, 2048);
+            assert.equal(req.maxTokens, undefined);
         });
 
         it('does not remap for non-GPT-5 models', () => {
@@ -48,6 +52,8 @@ describe('providers/openai', () => {
             };
             prepareOpenAIRequest(req);
             assert.equal(req.extraBody, undefined);
+            // maxTokens should be preserved for non-GPT-5 models
+            assert.equal(req.maxTokens, 4096);
         });
 
         it('forwards reasoning_effort', () => {
@@ -266,7 +272,7 @@ describe('providers/xiaomi', () => {
             assert.equal(req.extraBody?.thinking, undefined);
         });
 
-        it('remaps max_tokens to max_completion_tokens', () => {
+        it('remaps max_tokens to max_completion_tokens and clears maxTokens', () => {
             const req: ChatCompletionRequest = {
                 conversationId: 'test',
                 model: 'mimo-v2-pro',
@@ -276,6 +282,8 @@ describe('providers/xiaomi', () => {
             prepareXiaomiRequest(req);
             assert.ok(req.extraBody);
             assert.equal(req.extraBody!.max_completion_tokens, 8192);
+            // maxTokens must be cleared to avoid sending both to the API
+            assert.equal(req.maxTokens, undefined);
         });
 
         it('converts reasoning_details → reasoning_content', () => {
@@ -804,3 +812,405 @@ describe('providers/custom', () => {
     });
 });
 
+// ─── Anthropic ──────────────────────────────────────────────────────
+
+import { prepareAnthropicRequest, transformAnthropicResponse } from '../providers/anthropic';
+
+describe('providers/anthropic', () => {
+    describe('prepareAnthropicRequest', () => {
+        it('extracts system message into _anthropicSystem', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [
+                    { role: MessageRole.System, content: 'You are a helpful assistant.' },
+                    { role: MessageRole.User, content: 'Hello' },
+                ],
+            };
+            prepareAnthropicRequest(req);
+            assert.ok((req as any)._anthropicReq);
+            assert.equal((req as any)._anthropicSystem, 'You are a helpful assistant.');
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.system, 'You are a helpful assistant.');
+        });
+
+        it('joins multiple system messages with newlines', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [
+                    { role: MessageRole.System, content: 'Be helpful.' },
+                    { role: MessageRole.System, content: 'Be concise.' },
+                    { role: MessageRole.User, content: 'Hello' },
+                ],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.system, 'Be helpful.\n\nBe concise.');
+        });
+
+        it('converts user text message to string content', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [
+                    { role: MessageRole.User, content: 'Hello' },
+                ],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.messages.length, 1);
+            assert.equal(aReq.messages[0].role, 'user');
+            assert.equal(aReq.messages[0].content, 'Hello');
+        });
+
+        it('converts assistant message to assistant role', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [
+                    { role: MessageRole.Assistant, content: 'Hi there!' },
+                ],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.messages[0].role, 'assistant');
+            assert.equal(aReq.messages[0].content, 'Hi there!');
+        });
+
+        it('converts assistant message with tool calls to content blocks', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [
+                    {
+                        role: MessageRole.Assistant,
+                        content: 'Let me check the weather.',
+                        toolCalls: [
+                            {
+                                id: 'call_123',
+                                type: 'function',
+                                function: {
+                                    name: 'get_weather',
+                                    arguments: '{"location": "Seoul"}',
+                                },
+                            },
+                        ],
+                    } as ChatMessage,
+                ],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            const blocks = aReq.messages[0].content as any[];
+            assert.equal(blocks.length, 2);
+            assert.equal(blocks[0].type, 'text');
+            assert.equal(blocks[0].text, 'Let me check the weather.');
+            assert.equal(blocks[1].type, 'tool_use');
+            assert.equal(blocks[1].id, 'call_123');
+            assert.equal(blocks[1].name, 'get_weather');
+            assert.deepEqual(blocks[1].input, { location: 'Seoul' });
+        });
+
+        it('converts tool result message to tool_result block', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [
+                    {
+                        role: MessageRole.Tool,
+                        toolCallId: 'call_123',
+                        content: 'Sunny, 25°C',
+                    } as ChatMessage,
+                ],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            const blocks = aReq.messages[0].content as any[];
+            assert.equal(blocks.length, 1);
+            assert.equal(blocks[0].type, 'tool_result');
+            assert.equal(blocks[0].tool_use_id, 'call_123');
+            assert.equal(blocks[0].content, 'Sunny, 25°C');
+        });
+
+        it('converts multimodal content with image parts', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [
+                    {
+                        role: MessageRole.User,
+                        content: [
+                            { type: 'text', text: 'Describe this image:' },
+                            { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+                        ],
+                    } as ChatMessage,
+                ],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            const blocks = aReq.messages[0].content as any[];
+            assert.equal(blocks.length, 2);
+            assert.equal(blocks[0].type, 'text');
+            assert.equal(blocks[0].text, 'Describe this image:');
+            assert.equal(blocks[1].type, 'image');
+            assert.equal(blocks[1].source.type, 'base64');
+            assert.equal(blocks[1].source.media_type, 'image/png');
+            assert.equal(blocks[1].source.data, 'iVBORw0KGgo=');
+        });
+
+        it('converts OpenAI tools to Anthropic tool format', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [{ role: MessageRole.User, content: 'Hello' }],
+                tools: [
+                    {
+                        type: 'function',
+                        function: {
+                            name: 'get_weather',
+                            description: 'Get weather for a city',
+                            parameters: {
+                                type: 'object',
+                                properties: {
+                                    location: { type: 'string', description: 'City name' },
+                                },
+                                required: ['location'],
+                            },
+                        },
+                    },
+                ],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.ok(aReq.tools);
+            assert.equal(aReq.tools.length, 1);
+            assert.equal(aReq.tools[0].name, 'get_weather');
+            assert.equal(aReq.tools[0].description, 'Get weather for a city');
+            assert.deepEqual(aReq.tools[0].input_schema.properties.location, { type: 'string', description: 'City name' });
+        });
+
+        it('defaults max_tokens to 4096 when not specified', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [{ role: MessageRole.User, content: 'Hello' }],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.max_tokens, 4096);
+        });
+
+        it('uses specified maxTokens when provided', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [{ role: MessageRole.User, content: 'Hello' }],
+                maxTokens: 8192,
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.max_tokens, 8192);
+        });
+
+        it('applies tool_choice auto', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [{ role: MessageRole.User, content: 'Hello' }],
+                toolChoice: 'auto',
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.deepEqual(aReq.tool_choice, { type: 'auto' });
+        });
+
+        it('applies tool_choice with specific function name', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [{ role: MessageRole.User, content: 'Hello' }],
+                toolChoice: { type: 'function', function: { name: 'get_weather' } } as any,
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.deepEqual(aReq.tool_choice, { type: 'tool', name: 'get_weather' });
+        });
+
+        it('sets stream to true by default', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [{ role: MessageRole.User, content: 'Hello' }],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.stream, true);
+        });
+
+        it('no system when no system messages present', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'claude-sonnet-4-20250514',
+                messages: [{ role: MessageRole.User, content: 'Hello' }],
+            };
+            prepareAnthropicRequest(req);
+            const aReq = (req as any)._anthropicReq;
+            assert.equal(aReq.system, undefined);
+        });
+    });
+
+    describe('transformAnthropicResponse', () => {
+        it('converts text content block to message content', () => {
+            const anthropicResp = {
+                id: 'msg_001',
+                model: 'claude-sonnet-4-20250514',
+                role: 'assistant' as const,
+                content: [{ type: 'text', text: 'Hello! How can I help?' }],
+                stop_reason: 'end_turn',
+                stop_sequence: null,
+                usage: { input_tokens: 10, output_tokens: 5 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'claude-sonnet-4-20250514');
+            assert.equal(result.id, 'msg_001');
+            assert.equal(result.object, 'chat.completion');
+            assert.equal(result.model, 'claude-sonnet-4-20250514');
+            assert.equal(result.choices[0].message!.content, 'Hello! How can I help?');
+            assert.equal(result.choices[0].finishReason, 'stop');
+            assert.equal(result.usage!.promptTokens, 10);
+            assert.equal(result.usage!.completionTokens, 5);
+            assert.equal(result.usage!.totalTokens, 15);
+        });
+
+        it('concatenates multiple text blocks', () => {
+            const anthropicResp = {
+                id: 'msg_002',
+                model: 'claude-sonnet-4-20250514',
+                role: 'assistant' as const,
+                content: [
+                    { type: 'text', text: 'Part 1. ' },
+                    { type: 'text', text: 'Part 2.' },
+                ],
+                stop_reason: 'end_turn',
+                stop_sequence: null,
+                usage: { input_tokens: 5, output_tokens: 10 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'claude-sonnet-4-20250514');
+            assert.equal(result.choices[0].message!.content, 'Part 1. Part 2.');
+        });
+
+        it('converts tool_use blocks to tool_calls', () => {
+            const anthropicResp = {
+                id: 'msg_003',
+                model: 'claude-sonnet-4-20250514',
+                role: 'assistant' as const,
+                content: [
+                    { type: 'tool_use', id: 'toolu_001', name: 'get_weather', input: { location: 'Seoul' } },
+                ],
+                stop_reason: 'tool_use',
+                stop_sequence: null,
+                usage: { input_tokens: 20, output_tokens: 15 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'claude-sonnet-4-20250514');
+            assert.equal(result.choices[0].message!.content, '');
+            assert.ok(result.choices[0].message!.toolCalls);
+            assert.equal(result.choices[0].message!.toolCalls!.length, 1);
+            assert.equal(result.choices[0].message!.toolCalls![0].id, 'toolu_001');
+            assert.equal(result.choices[0].message!.toolCalls![0].function.name, 'get_weather');
+            assert.equal(result.choices[0].message!.toolCalls![0].function.arguments, '{"location":"Seoul"}');
+        });
+
+        it('maps end_turn → stop', () => {
+            const anthropicResp = {
+                id: 'msg_004', model: 'claude-sonnet-4-20250514', role: 'assistant' as const,
+                content: [{ type: 'text', text: 'Done' }],
+                stop_reason: 'end_turn', stop_sequence: null,
+                usage: { input_tokens: 1, output_tokens: 1 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'test');
+            assert.equal(result.choices[0].finishReason, 'stop');
+        });
+
+        it('maps max_tokens → length', () => {
+            const anthropicResp = {
+                id: 'msg_005', model: 'claude-sonnet-4-20250514', role: 'assistant' as const,
+                content: [{ type: 'text', text: 'Truncated' }],
+                stop_reason: 'max_tokens', stop_sequence: null,
+                usage: { input_tokens: 1, output_tokens: 1 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'test');
+            assert.equal(result.choices[0].finishReason, 'length');
+        });
+
+        it('maps stop_sequence → stop', () => {
+            const anthropicResp = {
+                id: 'msg_006', model: 'claude-sonnet-4-20250514', role: 'assistant' as const,
+                content: [{ type: 'text', text: 'Stopped' }],
+                stop_reason: 'stop_sequence', stop_sequence: '\n\nHuman:',
+                usage: { input_tokens: 1, output_tokens: 1 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'test');
+            assert.equal(result.choices[0].finishReason, 'stop');
+        });
+
+        it('maps tool_use → tool_calls', () => {
+            const anthropicResp = {
+                id: 'msg_007', model: 'claude-sonnet-4-20250514', role: 'assistant' as const,
+                content: [{ type: 'tool_use', id: 't1', name: 'fn', input: {} }],
+                stop_reason: 'tool_use', stop_sequence: null,
+                usage: { input_tokens: 1, output_tokens: 1 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'test');
+            assert.equal(result.choices[0].finishReason, 'tool_calls');
+        });
+
+        it('defaults null stop_reason to stop', () => {
+            const anthropicResp = {
+                id: 'msg_008', model: 'claude-sonnet-4-20250514', role: 'assistant' as const,
+                content: [{ type: 'text', text: 'OK' }],
+                stop_reason: null, stop_sequence: null,
+                usage: { input_tokens: 1, output_tokens: 1 },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'test');
+            assert.equal(result.choices[0].finishReason, 'stop');
+        });
+
+        it('forwards cache tokens in usage', () => {
+            const anthropicResp = {
+                id: 'msg_009', model: 'claude-sonnet-4-20250514', role: 'assistant' as const,
+                content: [{ type: 'text', text: 'Cached response' }],
+                stop_reason: 'end_turn', stop_sequence: null,
+                usage: {
+                    input_tokens: 100,
+                    output_tokens: 50,
+                    cache_read_input_tokens: 80,
+                    cache_creation_input_tokens: 20,
+                },
+            };
+            const result = transformAnthropicResponse(anthropicResp, 'test');
+            assert.equal(result.usage!.cachedTokens, 80);
+            assert.equal(result.usage!.cacheCreationTokens, 20);
+        });
+    });
+});
+
+// ─── Vertex ──────────────────────────────────────────────────────────
+
+import { prepareVertexRequest, sendVertexNonStreamingRequest } from '../providers/vertex';
+
+describe('providers/vertex', () => {
+    describe('prepareVertexRequest', () => {
+        it('is a no-op (delegates to prepareGeminiRequest at runtime)', () => {
+            const req: ChatCompletionRequest = {
+                conversationId: 'test',
+                model: 'gemini-3.1-pro-preview',
+                messages: [{ role: MessageRole.User, content: 'hello' }],
+                extraBody: { vertexProjectId: 'my-project', vertexRegion: 'us-east1' },
+            };
+            prepareVertexRequest(req);
+            // prepareVertexRequest is a no-op stub — the customSend path
+            // in provider-client handles Vertex-specific routing
+            assert.equal(req.model, 'gemini-3.1-pro-preview');
+            assert.equal((req.extraBody as any).vertexProjectId, 'my-project');
+        });
+    });
+});

@@ -82,9 +82,6 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
     }
 
     /**
-     * Update custom provider endpoint URLs from SecretStorage.
-     */
-    /**
      * Update custom provider configurations and their API keys.
      */
     updateCustomProviders(providers: Map<string, CustomProviderConfig>, apiKeys: Record<string, string>): void {
@@ -92,6 +89,9 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         this.router.updateCustomApiKeys(apiKeys);
     }
 
+    /**
+     * Update custom provider endpoint URLs from SecretStorage.
+     */
     updateEndpointUrls(urls: Record<string, string>): void {
         this.router.updateEndpointUrls(urls);
     }
