@@ -98,7 +98,7 @@ const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string
   'vercel-ai-gateway': { label: 'Vercel AI Gateway', defaultEndpoint: 'https://ai-gateway.vercel.sh/v1' },
   zai: {
     label: 'Z.ai (Zhipu Intl.)',
-    defaultEndpoint: 'https://api.z.ai/v1',
+    defaultEndpoint: 'https://api.z.ai/api/paas/v4',
     advancedFields: [
       { key: 'zaiApiLine', label: 'API Line', placeholder: 'international_coding', type: 'text', description: 'Z.ai API routing line: "international_coding" (default) or "china_coding"' },
     ],
