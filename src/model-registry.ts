@@ -176,7 +176,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Xiaomi MiMo v2 Pro with thinking enabled',
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.Xiaomi,
-        pricing: { prompt: 0.001, completion: 0.003, contextCacheRead: 0.0002, promptAbove200K: 0.002, completionAbove200K: 0.006 },
+        pricing: $(0.000435, 0.00087, 0.0000036),
         imageInput: false, toolCalling: true,
     },
     {
@@ -184,7 +184,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Xiaomi MiMo v2 Omni-modal model with thinking',
         contextLength: 256_000, maxOutputTokens: 32_768,
         provider: ProviderType.Xiaomi,
-        pricing: $(0.0004, 0.002, 0.00008),
+        pricing: $(0.00014, 0.00028, 0.0000028),
         imageInput: true, toolCalling: true,
     },
     {
@@ -200,7 +200,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Xiaomi MiMo v2 Flash model',
         contextLength: 256_000, maxOutputTokens: 65_536,
         provider: ProviderType.Xiaomi,
-        pricing: $(0.0001, 0.0003, 0.00001),
+        pricing: $(0.00014, 0.00028, 0.0000028),
         imageInput: false, toolCalling: true,
     },
 
@@ -279,29 +279,30 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         imageInput: false, toolCalling: true,
     },
     {
-        id: 'pixtral-large-latest', name: 'Pixtral Large',
-        description: "Mistral's multimodal model with vision capabilities",
-        contextLength: 131_072, maxOutputTokens: 131_072,
+        id: 'mistral-medium-latest', name: 'Mistral Medium 3.5',
+        description: "Mistral's multimodal mid-tier model with vision (replaces the retired Pixtral Large)",
+        contextLength: 262_144, maxOutputTokens: 131_072,
         provider: ProviderType.Mistral,
-        pricing: $(0.002, 0.006),
+        pricing: $(0.0015, 0.0075),
         imageInput: true, toolCalling: true,
     },
 
     // ═══ xAI ═══
     {
-        id: 'grok-4', name: 'Grok 4',
-        description: "xAI's flagship large language model for reasoning and coding",
+        id: 'grok-4.3', name: 'Grok 4.3',
+        description: "xAI's flagship large language model for reasoning and coding (succeeds the retired Grok 4)",
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.XAI,
-        pricing: $(0.003, 0.015),
+        // Requests over 200K total tokens are billed at a higher tier.
+        pricing: $(0.00125, 0.0025, 0.0002),
         imageInput: true, toolCalling: true,
     },
     {
-        id: 'grok-4-mini', name: 'Grok 4 Mini',
-        description: "xAI's small, fast model for efficient reasoning and coding tasks",
-        contextLength: 1_000_000, maxOutputTokens: 131_072,
+        id: 'grok-build-0.1', name: 'Grok Build 0.1',
+        description: "xAI's fast, cost-efficient model for agentic coding and web dev (the surviving small Grok; grok-4-fast* are retired)",
+        contextLength: 256_000, maxOutputTokens: 131_072,
         provider: ProviderType.XAI,
-        pricing: $(0.0006, 0.003),
+        pricing: $(0.001, 0.002, 0.0002),
         imageInput: true, toolCalling: true,
     },
 
