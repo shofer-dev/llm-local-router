@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import type { MetricsPayload } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
@@ -121,10 +121,17 @@ function isComposite(modelId: string): boolean {
   return modelId.startsWith('shofer/');
 }
 
+/** Human-readable label for a line key (aggregate keys → friendly names). */
+function friendlyName(key: string): string {
+  if (key === ALL_PRIMARY) return 'All Primary';
+  if (key === ALL_COMPOSITE) return 'All Composite';
+  return key;
+}
+
 // ─── Single-chart sub-component ───────────────────────────────────
 
 function MetricChart({
-  metric, points, timeRange, modelsInData, visibleModels, loading,
+  metric, points, timeRange, modelsInData, visibleModels, loading, onToggle,
 }: {
   metric: MetricDef;
   points: TimeSeriesPoint[];
@@ -132,6 +139,7 @@ function MetricChart({
   modelsInData: string[];
   visibleModels: string[];
   loading: boolean;
+  onToggle: (key: string) => void;
 }) {
   const primaryKeys = modelsInData.filter(m => !isComposite(m));
   const compositeKeys = modelsInData.filter(m => isComposite(m));
@@ -217,7 +225,7 @@ function MetricChart({
       </div>
       {points.length > 0 && (
         <div style={cs.chartWrap}>
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
               <CartesianGrid stroke="var(--vscode-panel-border, rgba(128,128,128,0.12))" strokeDasharray="3 3" />
               <XAxis dataKey="windowStart"
@@ -236,13 +244,31 @@ function MetricChart({
                 border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))',
                 borderRadius: '4px', fontSize: '10px', fontFamily: 'var(--vscode-font-family)',
               }}
+                itemSorter={(item: any) => -(item.value ?? 0)}
                 labelFormatter={(iso: string) => {
                   const d = new Date(iso);
                   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                 }}
-                formatter={(value: number) => [tooltipVal(value, metric.key), '']} />
+                formatter={(value: number, name: string) => [tooltipVal(value, metric.key), name]} />
+              <Legend
+                wrapperStyle={{ fontSize: '10px', cursor: 'pointer', paddingTop: '4px' }}
+                onClick={(e: any) => {
+                  const k = e?.dataKey ?? e?.payload?.dataKey;
+                  if (k) onToggle(k as string);
+                }}
+                formatter={(value: string, entry: any) => {
+                  const k = entry?.dataKey ?? entry?.payload?.dataKey;
+                  const vis = visibleKeysVal.includes(k);
+                  return (
+                    <span style={{
+                      color: 'var(--vscode-foreground)',
+                      opacity: vis ? 1 : 0.4,
+                      textDecoration: vis ? 'none' : 'line-through',
+                    }}>{value}</span>
+                  );
+                }} />
               {allLineKeys.map(key => (
-                <Line key={key} type="monotone" dataKey={key} name={key}
+                <Line key={key} type="monotone" dataKey={key} name={friendlyName(key)}
                   stroke={allColors.get(key)!}
                   strokeWidth={key === ALL_PRIMARY || key === ALL_COMPOSITE ? 2.5 : 1.5}
                   strokeDasharray={key === ALL_PRIMARY ? '7 4' : key === ALL_COMPOSITE ? '10 4 2 4' : undefined}
@@ -473,7 +499,8 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
         {METRICS.map(m => (
           <MetricChart key={m.key} metric={m}
             points={allData[m.key] ?? []} timeRange={timeRange}
-            modelsInData={modelsInData} visibleModels={visibleModels} loading={loading} />
+            modelsInData={modelsInData} visibleModels={visibleModels} loading={loading}
+            onToggle={toggleModel} />
         ))}
       </div>
 
