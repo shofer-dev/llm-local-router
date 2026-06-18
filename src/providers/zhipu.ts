@@ -1,9 +1,11 @@
 /**
  * Zhipu GLM provider client.
  *
- * Zhipu uses an OpenAI-compatible API. Thinking mode is controlled via
+ * Uses an OpenAI-compatible API. Thinking mode is controlled via
  * extra_body.thinking toggle, and reasoning_content is natively supported.
  *
+ * Routed through the Z.ai international Coding Plan endpoint rather than
+ * bigmodel.cn, so a Z.ai coding-plan key serves the bare glm-* models.
  */
 
 import { ChatCompletionRequest } from '../types';
@@ -12,7 +14,7 @@ import { ChatCompletionRequest } from '../types';
  * GLM models that support thinking (all 4.x and 5.x models).
  */
 const THINKING_MODELS = new Set([
-    'glm-5.1', 'glm-5', 'glm-4.7', 'glm-4.6', 'glm-4.5',
+    'glm-5.2', 'glm-5.1', 'glm-5', 'glm-4.7', 'glm-4.6', 'glm-4.5', 'glm-4.5-air',
 ]);
 
 export function prepareZhipuRequest(req: ChatCompletionRequest): void {
@@ -24,5 +26,5 @@ export function prepareZhipuRequest(req: ChatCompletionRequest): void {
 }
 
 export function getZhipuBaseUrl(): string {
-    return 'https://open.bigmodel.cn/api/paas/v4';
+    return 'https://api.z.ai/api/coding/paas/v4';
 }

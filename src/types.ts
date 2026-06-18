@@ -176,7 +176,7 @@ export interface ProviderClient {
 
 // ─── Composite model types ──────────────────────────────────────────
 
-export type CompositeStrategy = 'failover' | 'round_robin' | 'lowest_latency';
+export type CompositeStrategy = 'failover' | 'round_robin' | 'lowest_latency' | 'highest_reliability';
 
 export interface ThrottlingConfig {
     maxConcurrent: number;
@@ -217,8 +217,10 @@ export interface CompositeModelConfig {
     /** Health monitoring configuration */
     health?: CompositeHealthConfig;
     /**
-     * For lowest_latency strategy: sliding window duration in ms over which
-     * average TTFB is computed to determine the fastest model.
+     * Sliding window duration in ms used by the lowest_latency strategy (over
+     * which average TTFB is computed to find the fastest model) and by the
+     * highest_reliability strategy (over which the success ratio is computed
+     * to find the most reliable model).
      * Default: 600_000 (10 minutes).
      */
     latencyWindowMs?: number;

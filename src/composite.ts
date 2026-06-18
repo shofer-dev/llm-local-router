@@ -8,6 +8,9 @@
  *   - lowest_latency: always picks the model with lowest average TTFB over
  *     a configurable sliding window (default 10 min). Falls back to equal
  *     weights when no latency data is available.
+ *   - highest_reliability: always picks the model with the highest success
+ *     ratio over the same sliding window. Falls back to equal weights when
+ *     no reliability data is available.
  *
  * Streaming requests follow a "first-byte rule": once any chunk has been
  * sent to the client, failover to a different model is not possible.
@@ -99,16 +102,36 @@ interface SWRRState {
 }
 
 /** Per-model latency tracking for lowest_latency strategy. */
+
+/** A single TTFB sample with its recording timestamp. */
+interface LatencySample {
+    /** Time-to-first-byte in milliseconds. */
+    ttfbMs: number;
+    /** Epoch milliseconds when the sample was recorded. */
+    recordedAt: number;
+}
 interface LatencyTracker {
     /** Timestamped TTFB samples in milliseconds. */
-    samples: number[];
+    samples: LatencySample[];
     /** Current exponential moving average. */
     ema: number;
     /** Smoothing factor for EMA (0-1). Higher = more weight to recent. */
     alpha: number;
 }
 
+/** A single success/failure outcome for the highest_reliability strategy. */
+interface ReliabilitySample {
+    /** Whether the attempt succeeded (reached first byte). */
+    success: boolean;
+    /** Epoch milliseconds when the outcome was recorded. */
+    recordedAt: number;
+}
+
 const DEFAULT_LATENCY_WINDOW_MS = 600_000; // 10 minutes
+
+/** Cap on retained reliability samples per model (bounds memory; the window
+ *  filter at read time is the real selector). */
+const MAX_RELIABILITY_SAMPLES = 500;
 
 export class CompositeService {
     private router: ProviderRouter;
@@ -124,6 +147,8 @@ export class CompositeService {
     private swrrState = new Map<string, SWRRState>();
     // Per-model latency tracking for lowest_latency strategy
     private latencyTrackers = new Map<string, LatencyTracker>();
+    // Per-model success/failure samples for highest_reliability strategy
+    private reliabilityTrackers = new Map<string, ReliabilitySample[]>();
 
 
     constructor(router: ProviderRouter) {
@@ -352,6 +377,10 @@ export class CompositeService {
             return this.lowestLatencySelect(compositeId, resolvedModels, config, health);
         }
 
+        if (config.strategy === 'highest_reliability') {
+            return this.highestReliabilitySelect(compositeId, resolvedModels, config, health);
+        }
+
         // failover: strict order, but skip unhealthy
         return healthyIds;
     }
@@ -427,6 +456,7 @@ export class CompositeService {
     }
 
     private recordSuccess(modelId: string, healthCfg: CompositeHealthConfig): void {
+        this.recordReliability(modelId, true);
         const h = this.getHealth(modelId);
         h.consecutiveFailures = 0;
         if (h.state !== HealthState.Healthy) {
@@ -436,6 +466,7 @@ export class CompositeService {
     }
 
     private recordFailure(modelId: string, healthCfg: CompositeHealthConfig): void {
+        this.recordReliability(modelId, false);
         const h = this.getHealth(modelId);
         h.consecutiveFailures++;
         h.lastFailureTime = Date.now();
@@ -487,14 +518,14 @@ export class CompositeService {
     private recordLatency(modelId: string, ttfbMs: number, windowMs: number): void {
         let tracker = this.latencyTrackers.get(modelId);
         if (!tracker) {
-            tracker = { samples: [], ema: ttfbMs, alpha: 0.3 };
+            tracker = { samples: [] as LatencySample[], ema: ttfbMs, alpha: 0.3 };
             this.latencyTrackers.set(modelId, tracker);
         }
 
         // Prune old samples
         const cutoff = Date.now() - windowMs;
-        tracker.samples = tracker.samples.filter(s => s > cutoff);
-        tracker.samples.push(Date.now());
+        tracker.samples = tracker.samples.filter(s => s.recordedAt > cutoff);
+        tracker.samples.push({ ttfbMs, recordedAt: Date.now() });
 
         // EMA update
         tracker.ema = tracker.alpha * ttfbMs + (1 - tracker.alpha) * tracker.ema;
@@ -549,6 +580,82 @@ export class CompositeService {
         }
 
         return bestModel ? [bestModel] : [];
+    }
+
+    // ─── Reliability-based selection ─────────────────────────────────
+
+    /**
+     * Record a success/failure outcome for a model. Samples are timestamped;
+     * the sliding window is applied at read time in getReliability(). The
+     * retained list is capped to bound memory.
+     */
+    private recordReliability(modelId: string, success: boolean): void {
+        let samples = this.reliabilityTrackers.get(modelId);
+        if (!samples) {
+            samples = [];
+            this.reliabilityTrackers.set(modelId, samples);
+        }
+        samples.push({ success, recordedAt: Date.now() });
+        if (samples.length > MAX_RELIABILITY_SAMPLES) {
+            samples.splice(0, samples.length - MAX_RELIABILITY_SAMPLES);
+        }
+    }
+
+    /**
+     * Success ratio (0-1) for a model over the given sliding window, or null
+     * when there are no samples in the window.
+     */
+    private getReliability(modelId: string, windowMs: number): number | null {
+        const samples = this.reliabilityTrackers.get(modelId);
+        if (!samples || samples.length === 0) return null;
+        const cutoff = Date.now() - windowMs;
+        let total = 0;
+        let ok = 0;
+        for (const s of samples) {
+            if (s.recordedAt <= cutoff) continue;
+            total++;
+            if (s.success) ok++;
+        }
+        if (total === 0) return null;
+        return ok / total;
+    }
+
+    /**
+     * Select the model with the highest success ratio over the sliding window
+     * for the highest_reliability strategy. Falls back to equal-weight
+     * round-robin when no reliability data exists for any model. The chosen
+     * model leads; remaining healthy models follow (sorted by reliability) so
+     * failover still has candidates.
+     *
+     * Untested models are given the benefit of the doubt (treated as fully
+     * reliable, 1.0) so they get sampled rather than being permanently ranked
+     * below a model with a known-bad ratio; once a model has data in the
+     * window, its measured ratio applies.
+     */
+    private highestReliabilitySelect(
+        compositeId: string,
+        resolvedModels: ResolvedModelConfig[],
+        config: CompositeModelConfig,
+        health: CompositeHealthConfig,
+    ): string[] {
+        const windowMs = config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS;
+        const healthy = resolvedModels.filter(m => !this.isUnhealthy(m.id, health));
+
+        if (healthy.length === 0) return [];
+
+        const scored = healthy.map(m => ({ id: m.id, score: this.getReliability(m.id, windowMs) }));
+        const allUnknown = scored.every(s => s.score === null);
+
+        // No reliability data yet: fall back to equal-weight round-robin.
+        if (allUnknown) {
+            const equalModels = healthy.map(m => ({ ...m, weight: 1 }));
+            return this.smoothWRRSelect(compositeId, equalModels, health);
+        }
+
+        // Highest reliability first; untested models (null) are optimistically
+        // treated as 1.0 so they outrank known-unreliable models.
+        scored.sort((a, b) => (b.score ?? 1) - (a.score ?? 1));
+        return scored.map(s => s.id);
     }
 
     // ─── Throttling ─────────────────────────────────────────────────

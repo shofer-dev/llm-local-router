@@ -122,6 +122,41 @@ describe('CompositeService', () => {
         });
     });
 
+    describe('highest reliability', () => {
+        it('routes to the model with the higher success ratio', async () => {
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['a', new Error('always down')], ['b', okResponse],
+            ]));
+            const service = new CompositeService(router);
+            service.loadConfigs({
+                'shofer/rel': { strategy: 'highest_reliability', models: ['a', 'b'] },
+            });
+
+            // Cold start routes via round-robin and seeds reliability data
+            // (whichever model it picks; 'a' always fails, 'b' always succeeds).
+            await service.sendCompositeRequest('shofer/rel', reqStub, () => {}, new AbortController()).catch(() => {});
+
+            // 'b' now has a strictly better success ratio than 'a', so it leads
+            // and serves the request — never the known-failing 'a'.
+            for (let i = 0; i < 3; i++) {
+                const r = await service.sendCompositeRequest('shofer/rel', reqStub, () => {}, new AbortController());
+                assert.equal(r.servedByModel, 'b');
+            }
+        });
+
+        it('falls back to round-robin on cold start (no data)', async () => {
+            const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([
+                ['a', okResponse], ['b', okResponse],
+            ]));
+            const service = new CompositeService(router);
+            service.loadConfigs({
+                'shofer/rel2': { strategy: 'highest_reliability', models: ['a', 'b'] },
+            });
+            const r = await service.sendCompositeRequest('shofer/rel2', reqStub, () => {}, new AbortController());
+            assert.ok(r.servedByModel === 'a' || r.servedByModel === 'b');
+        });
+    });
+
     describe('health', () => {
         it('skips unhealthy models in failover', async () => {
             const router = createMockRouter(new Map<string, ChatCompletionResponse | Error>([

@@ -78,13 +78,13 @@ describe('llm-client', () => {
             assert.equal(pricing.cacheReadsPrice, 0.5);
         });
 
-        it('converts deepseek-v4-flash pricing (no cache)', () => {
+        it('converts deepseek-v4-flash pricing', () => {
             const pricing = toPerMillionPricing('deepseek-v4-flash');
             assert.ok(pricing);
             assert.ok(Math.abs(pricing.inputPrice - 0.14) < 0.001, `expected ~0.14, got ${pricing.inputPrice}`);
             assert.ok(Math.abs(pricing.outputPrice - 0.28) < 0.001, `expected ~0.28, got ${pricing.outputPrice}`);
-            // deepseek-v4-flash has no cache-read pricing in the registry
-            assert.equal(pricing.cacheReadsPrice ?? null, null);
+            // cache read $0.0000028/1K → $0.0028/1M
+            assert.ok(Math.abs((pricing.cacheReadsPrice ?? 0) - 0.0028) < 0.0001, `expected ~0.0028, got ${pricing.cacheReadsPrice}`);
         });
 
         it('returns undefined for unknown model', () => {

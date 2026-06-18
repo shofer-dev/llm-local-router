@@ -104,7 +104,7 @@ describe('model-registry', () => {
         ];
         const newProviderChecks: Array<[string, ProviderType]> = [
             ['mistral-large-latest', ProviderType.Mistral],
-            ['grok-4', ProviderType.XAI],
+            ['grok-4.3', ProviderType.XAI],
             ['anthropic.claude-sonnet-4-20250514-v1:0', ProviderType.Bedrock],
             ['claude-opus-4-20250514', ProviderType.AnthropicVertex],
             ['claude-opus-4-8', ProviderType.Anthropic],
@@ -161,7 +161,7 @@ describe('model-registry', () => {
 
         it('returns Zhipu models', () => {
             const models = getModelsByProvider(ProviderType.Zhipu);
-            assert.equal(models.length, 5);
+            assert.equal(models.length, 7);
         });
 
         it('returns Mistral models', () => {

@@ -44,7 +44,7 @@ const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string
   minimax: { label: 'MiniMax', defaultEndpoint: 'https://api.minimax.io/v1' },
   moonshot: { label: 'Moonshot / Kimi', defaultEndpoint: 'https://api.moonshot.cn/v1' },
   xiaomi: { label: 'Xiaomi MiMo', defaultEndpoint: 'https://api.xiaomimimo.com/v1' },
-  zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://open.bigmodel.cn/api/paas/v4' },
+  zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://api.z.ai/api/coding/paas/v4' },
   openrouter: { label: 'OpenRouter', defaultEndpoint: 'https://openrouter.ai/api/v1' },
   mistral: { label: 'Mistral AI', defaultEndpoint: 'https://api.mistral.ai/v1' },
   xai: { label: 'xAI (Grok)', defaultEndpoint: 'https://api.x.ai/v1' },
@@ -98,7 +98,7 @@ const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string
   'vercel-ai-gateway': { label: 'Vercel AI Gateway', defaultEndpoint: 'https://ai-gateway.vercel.sh/v1' },
   zai: {
     label: 'Z.ai (Zhipu Intl.)',
-    defaultEndpoint: 'https://api.z.ai/v1',
+    defaultEndpoint: 'https://api.z.ai/api/coding/paas/v4',
     advancedFields: [
       { key: 'zaiApiLine', label: 'API Line', placeholder: 'international_coding', type: 'text', description: 'Z.ai API routing line: "international_coding" (default) or "china_coding"' },
     ],
@@ -210,7 +210,7 @@ interface MetricsPayload {
 }
 
 type HostMessage =
-  | { type: 'initConfig'; compositeModels: WebviewCompositeModel[]; modelRegistry: ModelRegistrySummary[]; activeTab?: WebviewTab }
+  | { type: 'initConfig'; compositeModels: WebviewCompositeModel[]; modelRegistry: ModelRegistrySummary[]; version: string; activeTab?: WebviewTab }
   | { type: 'configSaved' }
   | { type: 'validationError'; errors: string[] }
   | { type: 'configImported'; compositeModels: WebviewCompositeModel[] }
@@ -218,7 +218,7 @@ type HostMessage =
   | { type: 'statusUpdate'; status: StatusPayload }
   | { type: 'providerConfigSaved'; provider: string }
   | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] }
-  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
+  | { type: 'metricsQueryResponse'; metric: string; since: string; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
   | { type: 'initCustomProviders'; customProviders: CustomProviderConfig[] }
   | { type: 'customProviderSaved'; provider: CustomProviderConfig }
   | { type: 'customProviderDeleted'; providerId: string };
@@ -366,6 +366,7 @@ export class RouterConfigProvider {
       type: 'initConfig',
       compositeModels: webviewModels,
       modelRegistry: registry,
+      version: this.context.extension.packageJSON.version ?? 'unknown',
       ...(activeTab ? { activeTab } : {}),
     });
     this.panel.webview.postMessage({ type: 'statusUpdate', status });
@@ -479,7 +480,7 @@ export class RouterConfigProvider {
     const collector = getMetricsCollector();
     const storage = collector.getStorage();
     if (!storage) {
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', data: [], models: [] });
+      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
       return;
     }
     try {
@@ -487,10 +488,10 @@ export class RouterConfigProvider {
       const storageMetric = metric === 'cost_cumulative' ? 'cost' : metric;
       const data = storage.getTimeSeries(since, modelIds, storageMetric);
       const models = modelIds.length > 0 ? modelIds : storage.getDistinctModels(since);
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', data, models });
+      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data, models });
     } catch (err) {
       (await import('./logger')).getLogger().warning(`Metrics query failed: ${err}`);
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', data: [], models: [] });
+      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
     }
   }
 

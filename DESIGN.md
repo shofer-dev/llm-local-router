@@ -38,7 +38,7 @@ Shofer Router is a self-contained VS Code extension that embeds all LLM routing 
 │  │    resolution        │  │  • Health monitoring           │ │
 │  │  • Protocol-based    │  │  • Throttling                  │ │
 │  │    handler factory   │  │  • TTFB latency tracking       │ │
-│  │  • API key routing   │  │                                │ │
+│  │  • API key routing   │  │  • Highest-reliability strategy│ │
 │  │  • Request prep      │  │                                │ │
 │  │  • Stream transform  │  │                                │ │
 │  └──────────┬───────────┘  └────────────────────────────────┘ │
@@ -190,6 +190,7 @@ Handles `shofer/*` composite models with reliability features — the primary pl
 - **failover**: Tries models in strict order. On failure (HTTP error, timeout, stream abort), falls back to the next model.
 - **round_robin**: Smooth weighted round-robin (nginx-style). Each model has a `weight` (default: 1). The algorithm tracks per-model `currentWeight`, picks the highest, then subtracts the total — distributing proportionally without bursting to high-weight nodes. Unhealthy models are excluded.
 - **lowest_latency**: Always picks the model with the lowest average TTFB, computed via exponential moving average (EMA, α=0.3) over a configurable sliding window (default: 10 minutes). When no latency data exists (cold start), falls back to equal-weight round-robin.
+- **highest_reliability**: Always picks the model with the highest success ratio (successes ÷ attempts) over the same configurable sliding window (`latencyWindowMs`, default: 10 minutes). Remaining healthy models follow in descending reliability so failover still has candidates. Untested models are given the benefit of the doubt (treated as 1.0) so they get sampled rather than ranked below a known-unreliable model. When no reliability data exists at all (cold start), falls back to equal-weight round-robin.
 
 **Model configs** accept either a plain string (`"model-id"`) or an object:
 ```json
@@ -201,6 +202,11 @@ Per-model `throttling` overrides composite-level defaults for that model only.
 - TTFB is measured per-model on each successful composite request
 - Samples beyond the configurable `latencyWindowMs` (default: 600s) are pruned automatically
 - EMA smoothing (α=0.3) prevents noise from outliers affecting selection
+
+**Reliability tracking (highest_reliability strategy):**
+- Each composite attempt records a success/failure outcome per-model (success = reached first byte)
+- The success ratio is computed over the same `latencyWindowMs` sliding window, applied at read time
+- Retained samples are capped per model (500) to bound memory; the window filter is the real selector
 
 **Health tracking — three states:**
 | State | Trigger | Behavior |

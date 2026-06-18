@@ -1,12 +1,15 @@
 import React from 'react';
 
-const VERSION = '0.6.1';
+interface Props {
+  /** Extension version, supplied by the host via initConfig. */
+  version?: string;
+}
 
-export default function AboutPanel() {
+export default function AboutPanel({ version }: Props) {
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>Shofer Router</h2>
-      <p style={styles.version}>Version {VERSION}</p>
+      <p style={styles.version}>Version {version || 'unknown'}</p>
 
       <div style={styles.section}>
         <p>
@@ -22,12 +25,25 @@ export default function AboutPanel() {
             'OpenAI (GPT-5.x)',
             'Anthropic (Claude)',
             'Google Gemini',
+            'Google Vertex AI',
             'DeepSeek',
             'MiniMax',
             'Moonshot / Kimi',
             'Xiaomi MiMo',
             'Zhipu GLM',
+            'Z.ai',
+            'Mistral AI',
+            'xAI (Grok)',
+            'AWS Bedrock',
+            'Ollama (local)',
+            'LM Studio (local)',
+            'Fireworks AI',
+            'SambaNova',
+            'Baseten',
             'OpenRouter',
+            'Requesty',
+            'Unbound',
+            'Vercel AI Gateway',
           ].map(p => (
             <span key={p} style={styles.tag}>{p}</span>
           ))}

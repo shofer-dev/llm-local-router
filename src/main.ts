@@ -249,7 +249,7 @@ function getDefaultEndpoint(provider: string): string {
         minimax: 'https://api.minimax.io',
         moonshot: 'https://api.moonshot.cn',
         xiaomi: 'https://api.xiaomimimo.com',
-        zhipu: 'https://open.bigmodel.cn',
+        zhipu: 'https://api.z.ai',
         openrouter: 'https://openrouter.ai',
     };
     return defaults[provider] || '';

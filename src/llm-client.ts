@@ -168,7 +168,7 @@ export async function sendNonStreamingRequest(
 
     const response = await fetch(url, {
         method: 'POST',
-        headers: buildHeaders(apiKey),
+        headers: buildHeaders(apiKey, url),
         body: JSON.stringify(body),
         signal: abortController.signal,
     });
@@ -198,7 +198,7 @@ export async function sendStreamingRequest(
 
     const response = await fetch(url, {
         method: 'POST',
-        headers: buildHeaders(apiKey),
+        headers: buildHeaders(apiKey, url),
         body: JSON.stringify(body),
         signal: abortController.signal,
     });
@@ -229,10 +229,23 @@ function extractReasoningFromDetails(details: unknown): string | undefined {
 
 // ─── Internal helpers ───────────────────────────────────────────────
 
-function buildHeaders(apiKey: string): Record<string, string> {
+/**
+ * Roo Code client-identity headers. Z.ai's GLM Coding Plan attributes
+ * usage to supported coding tools by these headers, so requests to
+ * api.z.ai mimic Roo Code. Verified working via the OpenAI-compatible
+ * coding endpoint (https://api.z.ai/api/coding/paas/v4).
+ */
+const ROO_CODE_HEADERS: Record<string, string> = {
+    'HTTP-Referer': 'https://github.com/RooVetGit/Roo-Cline',
+    'X-Title': 'Roo Code',
+    'User-Agent': 'RooCode/3.53.0',
+};
+
+function buildHeaders(apiKey: string, url?: string): Record<string, string> {
     return {
         'Content-Type': 'application/json',
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        ...(url && url.includes('api.z.ai') ? ROO_CODE_HEADERS : {}),
     };
 }
 

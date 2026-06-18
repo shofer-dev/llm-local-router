@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import type { MetricsPayload } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
@@ -18,7 +18,6 @@ interface TimeSeriesPoint {
 
 type MetricKey =
   | 'cost'
-  | 'cost_cumulative'
   | 'requests'
   | 'errors'
   | 'tokens_total'
@@ -31,17 +30,17 @@ type MetricKey =
 interface MetricDef {
   key: MetricKey;
   label: string;
+  /** When true, the chart plots a running cumulative total instead of per-window values. */
+  cumulative?: boolean;
   computeTotal: (pts: TimeSeriesPoint[]) => string;
 }
 
+const fmtTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
 const METRICS: MetricDef[] = [
   {
-    key: 'cost', label: 'Cost',
+    key: 'cost', label: 'Cost (Cumulative)', cumulative: true,
     computeTotal: (pts) => `$${pts.reduce((s, d) => s + d.value, 0).toFixed(6)}`,
-  },
-  {
-    key: 'cost_cumulative', label: 'Cost (Cumulative)',
-    computeTotal: () => '',
   },
   {
     key: 'requests', label: 'Requests',
@@ -52,38 +51,29 @@ const METRICS: MetricDef[] = [
     computeTotal: (pts) => String(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'tokens_total', label: 'Tokens (Total)',
-    computeTotal: (pts) => {
-      const n = pts.reduce((s, d) => s + d.value, 0);
-      return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-    },
+    key: 'tokens_total', label: 'Tokens (Total, Cumulative)', cumulative: true,
+    computeTotal: (pts) => fmtTokens(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'tokens_prompt', label: 'Tokens (Prompt)',
-    computeTotal: (pts) => {
-      const n = pts.reduce((s, d) => s + d.value, 0);
-      return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-    },
+    key: 'tokens_prompt', label: 'Tokens (Prompt, Cumulative)', cumulative: true,
+    computeTotal: (pts) => fmtTokens(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'tokens_completion', label: 'Tokens (Completion)',
-    computeTotal: (pts) => {
-      const n = pts.reduce((s, d) => s + d.value, 0);
-      return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-    },
+    key: 'tokens_completion', label: 'Tokens (Completion, Cumulative)', cumulative: true,
+    computeTotal: (pts) => fmtTokens(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'latency_ttfb', label: 'Latency (TTFB)',
+    key: 'latency_ttfb', label: 'Latency — Time to First Byte (TTFB)',
     computeTotal: (pts) => {
       if (pts.length === 0) return '—';
-      return `${Math.round(pts.reduce((s, d) => s + d.value, 0) / pts.length)}ms`;
+      return `${(pts.reduce((s, d) => s + d.value, 0) / pts.length / 1000).toFixed(2)}s`;
     },
   },
   {
-    key: 'latency_ttlb', label: 'Latency (TTLB)',
+    key: 'latency_ttlb', label: 'Latency — Time to Last Byte (TTLB)',
     computeTotal: (pts) => {
       if (pts.length === 0) return '—';
-      return `${Math.round(pts.reduce((s, d) => s + d.value, 0) / pts.length)}ms`;
+      return `${(pts.reduce((s, d) => s + d.value, 0) / pts.length / 1000).toFixed(2)}s`;
     },
   },
   {
@@ -112,17 +102,22 @@ const COLORS = [
 const ALL_PRIMARY = '__ALL_PRIMARY__';
 const ALL_COMPOSITE = '__ALL_COMPOSITE__';
 
+function isLatency(metricKey: string): boolean {
+  return metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb';
+}
+
 function formatTick(value: number, metricKey: string): string {
-  if (metricKey === 'cost' || metricKey === 'cost_cumulative') return `$${value.toFixed(4)}`;
+  if (metricKey === 'cost') return `$${value.toFixed(4)}`;
   if (metricKey === 'cache_hit_ratio') return `${(value * 100).toFixed(0)}%`;
+  if (isLatency(metricKey)) return `${(value / 1000).toFixed(2)}s`; // ms → seconds
   if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
   return String(Math.round(value));
 }
 
 function tooltipVal(value: number, metricKey: string): string {
-  if (metricKey === 'cost' || metricKey === 'cost_cumulative') return `$${(value as number).toFixed(6)}`;
+  if (metricKey === 'cost') return `$${(value as number).toFixed(6)}`;
   if (metricKey === 'cache_hit_ratio') return `${((value as number) * 100).toFixed(1)}%`;
-  if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb') return `${Math.round(value as number)}ms`;
+  if (isLatency(metricKey)) return `${((value as number) / 1000).toFixed(3)}s`; // ms → seconds
   return String(Math.round(value as number));
 }
 
@@ -131,10 +126,17 @@ function isComposite(modelId: string): boolean {
   return modelId.startsWith('shofer/');
 }
 
+/** Human-readable label for a line key (aggregate keys → friendly names). */
+function friendlyName(key: string): string {
+  if (key === ALL_PRIMARY) return 'All Primary';
+  if (key === ALL_COMPOSITE) return 'All Composite';
+  return key;
+}
+
 // ─── Single-chart sub-component ───────────────────────────────────
 
 function MetricChart({
-  metric, points, timeRange, modelsInData, visibleModels, loading,
+  metric, points, timeRange, modelsInData, visibleModels, loading, onToggle,
 }: {
   metric: MetricDef;
   points: TimeSeriesPoint[];
@@ -142,6 +144,7 @@ function MetricChart({
   modelsInData: string[];
   visibleModels: string[];
   loading: boolean;
+  onToggle: (key: string) => void;
 }) {
   const primaryKeys = modelsInData.filter(m => !isComposite(m));
   const compositeKeys = modelsInData.filter(m => isComposite(m));
@@ -153,8 +156,9 @@ function MetricChart({
   const allLineKeys = [...aggKeys, ...modelsInData];
 
   const allColors = new Map<string, string>();
-  // Fixed colors for aggregate lines
-  allColors.set(ALL_PRIMARY, '#ffffff');
+  // Fixed colors for aggregate lines (theme-aware so the primary line is
+  // never white-on-white / black-on-black).
+  allColors.set(ALL_PRIMARY, 'var(--vscode-charts-foreground, #cccccc)');
   allColors.set(ALL_COMPOSITE, '#ff9800');
   for (let i = 0; i < modelsInData.length; i++) {
     allColors.set(modelsInData[i], COLORS[i % COLORS.length]);
@@ -176,56 +180,46 @@ function MetricChart({
     }
     const windows = [...windowMap.keys()].sort();
 
-    function sumValues(ids: string[], row: Record<string, number | string>): number {
-      const vals = ids.map(id => row[id] as number | undefined).filter((v): v is number => typeof v === 'number');
+    // Latency and cache-hit-ratio aggregate by average across models; everything
+    // else sums. (For cumulative metrics the per-model values are summed into a
+    // running total, then aggregates derive from those.)
+    const isAvg = metric.key === 'latency_ttfb' || metric.key === 'latency_ttlb' || metric.key === 'cache_hit_ratio';
+    const aggregate = (ids: string[], row: Record<string, number | string>): number => {
+      const vals = ids.map(id => row[id]).filter((v): v is number => typeof v === 'number');
       if (vals.length === 0) return 0;
-      if (metric.key === 'latency_ttfb' || metric.key === 'latency_ttlb' || metric.key === 'cache_hit_ratio') {
-        return vals.reduce((s, v) => s + v, 0) / vals.length;
-      }
-      return vals.reduce((s, v) => s + v, 0);
-    }
+      return isAvg ? vals.reduce((s, v) => s + v, 0) / vals.length : vals.reduce((s, v) => s + v, 0);
+    };
 
-    const raw: Array<Record<string, number | string>> = windows.map(w => {
-      const vals = windowMap.get(w) ?? {};
-      return { windowStart: w, ...vals };
-    });
-
-    const buildRows = (rows: Array<Record<string, number | string>>) =>
-      rows.map(row => {
-        const out: Record<string, number | string> = { windowStart: row.windowStart };
-        if (primaryKeys.length > 0) out[ALL_PRIMARY] = sumValues(primaryKeys, row);
-        if (compositeKeys.length > 0) out[ALL_COMPOSITE] = sumValues(compositeKeys, row);
-        return out;
-      });
-
-    if (metric.key === 'cost_cumulative') {
-      const acc = new Map<string, number>();
-      return buildRows(raw).map(row => {
-        const out: Record<string, number | string> = { windowStart: row.windowStart };
-        // Accumulate per-model cumulative totals
-        for (const mid of modelsInData) {
-          const d = (raw.find(r => r.windowStart === row.windowStart)?.[mid] as number | undefined) ?? 0;
-          const r = (acc.get(mid) ?? 0) + d;
+    const acc = new Map<string, number>();
+    return windows.map(w => {
+      const row = windowMap.get(w) ?? {};
+      const out: Record<string, number | string> & { windowStart: string } = { windowStart: w };
+      // Per-model series (so individual model lines render for every metric).
+      for (const mid of modelsInData) {
+        const v = row[mid];
+        if (metric.cumulative) {
+          const r = (acc.get(mid) ?? 0) + (typeof v === 'number' ? v : 0);
           acc.set(mid, r);
           out[mid] = r;
+        } else if (typeof v === 'number') {
+          out[mid] = v;
         }
-        // Aggregate keys derive from model accumulators
-        if (primaryKeys.length > 0) {
-          out[ALL_PRIMARY] = primaryKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
-        }
-        if (compositeKeys.length > 0) {
-          out[ALL_COMPOSITE] = compositeKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
-        }
-        return out as Record<string, number | string> & { windowStart: string };
-      });
-    }
-
-    return buildRows(raw) as unknown as Array<Record<string, number | string> & { windowStart: string }>;
-  }, [points, metric.key, modelsInData, primaryKeys, compositeKeys]);
+      }
+      // Aggregate (ALL_PRIMARY / ALL_COMPOSITE) series.
+      if (metric.cumulative) {
+        if (primaryKeys.length > 0) out[ALL_PRIMARY] = primaryKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
+        if (compositeKeys.length > 0) out[ALL_COMPOSITE] = compositeKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
+      } else {
+        if (primaryKeys.length > 0) out[ALL_PRIMARY] = aggregate(primaryKeys, row);
+        if (compositeKeys.length > 0) out[ALL_COMPOSITE] = aggregate(compositeKeys, row);
+      }
+      return out;
+    });
+  }, [points, metric.key, metric.cumulative, modelsInData, primaryKeys, compositeKeys]);
 
   if (points.length === 0 && !loading) return null;
 
-  const total = metric.key === 'cost_cumulative' ? '' : metric.computeTotal(points);
+  const total = metric.computeTotal(points);
 
   return (
     <div id={`metric-${metric.key}`} style={cs.section}>
@@ -236,7 +230,7 @@ function MetricChart({
       </div>
       {points.length > 0 && (
         <div style={cs.chartWrap}>
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
               <CartesianGrid stroke="var(--vscode-panel-border, rgba(128,128,128,0.12))" strokeDasharray="3 3" />
               <XAxis dataKey="windowStart"
@@ -255,13 +249,31 @@ function MetricChart({
                 border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))',
                 borderRadius: '4px', fontSize: '10px', fontFamily: 'var(--vscode-font-family)',
               }}
+                itemSorter={(item: any) => -(item.value ?? 0)}
                 labelFormatter={(iso: string) => {
                   const d = new Date(iso);
                   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                 }}
-                formatter={(value: number) => [tooltipVal(value, metric.key), '']} />
+                formatter={(value: number, name: string) => [tooltipVal(value, metric.key), name]} />
+              <Legend
+                wrapperStyle={{ fontSize: '10px', cursor: 'pointer', paddingTop: '4px' }}
+                onClick={(e: any) => {
+                  const k = e?.dataKey ?? e?.payload?.dataKey;
+                  if (k) onToggle(k as string);
+                }}
+                formatter={(value: string, entry: any) => {
+                  const k = entry?.dataKey ?? entry?.payload?.dataKey;
+                  const vis = visibleKeysVal.includes(k);
+                  return (
+                    <span style={{
+                      color: 'var(--vscode-foreground)',
+                      opacity: vis ? 1 : 0.4,
+                      textDecoration: vis ? 'none' : 'line-through',
+                    }}>{value}</span>
+                  );
+                }} />
               {allLineKeys.map(key => (
-                <Line key={key} type="monotone" dataKey={key} name={key}
+                <Line key={key} type="monotone" dataKey={key} name={friendlyName(key)}
                   stroke={allColors.get(key)!}
                   strokeWidth={key === ALL_PRIMARY || key === ALL_COMPOSITE ? 2.5 : 1.5}
                   strokeDasharray={key === ALL_PRIMARY ? '7 4' : key === ALL_COMPOSITE ? '10 4 2 4' : undefined}
@@ -310,20 +322,19 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
     const until = new Date().toISOString();
     setLoading(true);
 
-    const keys = METRICS.map(m => m.key);
+    const expectedKeys = new Set<string>(METRICS.map(m => m.key));
     const collected: Record<string, TimeSeriesPoint[]> = {};
-    let received = 0;
 
     const unsub = onMessage((msg: any) => {
-      if (msg.type === 'metricsQueryResponse') {
-        if (received < keys.length) {
-          collected[keys[received]] = msg.data;
-          received++;
-          if (received === keys.length) {
-            setAllData({ ...collected });
-            setLoading(false);
-          }
-        }
+      if (msg.type !== 'metricsQueryResponse') return;
+      // Match responses by metric key (responses can arrive out of order),
+      // and ignore stragglers from a previous time-range request.
+      if (msg.since !== since) return;
+      if (!expectedKeys.has(msg.metric) || msg.metric in collected) return;
+      collected[msg.metric] = msg.data;
+      if (Object.keys(collected).length === expectedKeys.size) {
+        setAllData({ ...collected });
+        setLoading(false);
       }
     });
 
@@ -493,7 +504,8 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
         {METRICS.map(m => (
           <MetricChart key={m.key} metric={m}
             points={allData[m.key] ?? []} timeRange={timeRange}
-            modelsInData={modelsInData} visibleModels={visibleModels} loading={loading} />
+            modelsInData={modelsInData} visibleModels={visibleModels} loading={loading}
+            onToggle={toggleModel} />
         ))}
       </div>
 

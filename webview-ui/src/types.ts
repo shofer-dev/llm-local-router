@@ -8,7 +8,7 @@
 
 // ─── Strategy ───────────────────────────────────────────────────
 
-export type RoutingStrategy = 'failover' | 'round_robin' | 'lowest_latency';
+export type RoutingStrategy = 'failover' | 'round_robin' | 'lowest_latency' | 'highest_reliability';
 
 // ─── Throttling ─────────────────────────────────────────────────
 
@@ -211,6 +211,7 @@ export type HostMessage =
       type: 'initConfig';
       compositeModels: CompositeModelConfig[];
       modelRegistry: ModelRegistrySummary[];
+      version: string;
       activeTab?: 'status' | 'config' | 'metrics' | 'providers';
     }
   | { type: 'configSaved' }
@@ -220,7 +221,7 @@ export type HostMessage =
   | { type: 'statusUpdate'; status: StatusPayload }
   | { type: 'providerConfigSaved'; provider: string }
   | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] }
-  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
+  | { type: 'metricsQueryResponse'; metric: string; since: string; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
   | { type: 'initCustomProviders'; customProviders: CustomProviderConfig[] }
   | { type: 'customProviderSaved'; provider: CustomProviderConfig }
   | { type: 'customProviderDeleted'; providerId: string };
