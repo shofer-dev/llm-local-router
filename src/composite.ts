@@ -99,9 +99,17 @@ interface SWRRState {
 }
 
 /** Per-model latency tracking for lowest_latency strategy. */
+
+/** A single TTFB sample with its recording timestamp. */
+interface LatencySample {
+    /** Time-to-first-byte in milliseconds. */
+    ttfbMs: number;
+    /** Epoch milliseconds when the sample was recorded. */
+    recordedAt: number;
+}
 interface LatencyTracker {
     /** Timestamped TTFB samples in milliseconds. */
-    samples: number[];
+    samples: LatencySample[];
     /** Current exponential moving average. */
     ema: number;
     /** Smoothing factor for EMA (0-1). Higher = more weight to recent. */
@@ -487,14 +495,14 @@ export class CompositeService {
     private recordLatency(modelId: string, ttfbMs: number, windowMs: number): void {
         let tracker = this.latencyTrackers.get(modelId);
         if (!tracker) {
-            tracker = { samples: [], ema: ttfbMs, alpha: 0.3 };
+            tracker = { samples: [] as LatencySample[], ema: ttfbMs, alpha: 0.3 };
             this.latencyTrackers.set(modelId, tracker);
         }
 
         // Prune old samples
         const cutoff = Date.now() - windowMs;
-        tracker.samples = tracker.samples.filter(s => s > cutoff);
-        tracker.samples.push(Date.now());
+        tracker.samples = tracker.samples.filter(s => s.recordedAt > cutoff);
+        tracker.samples.push({ ttfbMs, recordedAt: Date.now() });
 
         // EMA update
         tracker.ema = tracker.alpha * ttfbMs + (1 - tracker.alpha) * tracker.ema;

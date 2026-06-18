@@ -341,6 +341,17 @@ describe('providers/zhipu', () => {
         assert.ok(req.extraBody);
         assert.deepEqual(req.extraBody!.thinking, { type: 'enabled' });
     });
+
+    it('enables thinking for glm-5.2', () => {
+        const req: ChatCompletionRequest = {
+            conversationId: 'test',
+            model: 'glm-5.2',
+            messages: [],
+        };
+        prepareZhipuRequest(req);
+        assert.ok(req.extraBody);
+        assert.deepEqual(req.extraBody!.thinking, { type: 'enabled' });
+    });
 });
 
 // ─── Google ────────────────────────────────────────────────────────

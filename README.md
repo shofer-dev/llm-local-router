@@ -30,7 +30,7 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 | MiniMax | MiniMax-M2.7, MiniMax-M2.5 | `minimax` |
 | Moonshot | kimi-k2-thinking, kimi-k2.5 | `moonshot` |
 | Xiaomi | mimo-v2-pro, mimo-v2-omni, mimo-v2-tts, mimo-v2-flash | `xiaomi` |
-| Zhipu | glm-5.1, glm-5, glm-4.7, glm-4.6, glm-4.5 | `zhipu` |
+| Zhipu | glm-5.2, glm-5.1, glm-5, glm-4.7, glm-4.6, glm-4.5 | `zhipu` |
 | OpenRouter | auto (passthrough for unknown models) | `openrouter` |
 | **Custom** | Any provider via the webview UI | User-defined |
 

@@ -156,7 +156,8 @@ const GEMINI_NATIVE_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta
  * The schemas coming from VS Code contain `additionalProperties: false`
  * (standard JSON Schema), which must be removed before sending.
  */
-function stripAdditionalProperties(obj: Record<string, unknown>): Record<string, unknown> {
+/** @test — exported for unit test coverage */
+export function stripAdditionalProperties(obj: Record<string, unknown>): Record<string, unknown> {
     if (typeof obj !== 'object' || obj === null) {
         return obj;
     }
@@ -181,7 +182,8 @@ function stripAdditionalProperties(obj: Record<string, unknown>): Record<string,
     return result;
 }
 
-function roleToGemini(role: MessageRole): string {
+/** @test — exported for unit test coverage */
+export function roleToGemini(role: MessageRole): string {
     switch (role) {
         case MessageRole.User: return 'user';
         case MessageRole.Assistant: return 'model';
@@ -190,7 +192,8 @@ function roleToGemini(role: MessageRole): string {
     }
 }
 
-function roleFromGemini(role: string | undefined): MessageRole {
+/** @test — exported for unit test coverage */
+export function roleFromGemini(role: string | undefined): MessageRole {
     switch (role) {
         case 'user': return MessageRole.User;
         case 'model': return MessageRole.Assistant;
@@ -201,7 +204,8 @@ function roleFromGemini(role: string | undefined): MessageRole {
 /**
  * Translate an OpenAI ChatMessage to a Gemini Content.
  */
-function messageToGeminiContent(msg: ChatMessage): GeminiContent {
+/** @test — exported for unit test coverage */
+export function messageToGeminiContent(msg: ChatMessage): GeminiContent {
     const parts: GeminiPart[] = [];
 
     const isToolResult = msg.role === MessageRole.Tool;
@@ -285,7 +289,12 @@ function messageToGeminiContent(msg: ChatMessage): GeminiContent {
 /**
  * Build the Gemini native API request payload from an OpenAI-compatible request.
  */
-function buildGeminiRequest(request: ChatCompletionRequest): GeminiRequest {
+/**
+ * Build the Gemini native API request payload from an OpenAI-compatible request.
+ *
+ * @test — exported for unit test coverage
+ */
+export function buildGeminiRequest(request: ChatCompletionRequest): GeminiRequest {
     const geminiReq: GeminiRequest = {
         contents: [],
     };
@@ -378,7 +387,8 @@ function buildGeminiRequest(request: ChatCompletionRequest): GeminiRequest {
  * Parse a Gemini part into OpenAI-compatible delta content.
  * Returns partial delta content for streaming accumulation.
  */
-function partToDelta(part: GeminiPart): {
+/** @test — exported for unit test coverage */
+export function partToDelta(part: GeminiPart): {
     content?: string;
     reasoningContent?: string;
     toolCall?: Partial<ToolCall> & { index?: number };
@@ -637,7 +647,12 @@ async function parseGeminiStream(
 /**
  * Convert a non-streaming Gemini response to OpenAI format.
  */
-function geminiToOpenAIResponse(
+/**
+ * Convert a non-streaming Gemini response to OpenAI format.
+ *
+ * @test — exported for unit test coverage
+ */
+export function geminiToOpenAIResponse(
     geminiResp: GeminiResponse,
     modelId: string,
 ): ChatCompletionResponse {
@@ -697,7 +712,8 @@ function geminiToOpenAIResponse(
     };
 }
 
-function mapGeminiFinishReason(reason: string): string {
+/** @test — exported for unit test coverage */
+export function mapGeminiFinishReason(reason: string): string {
     switch (reason) {
         case 'STOP': return 'stop';
         case 'MAX_TOKENS': return 'length';

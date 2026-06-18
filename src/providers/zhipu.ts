@@ -12,7 +12,7 @@ import { ChatCompletionRequest } from '../types';
  * GLM models that support thinking (all 4.x and 5.x models).
  */
 const THINKING_MODELS = new Set([
-    'glm-5.1', 'glm-5', 'glm-4.7', 'glm-4.6', 'glm-4.5',
+    'glm-5.2', 'glm-5.1', 'glm-5', 'glm-4.7', 'glm-4.6', 'glm-4.5',
 ]);
 
 export function prepareZhipuRequest(req: ChatCompletionRequest): void {

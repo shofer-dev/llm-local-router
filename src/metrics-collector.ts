@@ -233,7 +233,7 @@ export class MetricsCollector {
     }
 
     /**
-     * Get throttle skip count for a model since last query (resets after read).
+     * Get throttle skip count for a model. Counters persist until explicitly reset via resetThrottleSkipCounts.
      */
     getThrottleSkipCount(modelId: string): number {
         return this.throttleSkipCounts.get(modelId) ?? 0;

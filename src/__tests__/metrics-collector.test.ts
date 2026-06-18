@@ -73,6 +73,20 @@ function testClassifyUnknown(): void {
     if (result.errorType !== 'unknown') throw new Error(`Expected unknown, got ${result.errorType}`);
 }
 
+function testClassifyHttp4xx(): void {
+    const err = new Error('HTTP 400: Bad Request');
+    const result = classifyError(err);
+    if (result.errorType !== 'http_4xx') throw new Error(`Expected http_4xx, got ${result.errorType}`);
+    if (result.status !== 'error') throw new Error(`Expected error status, got ${result.status}`);
+}
+
+function testClassifyParseError(): void {
+    const err = new Error('Failed to parse JSON response');
+    const result = classifyError(err);
+    if (result.errorType !== 'parse_error') throw new Error(`Expected parse_error, got ${result.errorType}`);
+    if (result.status !== 'error') throw new Error(`Expected error status, got ${result.status}`);
+}
+
 // ─── MetricsCollector tests ────────────────────────────────────────
 
 function testRecordSuccess(): void {
@@ -353,6 +367,8 @@ const tests: Array<{ name: string; fn: () => void }> = [
     { name: 'classifyHttp5xx', fn: testClassifyHttp5xx },
     { name: 'classifyNetworkError', fn: testClassifyNetworkError },
     { name: 'classifyUnknown', fn: testClassifyUnknown },
+    { name: 'classifyHttp4xx', fn: testClassifyHttp4xx },
+    { name: 'classifyParseError', fn: testClassifyParseError },
     { name: 'recordSuccess', fn: testRecordSuccess },
     { name: 'recordError', fn: testRecordError },
     { name: 'availability', fn: testAvailability },
