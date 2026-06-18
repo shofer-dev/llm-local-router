@@ -210,7 +210,7 @@ interface MetricsPayload {
 }
 
 type HostMessage =
-  | { type: 'initConfig'; compositeModels: WebviewCompositeModel[]; modelRegistry: ModelRegistrySummary[]; activeTab?: WebviewTab }
+  | { type: 'initConfig'; compositeModels: WebviewCompositeModel[]; modelRegistry: ModelRegistrySummary[]; version: string; activeTab?: WebviewTab }
   | { type: 'configSaved' }
   | { type: 'validationError'; errors: string[] }
   | { type: 'configImported'; compositeModels: WebviewCompositeModel[] }
@@ -218,7 +218,7 @@ type HostMessage =
   | { type: 'statusUpdate'; status: StatusPayload }
   | { type: 'providerConfigSaved'; provider: string }
   | { type: 'initProviderConfig'; providers: ProviderConfigEntry[] }
-  | { type: 'metricsQueryResponse'; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
+  | { type: 'metricsQueryResponse'; metric: string; since: string; data: Array<{ windowStart: string; modelId: string; value: number }>; models: string[] }
   | { type: 'initCustomProviders'; customProviders: CustomProviderConfig[] }
   | { type: 'customProviderSaved'; provider: CustomProviderConfig }
   | { type: 'customProviderDeleted'; providerId: string };
@@ -366,6 +366,7 @@ export class RouterConfigProvider {
       type: 'initConfig',
       compositeModels: webviewModels,
       modelRegistry: registry,
+      version: this.context.extension.packageJSON.version ?? 'unknown',
       ...(activeTab ? { activeTab } : {}),
     });
     this.panel.webview.postMessage({ type: 'statusUpdate', status });
@@ -479,7 +480,7 @@ export class RouterConfigProvider {
     const collector = getMetricsCollector();
     const storage = collector.getStorage();
     if (!storage) {
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', data: [], models: [] });
+      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
       return;
     }
     try {
@@ -487,10 +488,10 @@ export class RouterConfigProvider {
       const storageMetric = metric === 'cost_cumulative' ? 'cost' : metric;
       const data = storage.getTimeSeries(since, modelIds, storageMetric);
       const models = modelIds.length > 0 ? modelIds : storage.getDistinctModels(since);
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', data, models });
+      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data, models });
     } catch (err) {
       (await import('./logger')).getLogger().warning(`Metrics query failed: ${err}`);
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', data: [], models: [] });
+      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
     }
   }
 

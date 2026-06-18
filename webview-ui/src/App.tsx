@@ -29,6 +29,7 @@ export default function App() {
   const [metrics, setMetrics] = React.useState<MetricsPayload | null>(null);
   const [status, setStatus] = React.useState<StatusPayload | null>(null);
   const [providers, setProviders] = React.useState<ProviderConfigEntry[]>([]);
+  const [version, setVersion] = React.useState<string>('');
 
   React.useEffect(() => {
     // Signal that the webview is ready to receive data
@@ -38,6 +39,7 @@ export default function App() {
       if (msg.type === 'initConfig') {
         setCompositeModels(msg.compositeModels);
         setModelRegistry(msg.modelRegistry);
+        setVersion(msg.version);
         if (msg.activeTab && msg.activeTab !== 'providers') {
           setActiveTab(msg.activeTab);
         }
@@ -109,7 +111,7 @@ export default function App() {
           )}
           {activeTab === 'metrics' && <MetricsPanel metrics={metrics} />}
           {activeTab === 'help' && <HelpPanel />}
-          {activeTab === 'about' && <AboutPanel />}
+          {activeTab === 'about' && <AboutPanel version={version} />}
         </div>
       </div>
     </ErrorBoundary>

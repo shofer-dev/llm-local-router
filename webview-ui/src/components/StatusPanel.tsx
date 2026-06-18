@@ -130,7 +130,7 @@ export default function StatusPanel({ status }: Props) {
                   <td style={styles.td}>
                     {m.pricing ? (
                       <span style={styles.mono}>
-                        ${m.pricing.inputPrice}/ ${m.pricing.outputPrice}
+                        ${m.pricing.inputPrice} / ${m.pricing.outputPrice}
                       </span>
                     ) : (
                       <span style={styles.na}>—</span>

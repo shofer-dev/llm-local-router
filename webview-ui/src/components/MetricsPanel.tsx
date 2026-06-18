@@ -310,20 +310,19 @@ export default function MetricsPanel({ metrics: _metrics }: Props) {
     const until = new Date().toISOString();
     setLoading(true);
 
-    const keys = METRICS.map(m => m.key);
+    const expectedKeys = new Set<string>(METRICS.map(m => m.key));
     const collected: Record<string, TimeSeriesPoint[]> = {};
-    let received = 0;
 
     const unsub = onMessage((msg: any) => {
-      if (msg.type === 'metricsQueryResponse') {
-        if (received < keys.length) {
-          collected[keys[received]] = msg.data;
-          received++;
-          if (received === keys.length) {
-            setAllData({ ...collected });
-            setLoading(false);
-          }
-        }
+      if (msg.type !== 'metricsQueryResponse') return;
+      // Match responses by metric key (responses can arrive out of order),
+      // and ignore stragglers from a previous time-range request.
+      if (msg.since !== since) return;
+      if (!expectedKeys.has(msg.metric) || msg.metric in collected) return;
+      collected[msg.metric] = msg.data;
+      if (Object.keys(collected).length === expectedKeys.size) {
+        setAllData({ ...collected });
+        setLoading(false);
       }
     });
 

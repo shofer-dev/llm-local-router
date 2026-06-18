@@ -1,12 +1,15 @@
 import React from 'react';
 
-const VERSION = '0.6.1';
+interface Props {
+  /** Extension version, supplied by the host via initConfig. */
+  version?: string;
+}
 
-export default function AboutPanel() {
+export default function AboutPanel({ version }: Props) {
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>Shofer Router</h2>
-      <p style={styles.version}>Version {VERSION}</p>
+      <p style={styles.version}>Version {version || 'unknown'}</p>
 
       <div style={styles.section}>
         <p>
