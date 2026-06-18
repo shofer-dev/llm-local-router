@@ -21,5 +21,5 @@ export function prepareZAiRequest(req: ChatCompletionRequest): void {
 }
 
 export function getZAiBaseUrl(): string {
-    return 'https://api.z.ai/api/paas/v4';
+    return 'https://api.z.ai/api/coding/paas/v4';
 }

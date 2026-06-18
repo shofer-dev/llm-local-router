@@ -77,7 +77,7 @@ const PROVIDER_BASE_URLS: Record<ProviderType, string> = {
     [ProviderType.Requesty]: 'https://api.requesty.ai/v1',
     [ProviderType.Unbound]: 'https://api.getunbound.ai/v1',
     [ProviderType.VercelAiGateway]: 'https://ai-gateway.vercel.sh/v1',
-    [ProviderType.ZAi]: 'https://api.z.ai/api/paas/v4',
+    [ProviderType.ZAi]: 'https://api.z.ai/api/coding/paas/v4',
 };
 
 /**
