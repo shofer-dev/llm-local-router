@@ -18,7 +18,6 @@ interface TimeSeriesPoint {
 
 type MetricKey =
   | 'cost'
-  | 'cost_cumulative'
   | 'requests'
   | 'errors'
   | 'tokens_total'
@@ -31,17 +30,17 @@ type MetricKey =
 interface MetricDef {
   key: MetricKey;
   label: string;
+  /** When true, the chart plots a running cumulative total instead of per-window values. */
+  cumulative?: boolean;
   computeTotal: (pts: TimeSeriesPoint[]) => string;
 }
 
+const fmtTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
 const METRICS: MetricDef[] = [
   {
-    key: 'cost', label: 'Cost',
+    key: 'cost', label: 'Cost (Cumulative)', cumulative: true,
     computeTotal: (pts) => `$${pts.reduce((s, d) => s + d.value, 0).toFixed(6)}`,
-  },
-  {
-    key: 'cost_cumulative', label: 'Cost (Cumulative)',
-    computeTotal: () => '',
   },
   {
     key: 'requests', label: 'Requests',
@@ -52,25 +51,16 @@ const METRICS: MetricDef[] = [
     computeTotal: (pts) => String(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'tokens_total', label: 'Tokens (Total)',
-    computeTotal: (pts) => {
-      const n = pts.reduce((s, d) => s + d.value, 0);
-      return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-    },
+    key: 'tokens_total', label: 'Tokens (Total, Cumulative)', cumulative: true,
+    computeTotal: (pts) => fmtTokens(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'tokens_prompt', label: 'Tokens (Prompt)',
-    computeTotal: (pts) => {
-      const n = pts.reduce((s, d) => s + d.value, 0);
-      return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-    },
+    key: 'tokens_prompt', label: 'Tokens (Prompt, Cumulative)', cumulative: true,
+    computeTotal: (pts) => fmtTokens(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'tokens_completion', label: 'Tokens (Completion)',
-    computeTotal: (pts) => {
-      const n = pts.reduce((s, d) => s + d.value, 0);
-      return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-    },
+    key: 'tokens_completion', label: 'Tokens (Completion, Cumulative)', cumulative: true,
+    computeTotal: (pts) => fmtTokens(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
     key: 'latency_ttfb', label: 'Latency (TTFB)',
@@ -113,14 +103,14 @@ const ALL_PRIMARY = '__ALL_PRIMARY__';
 const ALL_COMPOSITE = '__ALL_COMPOSITE__';
 
 function formatTick(value: number, metricKey: string): string {
-  if (metricKey === 'cost' || metricKey === 'cost_cumulative') return `$${value.toFixed(4)}`;
+  if (metricKey === 'cost') return `$${value.toFixed(4)}`;
   if (metricKey === 'cache_hit_ratio') return `${(value * 100).toFixed(0)}%`;
   if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
   return String(Math.round(value));
 }
 
 function tooltipVal(value: number, metricKey: string): string {
-  if (metricKey === 'cost' || metricKey === 'cost_cumulative') return `$${(value as number).toFixed(6)}`;
+  if (metricKey === 'cost') return `$${(value as number).toFixed(6)}`;
   if (metricKey === 'cache_hit_ratio') return `${((value as number) * 100).toFixed(1)}%`;
   if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb') return `${Math.round(value as number)}ms`;
   return String(Math.round(value as number));
@@ -153,8 +143,9 @@ function MetricChart({
   const allLineKeys = [...aggKeys, ...modelsInData];
 
   const allColors = new Map<string, string>();
-  // Fixed colors for aggregate lines
-  allColors.set(ALL_PRIMARY, '#ffffff');
+  // Fixed colors for aggregate lines (theme-aware so the primary line is
+  // never white-on-white / black-on-black).
+  allColors.set(ALL_PRIMARY, 'var(--vscode-charts-foreground, #cccccc)');
   allColors.set(ALL_COMPOSITE, '#ff9800');
   for (let i = 0; i < modelsInData.length; i++) {
     allColors.set(modelsInData[i], COLORS[i % COLORS.length]);
@@ -176,56 +167,46 @@ function MetricChart({
     }
     const windows = [...windowMap.keys()].sort();
 
-    function sumValues(ids: string[], row: Record<string, number | string>): number {
-      const vals = ids.map(id => row[id] as number | undefined).filter((v): v is number => typeof v === 'number');
+    // Latency and cache-hit-ratio aggregate by average across models; everything
+    // else sums. (For cumulative metrics the per-model values are summed into a
+    // running total, then aggregates derive from those.)
+    const isAvg = metric.key === 'latency_ttfb' || metric.key === 'latency_ttlb' || metric.key === 'cache_hit_ratio';
+    const aggregate = (ids: string[], row: Record<string, number | string>): number => {
+      const vals = ids.map(id => row[id]).filter((v): v is number => typeof v === 'number');
       if (vals.length === 0) return 0;
-      if (metric.key === 'latency_ttfb' || metric.key === 'latency_ttlb' || metric.key === 'cache_hit_ratio') {
-        return vals.reduce((s, v) => s + v, 0) / vals.length;
-      }
-      return vals.reduce((s, v) => s + v, 0);
-    }
+      return isAvg ? vals.reduce((s, v) => s + v, 0) / vals.length : vals.reduce((s, v) => s + v, 0);
+    };
 
-    const raw: Array<Record<string, number | string>> = windows.map(w => {
-      const vals = windowMap.get(w) ?? {};
-      return { windowStart: w, ...vals };
-    });
-
-    const buildRows = (rows: Array<Record<string, number | string>>) =>
-      rows.map(row => {
-        const out: Record<string, number | string> = { windowStart: row.windowStart };
-        if (primaryKeys.length > 0) out[ALL_PRIMARY] = sumValues(primaryKeys, row);
-        if (compositeKeys.length > 0) out[ALL_COMPOSITE] = sumValues(compositeKeys, row);
-        return out;
-      });
-
-    if (metric.key === 'cost_cumulative') {
-      const acc = new Map<string, number>();
-      return buildRows(raw).map(row => {
-        const out: Record<string, number | string> = { windowStart: row.windowStart };
-        // Accumulate per-model cumulative totals
-        for (const mid of modelsInData) {
-          const d = (raw.find(r => r.windowStart === row.windowStart)?.[mid] as number | undefined) ?? 0;
-          const r = (acc.get(mid) ?? 0) + d;
+    const acc = new Map<string, number>();
+    return windows.map(w => {
+      const row = windowMap.get(w) ?? {};
+      const out: Record<string, number | string> & { windowStart: string } = { windowStart: w };
+      // Per-model series (so individual model lines render for every metric).
+      for (const mid of modelsInData) {
+        const v = row[mid];
+        if (metric.cumulative) {
+          const r = (acc.get(mid) ?? 0) + (typeof v === 'number' ? v : 0);
           acc.set(mid, r);
           out[mid] = r;
+        } else if (typeof v === 'number') {
+          out[mid] = v;
         }
-        // Aggregate keys derive from model accumulators
-        if (primaryKeys.length > 0) {
-          out[ALL_PRIMARY] = primaryKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
-        }
-        if (compositeKeys.length > 0) {
-          out[ALL_COMPOSITE] = compositeKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
-        }
-        return out as Record<string, number | string> & { windowStart: string };
-      });
-    }
-
-    return buildRows(raw) as unknown as Array<Record<string, number | string> & { windowStart: string }>;
-  }, [points, metric.key, modelsInData, primaryKeys, compositeKeys]);
+      }
+      // Aggregate (ALL_PRIMARY / ALL_COMPOSITE) series.
+      if (metric.cumulative) {
+        if (primaryKeys.length > 0) out[ALL_PRIMARY] = primaryKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
+        if (compositeKeys.length > 0) out[ALL_COMPOSITE] = compositeKeys.reduce((s, m) => s + ((out[m] as number) ?? 0), 0);
+      } else {
+        if (primaryKeys.length > 0) out[ALL_PRIMARY] = aggregate(primaryKeys, row);
+        if (compositeKeys.length > 0) out[ALL_COMPOSITE] = aggregate(compositeKeys, row);
+      }
+      return out;
+    });
+  }, [points, metric.key, metric.cumulative, modelsInData, primaryKeys, compositeKeys]);
 
   if (points.length === 0 && !loading) return null;
 
-  const total = metric.key === 'cost_cumulative' ? '' : metric.computeTotal(points);
+  const total = metric.computeTotal(points);
 
   return (
     <div id={`metric-${metric.key}`} style={cs.section}>
