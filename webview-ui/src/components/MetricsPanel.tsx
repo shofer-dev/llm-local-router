@@ -63,17 +63,17 @@ const METRICS: MetricDef[] = [
     computeTotal: (pts) => fmtTokens(pts.reduce((s, d) => s + d.value, 0)),
   },
   {
-    key: 'latency_ttfb', label: 'Latency (TTFB)',
+    key: 'latency_ttfb', label: 'Latency — Time to First Byte (TTFB)',
     computeTotal: (pts) => {
       if (pts.length === 0) return '—';
-      return `${Math.round(pts.reduce((s, d) => s + d.value, 0) / pts.length)}ms`;
+      return `${(pts.reduce((s, d) => s + d.value, 0) / pts.length / 1000).toFixed(2)}s`;
     },
   },
   {
-    key: 'latency_ttlb', label: 'Latency (TTLB)',
+    key: 'latency_ttlb', label: 'Latency — Time to Last Byte (TTLB)',
     computeTotal: (pts) => {
       if (pts.length === 0) return '—';
-      return `${Math.round(pts.reduce((s, d) => s + d.value, 0) / pts.length)}ms`;
+      return `${(pts.reduce((s, d) => s + d.value, 0) / pts.length / 1000).toFixed(2)}s`;
     },
   },
   {
@@ -102,9 +102,14 @@ const COLORS = [
 const ALL_PRIMARY = '__ALL_PRIMARY__';
 const ALL_COMPOSITE = '__ALL_COMPOSITE__';
 
+function isLatency(metricKey: string): boolean {
+  return metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb';
+}
+
 function formatTick(value: number, metricKey: string): string {
   if (metricKey === 'cost') return `$${value.toFixed(4)}`;
   if (metricKey === 'cache_hit_ratio') return `${(value * 100).toFixed(0)}%`;
+  if (isLatency(metricKey)) return `${(value / 1000).toFixed(2)}s`; // ms → seconds
   if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
   return String(Math.round(value));
 }
@@ -112,7 +117,7 @@ function formatTick(value: number, metricKey: string): string {
 function tooltipVal(value: number, metricKey: string): string {
   if (metricKey === 'cost') return `$${(value as number).toFixed(6)}`;
   if (metricKey === 'cache_hit_ratio') return `${((value as number) * 100).toFixed(1)}%`;
-  if (metricKey === 'latency_ttfb' || metricKey === 'latency_ttlb') return `${Math.round(value as number)}ms`;
+  if (isLatency(metricKey)) return `${((value as number) / 1000).toFixed(3)}s`; // ms → seconds
   return String(Math.round(value as number));
 }
 
