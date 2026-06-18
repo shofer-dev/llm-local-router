@@ -207,7 +207,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
     {
         id: 'glm-5.2', name: 'GLM-5.2',
         description: 'Zhipu AI GLM-5.2 next-gen flagship for agentic engineering with interleaved thinking and long-horizon optimization',
-        contextLength: 200_000, maxOutputTokens: 131_072,
+        contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
         pricing: $(0.0025, 0.005),
         imageInput: false, toolCalling: true,
@@ -462,7 +462,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
     {
         id: 'glm-5.2-zai', name: 'GLM-5.2 (Z.ai)',
         description: 'Zhipu GLM-5.2 via Z.ai international API with interleaved thinking',
-        contextLength: 200_000, maxOutputTokens: 131_072,
+        contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
         pricing: $(0.0025, 0.005),
         imageInput: false, toolCalling: true,
