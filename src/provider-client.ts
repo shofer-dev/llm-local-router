@@ -62,7 +62,9 @@ const PROVIDER_BASE_URLS: Record<ProviderType, string> = {
     [ProviderType.MiniMax]: 'https://api.minimax.io/v1',
     [ProviderType.Moonshot]: 'https://api.moonshot.cn/v1',
     [ProviderType.Xiaomi]: 'https://api.xiaomimimo.com/v1',
-    [ProviderType.Zhipu]: 'https://open.bigmodel.cn/api/paas/v4',
+    // GLM models routed via the Z.ai international Coding Plan endpoint
+    // (not bigmodel.cn) so a Z.ai coding-plan key serves the bare glm-* models.
+    [ProviderType.Zhipu]: 'https://api.z.ai/api/coding/paas/v4',
     [ProviderType.OpenRouter]: 'https://openrouter.ai/api/v1',
     [ProviderType.Mistral]: 'https://api.mistral.ai/v1',
     [ProviderType.XAI]: 'https://api.x.ai/v1',

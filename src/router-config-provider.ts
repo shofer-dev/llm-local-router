@@ -44,7 +44,7 @@ const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string
   minimax: { label: 'MiniMax', defaultEndpoint: 'https://api.minimax.io/v1' },
   moonshot: { label: 'Moonshot / Kimi', defaultEndpoint: 'https://api.moonshot.cn/v1' },
   xiaomi: { label: 'Xiaomi MiMo', defaultEndpoint: 'https://api.xiaomimimo.com/v1' },
-  zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://open.bigmodel.cn/api/paas/v4' },
+  zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://api.z.ai/api/coding/paas/v4' },
   openrouter: { label: 'OpenRouter', defaultEndpoint: 'https://openrouter.ai/api/v1' },
   mistral: { label: 'Mistral AI', defaultEndpoint: 'https://api.mistral.ai/v1' },
   xai: { label: 'xAI (Grok)', defaultEndpoint: 'https://api.x.ai/v1' },
