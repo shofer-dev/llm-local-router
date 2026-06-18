@@ -150,11 +150,12 @@ export default function CompositeEditor({ composite, modelRegistry, onChange }: 
         />
       </ConfigSection>
 
-      {/* Latency window (lowest_latency strategy only) */}
-      {composite.strategy === 'lowest_latency' && (
-        <ConfigSection title="Latency">
+      {/* Sliding window (lowest_latency averages TTFB / highest_reliability
+          averages success ratio over this window) */}
+      {(composite.strategy === 'lowest_latency' || composite.strategy === 'highest_reliability') && (
+        <ConfigSection title={composite.strategy === 'lowest_latency' ? 'Latency' : 'Reliability'}>
           <NumberInput
-            label="Latency Window (ms)"
+            label="Sliding Window (ms)"
             value={composite.latencyWindowMs ?? 600000}
             min={30000}
             max={3600000}

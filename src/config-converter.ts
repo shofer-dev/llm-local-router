@@ -13,7 +13,7 @@ import { ALL_MODELS } from './model-registry';
 
 export interface WebviewCompositeModel {
   modelId: string;
-  strategy: 'failover' | 'round_robin' | 'lowest_latency';
+  strategy: 'failover' | 'round_robin' | 'lowest_latency' | 'highest_reliability';
   streamingTimeoutMs: number;
   nonStreamingTimeoutMs: number;
   totalTimeoutMs: number;
@@ -146,8 +146,9 @@ export function validateCompositeModels(models: WebviewCompositeModel[]): string
     seenIds.add(m.modelId);
 
     // Check strategy
-    if (m.strategy !== 'failover' && m.strategy !== 'round_robin' && m.strategy !== 'lowest_latency') {
-      errors.push(`${m.modelId}: strategy must be "failover", "round_robin", or "lowest_latency".`);
+    const validStrategies = ['failover', 'round_robin', 'lowest_latency', 'highest_reliability'];
+    if (!validStrategies.includes(m.strategy)) {
+      errors.push(`${m.modelId}: strategy must be "failover", "round_robin", "lowest_latency", or "highest_reliability".`);
     }
 
     // Check underlying models

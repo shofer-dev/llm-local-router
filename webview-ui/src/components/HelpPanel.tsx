@@ -55,6 +55,7 @@ export default function HelpPanel() {
           <li><strong>Failover</strong>: Tries models in strict priority order. On failure, falls back to the next.</li>
           <li><strong>Round Robin</strong>: Smooth weighted round-robin (nginx-style). Each model has a configurable weight.</li>
           <li><strong>Lowest Latency</strong>: Always picks the model with the lowest average TTFB, computed over a configurable sliding window (default 10 minutes). When no latency data exists, falls back to equal-weight round-robin.</li>
+          <li><strong>Highest Reliability</strong>: Always picks the model with the highest success ratio, computed over a configurable sliding window (default 10 minutes). When no reliability data exists, falls back to equal-weight round-robin.</li>
         </ul>
         <p>
           Each composite model also supports configurable <strong>health checks</strong>

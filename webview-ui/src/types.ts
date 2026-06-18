@@ -8,7 +8,7 @@
 
 // ─── Strategy ───────────────────────────────────────────────────
 
-export type RoutingStrategy = 'failover' | 'round_robin' | 'lowest_latency';
+export type RoutingStrategy = 'failover' | 'round_robin' | 'lowest_latency' | 'highest_reliability';
 
 // ─── Throttling ─────────────────────────────────────────────────
 

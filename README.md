@@ -5,7 +5,7 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 ## Features
 
 - **9 built-in LLM providers + custom providers**: OpenAI, Anthropic, Google Gemini, DeepSeek, MiniMax, Moonshot/Kimi, Xiaomi MiMo, Zhipu GLM, OpenRouter — plus **user-registered custom providers** via the webview UI
-- **Composite models** (`shofer/*`): **Failover**, **weighted round-robin**, and **lowest-latency** strategies across multiple underlying models with in-process health monitoring and throttling
+- **Composite models** (`shofer/*`): **Failover**, **weighted round-robin**, **lowest-latency**, and **highest-reliability** strategies across multiple underlying models with in-process health monitoring and throttling
 - **Full protocol translation**: Anthropic Messages API ↔ OpenAI Chat Completions, MiniMax `<think>` tag handling, DeepSeek/Moonshot reasoning_content round-trip, Xiaomi max_completion_tokens remapping, Zhipu thinking toggle
 - **Streaming**: SSE streaming for all providers with real-time tool call accumulation
 - **Cost tracking**: Per-token pricing from the built-in model registry, per-conversation cost ledger
@@ -101,6 +101,11 @@ Define `shofer/*` composite models via the **Config → Composite Models** tab, 
     "strategy": "lowest_latency",
     "models": ["deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.5"],
     "latencyWindowMs": 600000
+  },
+  "shofer/most-reliable": {
+    "strategy": "highest_reliability",
+    "models": ["deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.5"],
+    "latencyWindowMs": 600000
   }
 }
 ```
@@ -109,6 +114,7 @@ Define `shofer/*` composite models via the **Config → Composite Models** tab, 
 - **failover**: Tries models in strict order. On failure, falls back to the next.
 - **round_robin**: Smooth weighted round-robin (nginx-style) — distributes requests proportional to model weights.
 - **lowest_latency**: Always picks the model with the lowest average TTFB over a configurable sliding window. Falls back to equal-weight round-robin on cold start.
+- **highest_reliability**: Always picks the model with the highest success ratio over a configurable sliding window (`latencyWindowMs`). Falls back to equal-weight round-robin on cold start.
 
 **Model entries** accept either a plain string (`"model-id"`) or an object with per-model overrides:
 - `{ "id": "model-id", "weight": 5 }` — weight for round-robin (default: 1)
@@ -169,7 +175,7 @@ extensions/shofer-router/
 │   ├── language-model-provider.ts   # VS Code LanguageModelChatProvider + cost ledger
 │   ├── llm-client.ts                # HTTP client, SSE streaming, cost computation
 │   ├── provider-client.ts           # Provider router + custom provider resolution
-│   ├── composite.ts                 # Composite model failover/round-robin/lowest-latency
+│   ├── composite.ts                 # Composite model failover/round-robin/lowest-latency/highest-reliability
 │   ├── config-converter.ts          # Webview ↔ host config format conversion
 │   ├── model-registry.ts            # All built-in model definitions + pricing
 │   ├── metrics-collector.ts         # In-memory 5-min windowed metrics aggregation
@@ -200,7 +206,7 @@ extensions/shofer-router/
 │           ├── ConfigPanel.tsx       # Sub-tab bar (Primary Providers / Composite)
 │           ├── MetricsPanel.tsx      # Multi-chart dashboard with categorized picker
 │           ├── HelpPanel.tsx         # Usage guide
-│           ├── StrategySelector.tsx  # failover / round_robin / lowest_latency
+│           ├── StrategySelector.tsx  # failover / round_robin / lowest_latency / highest_reliability
 │           └── ...
 ├── package.json
 ├── tsconfig.json
@@ -224,8 +230,9 @@ Shofer (vscode-lm handler)
     │    → Direct HTTP/SSE call to provider API (OpenAI, Anthropic, etc.)
     │
     ├─ Composite models (shofer/*)
-    │    → CompositeService: failover / round_robin / lowest_latency
+    │    → CompositeService: failover / round_robin / lowest_latency / highest_reliability
     │    → TTFB EMA tracking per model (lowest_latency)
+    │    → Success-ratio tracking per model (highest_reliability)
     │    → In-process health tracking + throttling
     │
     └─ Side-channel commands:
