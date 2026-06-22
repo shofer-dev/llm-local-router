@@ -77,6 +77,10 @@ export class Logger {
     public errorWithError(message: string, error: Error): void {
         const errorMessage = error.message || 'Unknown error';
         this.writeLog(LogLevel.Error, `${message}: ${errorMessage}`);
+        // Include the stack trace (when present) on its own line for debuggability.
+        if (error.stack) {
+            this.writeLog(LogLevel.Error, error.stack);
+        }
     }
 
     public show(): void {

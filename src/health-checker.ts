@@ -128,9 +128,13 @@ export class ProviderHealthChecker {
     return [...this.health.values()];
   }
 
-  /** Register a callback for health state changes. */
-  onChange(callback: HealthChangeCallback): void {
+  /** Register a callback for health state changes. Returns an unsubscribe fn. */
+  onChange(callback: HealthChangeCallback): () => void {
     this.callbacks.push(callback);
+    return () => {
+      const i = this.callbacks.indexOf(callback);
+      if (i !== -1) this.callbacks.splice(i, 1);
+    };
   }
 
   /** Shut down all sockets. */
