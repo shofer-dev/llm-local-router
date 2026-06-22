@@ -49,14 +49,6 @@
   ],
   "main": "./out/main.js",
   "activationEvents": [
-    "onLanguage:typescript",
-    "onLanguage:javascript",
-    "onLanguage:python",
-    "onLanguage:go",
-    "onLanguage:rust",
-    "onLanguage:java",
-    "onLanguage:json",
-    "onLanguage:markdown",
     "onStartupFinished"
   ],
   "contributes": {
