@@ -15,8 +15,6 @@ interface CustomProviderFormProps {
   onSave: (cfg: CustomProviderConfig, apiKey: string) => void;
   onCancel: () => void;
   onDelete?: () => void;
-  /** Callback so the form can stash the API key before parent saves. */
-  onFormChange: (cfgId: string, form: { apiKey: string; endpointUrl: string; promptPrice: string; completionPrice: string; cacheReadPrice: string }) => void;
 }
 
 // ─── Custom provider form (module scope — stable identity) ────────
@@ -26,7 +24,7 @@ interface CustomProviderFormProps {
  * Defined at module scope so React preserves component identity across
  * parent re-renders (e.g., when metricsUpdate fires every 15s).
  */
-const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving, saved, onSave, onCancel, onDelete, onFormChange }) => {
+const CustomProviderForm: React.FC<CustomProviderFormProps> = ({ initial, saving, saved, onSave, onCancel, onDelete }) => {
   const [id, setId] = React.useState(initial?.id ?? '');
   const [protocol, setProtocol] = React.useState<CustomProviderProtocol>(initial?.protocol ?? 'openai-compatible');
   const [endpointUrl, setEndpointUrl] = React.useState(initial?.endpointUrl ?? '');
@@ -490,14 +488,6 @@ export default function ProvidersPanel({ providers }: Props) {
     postMessage({ type: 'deleteCustomProvider', providerId });
   };
 
-  /** Called by CustomProviderForm to stash its form fields before save. */
-  const handleCustomFormChange = (
-    cfgId: string,
-    f: { apiKey: string; endpointUrl: string; promptPrice: string; completionPrice: string; cacheReadPrice: string }
-  ) => {
-    setForms(prev => ({ ...prev, [cfgId]: { apiKey: f.apiKey, endpointUrl: f.endpointUrl } }));
-  };
-
   // ─── Determine what to show in the right panel ──────────────────
 
   const renderRightPanel = () => {
@@ -521,7 +511,6 @@ export default function ProvidersPanel({ providers }: Props) {
             saved={saved}
             onSave={handleSaveCustom}
             onCancel={() => setShowAddCustom(false)}
-            onFormChange={handleCustomFormChange}
           />
         </div>
       );
@@ -549,7 +538,6 @@ export default function ProvidersPanel({ providers }: Props) {
             onSave={handleSaveCustom}
             onCancel={() => setEditingCustomId(null)}
             onDelete={() => handleDeleteCustom(selectedCustom.id)}
-            onFormChange={handleCustomFormChange}
           />
         </div>
       );
