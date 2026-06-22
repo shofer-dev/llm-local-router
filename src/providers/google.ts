@@ -446,7 +446,7 @@ export async function sendGeminiNonStreamingRequest(
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = (await response.text()).slice(0, 1000);
         throw new LLMClientError(`Gemini HTTP ${response.status}: ${errorText}`);
     }
 
@@ -482,7 +482,7 @@ export async function sendGeminiStreamingRequest(
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = (await response.text()).slice(0, 1000);
         throw new LLMClientError(`Gemini HTTP ${response.status}: ${errorText}`);
     }
 

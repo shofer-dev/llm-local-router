@@ -338,7 +338,7 @@ export async function sendAnthropicNonStreamingRequest(
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = (await response.text()).slice(0, 1000);
         throw new LLMClientError(`Anthropic HTTP ${response.status}: ${errorText}`);
     }
 
@@ -365,7 +365,7 @@ export async function sendAnthropicStreamingRequest(
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = (await response.text()).slice(0, 1000);
         throw new LLMClientError(`Anthropic HTTP ${response.status}: ${errorText}`);
     }
 

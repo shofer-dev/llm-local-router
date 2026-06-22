@@ -174,7 +174,7 @@ export async function sendNonStreamingRequest(
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = (await response.text()).slice(0, 1000);
         throw new LLMClientError(`HTTP ${response.status}: ${errorText}`);
     }
 
@@ -204,7 +204,7 @@ export async function sendStreamingRequest(
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = (await response.text()).slice(0, 1000);
         throw new LLMClientError(`HTTP ${response.status}: ${errorText}`);
     }
 
