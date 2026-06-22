@@ -187,9 +187,20 @@ export class ProviderRouter {
             preparer: prepareXAIRequest,
         });
 
-        // Bedrock: AWS-native Converse API (custom send path)
+        // Bedrock: not yet supported. It requires the AWS Converse API with
+        // SigV4 signing, not the OpenAI-compatible Bearer-token path the default
+        // send would use — that would POST to bedrock-runtime/chat/completions
+        // and hard-fail with a misleading HTTP error. Fail fast with a clear
+        // message instead until real Bedrock support exists.
         this.handlerCache.set(ProviderType.Bedrock, {
             preparer: prepareBedrockRequest,
+            customSend: async () => {
+                throw new Error(
+                    'AWS Bedrock is not yet supported by Shofer Router (it needs the ' +
+                    'Converse API with SigV4 signing, not an OpenAI-compatible endpoint). ' +
+                    'Use a custom provider pointing at an OpenAI-compatible Bedrock proxy instead.'
+                );
+            },
         });
 
         // Vertex AI (Gemini): Reuses Google Gemini native API
