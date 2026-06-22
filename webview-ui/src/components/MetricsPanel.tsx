@@ -428,7 +428,7 @@ export default function MetricsPanel() {
                     {primaryKeys.map(m => {
                       const vis = visibleModels.length === 0 || visibleModels.includes(m);
                       return (
-                        <div key={m} style={{ ...styles.opt, fontWeight: vis ? 600 : 400, paddingLeft: 18 }} onClick={() => toggleModel(m)}>
+                        <div key={m} role="button" tabIndex={0} aria-pressed={vis} style={{ ...styles.opt, fontWeight: vis ? 600 : 400, paddingLeft: 18 }} onClick={() => toggleModel(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleModel(m); } }}>
                           <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, marginRight: 6,
                             backgroundColor: modelColors.get(m) ?? '#888', flexShrink: 0, opacity: vis ? 1 : 0.3 }}/>
                           {m}
@@ -456,7 +456,7 @@ export default function MetricsPanel() {
                     {compositeKeys.map(m => {
                       const vis = visibleModels.length === 0 || visibleModels.includes(m);
                       return (
-                        <div key={m} style={{ ...styles.opt, fontWeight: vis ? 600 : 400, paddingLeft: 18 }} onClick={() => toggleModel(m)}>
+                        <div key={m} role="button" tabIndex={0} aria-pressed={vis} style={{ ...styles.opt, fontWeight: vis ? 600 : 400, paddingLeft: 18 }} onClick={() => toggleModel(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleModel(m); } }}>
                           <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, marginRight: 6,
                             backgroundColor: modelColors.get(m) ?? '#888', flexShrink: 0, opacity: vis ? 1 : 0.3 }}/>
                           {m}

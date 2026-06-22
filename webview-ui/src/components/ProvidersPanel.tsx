@@ -787,7 +787,11 @@ export default function ProvidersPanel({ providers }: Props) {
           return (
             <div
               key={p.id}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
               onClick={() => { setSelectedId(p.id); setShowAddCustom(false); setEditingCustomId(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(p.id); setShowAddCustom(false); setEditingCustomId(null); } }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -836,7 +840,11 @@ export default function ProvidersPanel({ providers }: Props) {
             return (
               <div
                 key={cp.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
                 onClick={() => { setSelectedId(cp.id); setShowAddCustom(false); setEditingCustomId(cp.id); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(cp.id); setShowAddCustom(false); setEditingCustomId(cp.id); } }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
