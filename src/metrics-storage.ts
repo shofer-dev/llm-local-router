@@ -26,11 +26,24 @@ import {
 /** How many days of data to retain before pruning. */
 const RETENTION_DAYS = 30;
 
+/**
+ * Debounce window for persisting the in-memory DB to disk. saveToDisk()
+ * exports and rewrites the entire database file (O(total size)) synchronously,
+ * so coalescing bursts of writes into a single deferred flush keeps that cost
+ * off the hot path. A crash can lose at most this much un-flushed data; close()
+ * flushes synchronously so clean shutdowns are durable.
+ */
+const SAVE_DEBOUNCE_MS = 1500;
+
 export class MetricsStorage {
     private db: SqlJsDatabase;
     private dbPath: string;
     /** When false, saveToDisk() is a no-op — used inside transactions. */
     private autoSave = true;
+    /** Set when there are in-memory changes not yet written to disk. */
+    private dirty = false;
+    /** Pending debounced flush, if any. */
+    private saveTimer?: ReturnType<typeof setTimeout>;
 
     /** Private constructor — use MetricsStorage.create() instead. */
     private constructor(db: SqlJsDatabase, dbPath: string) {
@@ -78,9 +91,31 @@ export class MetricsStorage {
 
     // ─── Persistence helpers ──────────────────────────────────────
 
-    /** Write the in-memory database to disk. No-op inside transactions. */
+    /**
+     * Mark the DB dirty and schedule a debounced flush. No-op inside
+     * transactions (autoSave=false). Coalesces bursts of writes so the
+     * expensive full-DB export+write happens at most once per debounce window
+     * instead of on every statement.
+     */
     private saveToDisk(): void {
         if (!this.autoSave) return;
+        this.dirty = true;
+        if (this.saveTimer) return;
+        this.saveTimer = setTimeout(() => {
+            this.saveTimer = undefined;
+            this.flushPending();
+        }, SAVE_DEBOUNCE_MS);
+        this.saveTimer.unref?.();
+    }
+
+    /** Synchronously write the in-memory DB to disk if there are pending changes. */
+    private flushPending(): void {
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+            this.saveTimer = undefined;
+        }
+        if (!this.dirty) return;
+        this.dirty = false;
         const data = this.db.export();
         fs.writeFileSync(this.dbPath, Buffer.from(data));
     }
@@ -519,8 +554,9 @@ export class MetricsStorage {
         this.saveToDisk();
     }
 
-    /** Close the database connection. */
+    /** Flush any pending changes and close the database connection. */
     close(): void {
+        this.flushPending();
         this.db.close();
     }
 }
