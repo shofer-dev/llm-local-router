@@ -768,26 +768,31 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         return this.requestCostLedger.get(conversationId)?.totalUsd;
     }
 
-    public getPricing(modelId: string): ModelPricingPerMillion | undefined {
-        if (!modelId) return undefined;
-        const direct = this.availableModels.find(m => m.id === modelId || m.family === modelId);
-        if (direct?.pricing) return direct.pricing;
-        const suffixMatch = this.availableModels.find(m => {
+    /** Exact match on model id or family. */
+    private findModelDirect(modelId: string) {
+        return this.availableModels.find(m => m.id === modelId || m.family === modelId);
+    }
+
+    /** Match on the suffix after the last '/' (e.g. "gpt-4o" → "openai/gpt-4o"). */
+    private findModelBySuffix(modelId: string) {
+        return this.availableModels.find(m => {
             const slash = m.id.lastIndexOf('/');
             return slash !== -1 && m.id.substring(slash + 1) === modelId;
         });
-        return suffixMatch?.pricing ?? toPerMillionPricing(modelId);
+    }
+
+    public getPricing(modelId: string): ModelPricingPerMillion | undefined {
+        if (!modelId) return undefined;
+        const direct = this.findModelDirect(modelId);
+        if (direct?.pricing) return direct.pricing;
+        return this.findModelBySuffix(modelId)?.pricing ?? toPerMillionPricing(modelId);
     }
 
     public getCapabilities(modelId: string): ModelCapabilities | undefined {
         if (!modelId) return undefined;
-        const direct = this.availableModels.find(m => m.id === modelId || m.family === modelId);
+        const direct = this.findModelDirect(modelId);
         if (direct) return direct.capabilities;
-        const suffixMatch = this.availableModels.find(m => {
-            const slash = m.id.lastIndexOf('/');
-            return slash !== -1 && m.id.substring(slash + 1) === modelId;
-        });
-        return suffixMatch?.capabilities;
+        return this.findModelBySuffix(modelId)?.capabilities;
     }
 
     // ─── Connection ───────────────────────────────────────────────
