@@ -23,6 +23,12 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Surface render crashes in the webview devtools console so field issues
+    // are debuggable instead of silently swallowed into the fallback UI.
+    console.error('[shofer-router webview] render error:', error, info.componentStack);
+  }
+
   render() {
     if (this.state.hasError) {
       return (

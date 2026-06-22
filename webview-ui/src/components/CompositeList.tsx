@@ -1,5 +1,5 @@
 import React from 'react';
-import type { CompositeModelConfig } from '../types';
+import type { CompositeModelConfig, RoutingStrategy } from '../types';
 
 interface Props {
   compositeModels: CompositeModelConfig[];
@@ -8,6 +8,14 @@ interface Props {
   onAdd: () => void;
   onDelete: (modelId: string) => void;
 }
+
+/** Short subtitle labels for each routing strategy. */
+const STRATEGY_SHORT_LABELS: Record<RoutingStrategy, string> = {
+  failover: 'Failover',
+  round_robin: 'Round Robin',
+  lowest_latency: 'Lowest Latency',
+  highest_reliability: 'Highest Reliability',
+};
 
 /**
  * Left panel: list of composite models with add/delete.
@@ -62,7 +70,7 @@ export default function CompositeList({ compositeModels, selectedId, onSelect, o
                   {cm.modelId}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)', marginTop: '2px' }}>
-                  {cm.strategy === 'failover' ? 'Failover' : 'Round Robin'} · {cm.underlyingModels.length} model{cm.underlyingModels.length !== 1 ? 's' : ''}
+                  {STRATEGY_SHORT_LABELS[cm.strategy] ?? cm.strategy} · {cm.underlyingModels.length} model{cm.underlyingModels.length !== 1 ? 's' : ''}
                 </div>
               </div>
               <button

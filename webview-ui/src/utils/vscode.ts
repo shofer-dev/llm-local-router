@@ -17,7 +17,19 @@ let _vscodeApi: VsCodeApi | undefined;
 
 export function getVsCodeApi(): VsCodeApi {
   if (!_vscodeApi) {
-    _vscodeApi = acquireVsCodeApi();
+    // acquireVsCodeApi only exists inside the VS Code webview host. In a bare
+    // Vite dev/preview server it is undefined, so fall back to an in-memory
+    // no-op stub instead of throwing on first postMessage.
+    if (typeof acquireVsCodeApi === 'function') {
+      _vscodeApi = acquireVsCodeApi();
+    } else {
+      let state: unknown;
+      _vscodeApi = {
+        postMessage: (message) => console.log('[vscode stub] postMessage', message),
+        getState: () => state,
+        setState: (s) => { state = s; },
+      };
+    }
   }
   return _vscodeApi;
 }
