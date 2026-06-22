@@ -113,10 +113,6 @@ interface LatencySample {
 interface LatencyTracker {
     /** Timestamped TTFB samples in milliseconds. */
     samples: LatencySample[];
-    /** Current exponential moving average. */
-    ema: number;
-    /** Smoothing factor for EMA (0-1). Higher = more weight to recent. */
-    alpha: number;
 }
 
 /** A single success/failure outcome for the highest_reliability strategy. */
@@ -520,13 +516,14 @@ export class CompositeService {
     // ─── Latency-based selection ─────────────────────────────────────
 
     /**
-     * Record a TTFB sample and update the exponential moving average
-     * for the given model. Old samples beyond the window are pruned.
+     * Record a TTFB sample for the given model. Samples are timestamped; the
+     * sliding window is applied at read time (and pruned here on write to bound
+     * memory).
      */
     private recordLatency(modelId: string, ttfbMs: number, windowMs: number): void {
         let tracker = this.latencyTrackers.get(modelId);
         if (!tracker) {
-            tracker = { samples: [] as LatencySample[], ema: ttfbMs, alpha: 0.3 };
+            tracker = { samples: [] as LatencySample[] };
             this.latencyTrackers.set(modelId, tracker);
         }
 
@@ -534,19 +531,22 @@ export class CompositeService {
         const cutoff = Date.now() - windowMs;
         tracker.samples = tracker.samples.filter(s => s.recordedAt > cutoff);
         tracker.samples.push({ ttfbMs, recordedAt: Date.now() });
-
-        // EMA update
-        tracker.ema = tracker.alpha * ttfbMs + (1 - tracker.alpha) * tracker.ema;
     }
 
     /**
-     * Get the estimated TTFB for a model based on EMA. Returns
-     * Infinity if no data exists.
+     * Get the estimated TTFB for a model: the mean of its in-window samples
+     * (the documented "lowest average TTFB over a sliding window" semantics).
+     * Prunes expired samples at read time and returns Infinity when no in-window
+     * data remains, so an idle model's stale latency never wins selection.
      */
-    private getEstimatedLatency(modelId: string): number {
+    private getEstimatedLatency(modelId: string, windowMs: number = DEFAULT_LATENCY_WINDOW_MS): number {
         const tracker = this.latencyTrackers.get(modelId);
-        if (!tracker || tracker.samples.length === 0) return Infinity;
-        return tracker.ema;
+        if (!tracker) return Infinity;
+        const cutoff = Date.now() - windowMs;
+        tracker.samples = tracker.samples.filter(s => s.recordedAt > cutoff);
+        if (tracker.samples.length === 0) return Infinity;
+        const sum = tracker.samples.reduce((acc, s) => acc + s.ttfbMs, 0);
+        return sum / tracker.samples.length;
     }
 
     /**
@@ -565,7 +565,7 @@ export class CompositeService {
 
         if (healthy.length === 0) return [];
 
-        const allUnknown = healthy.every(m => this.getEstimatedLatency(m.id) === Infinity);
+        const allUnknown = healthy.every(m => this.getEstimatedLatency(m.id, latencyWindowMs) === Infinity);
 
         // If no latency data exists, fall back to equal weights for all healthy models
         if (allUnknown) {
@@ -578,7 +578,8 @@ export class CompositeService {
         // leads, and slower (or untested → Infinity) models remain as failover
         // candidates rather than the request aborting if the fastest fails.
         return [...healthy]
-            .sort((a, b) => this.getEstimatedLatency(a.id) - this.getEstimatedLatency(b.id))
+            .sort((a, b) =>
+                this.getEstimatedLatency(a.id, latencyWindowMs) - this.getEstimatedLatency(b.id, latencyWindowMs))
             .map(m => m.id);
     }
 
