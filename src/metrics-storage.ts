@@ -22,6 +22,7 @@ import {
     MetricsWindow,
     ModelWindowStats,
 } from './types';
+import { getLogger } from './logger';
 
 /** How many days of data to retain before pruning. */
 const RETENTION_DAYS = 30;
@@ -116,8 +117,15 @@ export class MetricsStorage {
         }
         if (!this.dirty) return;
         this.dirty = false;
-        const data = this.db.export();
-        fs.writeFileSync(this.dbPath, Buffer.from(data));
+        try {
+            const data = this.db.export();
+            fs.writeFileSync(this.dbPath, Buffer.from(data));
+        } catch (err) {
+            // Disk full / permissions: warn rather than silently dropping all
+            // future persistence. Keep dirty so the next flush retries.
+            this.dirty = true;
+            getLogger().warning(`[metrics-storage] failed to persist DB: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
