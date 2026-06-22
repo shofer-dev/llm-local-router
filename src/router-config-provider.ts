@@ -362,14 +362,14 @@ export class RouterConfigProvider {
     const webviewModels = this.loadCompositeModelsFromSettings();
     const registry = this.buildModelRegistry();
     const status = await this.buildStatusPayload();
-    this.panel.webview.postMessage({
+    this.sendToWebview({
       type: 'initConfig',
       compositeModels: webviewModels,
       modelRegistry: registry,
       version: this.context.extension.packageJSON.version ?? 'unknown',
       ...(activeTab ? { activeTab } : {}),
     });
-    this.panel.webview.postMessage({ type: 'statusUpdate', status });
+    this.sendToWebview({ type: 'statusUpdate', status });
     this.sendProviderConfig();
     await this.sendCustomProviders();
   }
@@ -461,7 +461,7 @@ export class RouterConfigProvider {
       failoverCount: dist.failoverCount, midstreamFailureCount: dist.midstreamFailureCount,
       totalAttempts: dist.totalAttempts,
     }));
-    this.panel.webview.postMessage({
+    this.sendToWebview({
       type: 'metricsUpdate',
       metrics: { windowStart: win.windowStart, windowEnd: win.windowEnd, modelMetrics, compositeMetrics },
     });
@@ -480,7 +480,7 @@ export class RouterConfigProvider {
     const collector = getMetricsCollector();
     const storage = collector.getStorage();
     if (!storage) {
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
+      this.sendToWebview({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
       return;
     }
     try {
@@ -488,10 +488,10 @@ export class RouterConfigProvider {
       const storageMetric = metric === 'cost_cumulative' ? 'cost' : metric;
       const data = storage.getTimeSeries(since, modelIds, storageMetric);
       const models = modelIds.length > 0 ? modelIds : storage.getDistinctModels(since);
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data, models });
+      this.sendToWebview({ type: 'metricsQueryResponse', metric, since, data, models });
     } catch (err) {
       (await import('./logger')).getLogger().warning(`Metrics query failed: ${err}`);
-      this.panel.webview.postMessage({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
+      this.sendToWebview({ type: 'metricsQueryResponse', metric, since, data: [], models: [] });
     }
   }
 
@@ -568,7 +568,7 @@ export class RouterConfigProvider {
         };
       }
     }));
-    this.panel.webview.postMessage({ type: 'initProviderConfig', providers });
+    this.sendToWebview({ type: 'initProviderConfig', providers });
   }
 
   private async handleSaveProvider(
@@ -609,7 +609,7 @@ export class RouterConfigProvider {
       const eps = await loadEndpointUrls(this.context);
       this.languageModelProvider.updateApiKeys(keys as Record<string, string | undefined>);
       this.languageModelProvider.updateEndpointUrls(eps);
-      this.panel?.webview.postMessage({ type: 'providerConfigSaved', provider });
+      this.sendToWebview({ type: 'providerConfigSaved', provider });
       logger.info(`Provider config saved for ${provider}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -624,7 +624,7 @@ export class RouterConfigProvider {
     if (!this.panel) return;
     try {
       const customProviders = await this.loadCustomProvidersFromSettings();
-      this.panel.webview.postMessage({
+      this.sendToWebview({
         type: 'initCustomProviders',
         customProviders: Object.values(customProviders),
       });
@@ -660,7 +660,7 @@ export class RouterConfigProvider {
       await this.reloadCustomProviders();
       await this.languageModelProvider.fetchModels();
 
-      this.panel?.webview.postMessage({ type: 'customProviderSaved', provider });
+      this.sendToWebview({ type: 'customProviderSaved', provider });
       logger.info(`[customProvider:save] saved id=${provider.id} (${provider.label})`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -703,7 +703,7 @@ export class RouterConfigProvider {
       await this.reloadCustomProviders();
       await this.languageModelProvider.fetchModels();
 
-      this.panel?.webview.postMessage({ type: 'customProviderDeleted', providerId });
+      this.sendToWebview({ type: 'customProviderDeleted', providerId });
       logger.info(`Deleted custom provider: ${providerId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
