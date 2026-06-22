@@ -166,6 +166,11 @@
           "type": "string",
           "default": "",
           "description": "Inline JSON defining custom primary providers"
+        },
+        "shofer.router.experimental.prometheusEndpoint": {
+          "type": "boolean",
+          "default": false,
+          "description": "Experimental: expose a Prometheus metrics scrape endpoint on 127.0.0.1 (port via SHOFER_ROUTER_METRICS_PORT, default 30098). Loopback-only, no auth."
         }
       }
     }
