@@ -192,6 +192,18 @@ export function validateCompositeModels(models: WebviewCompositeModel[]): string
       }
     }
 
+    // Timeouts must be positive — a zero/negative total would make every
+    // request fail "Total timeout exceeded" on the first iteration.
+    for (const [name, val] of [
+      ['streaming_timeout_ms', m.streamingTimeoutMs],
+      ['nonstreaming_timeout_ms', m.nonStreamingTimeoutMs],
+      ['total_timeout_ms', m.totalTimeoutMs],
+    ] as const) {
+      if (typeof val === 'number' && val <= 0) {
+        errors.push(`${m.modelId}: ${name} must be > 0.`);
+      }
+    }
+
     // Check timeouts
     if (m.streamingTimeoutMs > m.totalTimeoutMs) {
       errors.push(
