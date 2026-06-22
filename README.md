@@ -11,7 +11,7 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 - **Cost tracking**: Per-token pricing from the built-in model registry, per-conversation cost ledger
 - **VS Code LM API**: Implements `LanguageModelChatProvider` for Copilot and Shofer integration
 - **Metrics dashboard**: All 10 metric charts on a single page with ToC navigation, categorized Primary/Composite model picker
-- **Side-channel commands**: `shofer.llm.getModelPricing`, `shofer.llm.getModelCapabilities`, `shofer.llm.getRequestCost`
+- **Side-channel commands**: `shofer.router.getModelPricing`, `shofer.router.getModelCapabilities`, `shofer.router.getRequestCost`
 - **Secure API keys**: Stored via VS Code's `SecretStorage` API
 
 ## Requirements
@@ -63,7 +63,6 @@ Custom provider metadata is stored in `settings.json` (`shofer.router.customProv
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `shofer.router.defaultModel` | string | `deepseek-v4-pro` | Default model |
-| `shofer.router.timeout` | number | `300000` | Request timeout (ms) |
 | `shofer.router.enabled` | boolean | `true` | Enable/disable |
 | `shofer.router.debug` | boolean | `false` | Debug logging |
 | `shofer.router.compositeModelsFile` | string | `""` | Path to composite-models.json |
@@ -236,9 +235,9 @@ Shofer (vscode-lm handler)
     │    → In-process health tracking + throttling
     │
     └─ Side-channel commands:
-         shofer.llm.getModelPricing(modelId)    → Registry + custom provider pricing
-         shofer.llm.getModelCapabilities(modelId) → Capabilities
-         shofer.llm.getRequestCost(conversationId) → Per-conversation cost ledger
+         shofer.router.getModelPricing(modelId)    → Registry + custom provider pricing
+         shofer.router.getModelCapabilities(modelId) → Capabilities
+         shofer.router.getRequestCost(conversationId) → Per-conversation cost ledger
 ```
 
 ## License

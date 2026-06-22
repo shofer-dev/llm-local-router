@@ -350,7 +350,7 @@ In-process, in-memory metrics aggregation with 5-minute aligned time windows, su
 
 **Design rationale**: VS Code extensions cannot expose HTTP endpoints, so a Prometheus scrape endpoint is not feasible. Instead, metrics are aggregated in-memory and exposed via:
 - Webview dashboard with all 10 metric charts on a single scrollable page
-- Side-channel commands (`shofer.llm.getMetrics`, `shofer.llm.exportMetrics`, etc.)
+- Side-channel commands (`shofer.router.getMetrics`, `shofer.router.exportMetrics`, etc.)
 - SQLite persistence
 
 **Window structure**: Each 5-minute window aggregates per-model statistics:
