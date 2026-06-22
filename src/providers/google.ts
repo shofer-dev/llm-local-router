@@ -504,6 +504,7 @@ async function parseGeminiStream(
     let buffer = '';
     let aggregatedText = '';
     let aggregatedReasoning = '';
+    const aggregatedToolCalls: ToolCall[] = [];
     let responseId = '';
     let modelVersion = '';
     let finishReason = '';
@@ -590,7 +591,19 @@ async function parseGeminiStream(
                                 }
 
                                 if (delta.toolCall) {
-                                    // Emit tool call immediately
+                                    // Gemini omits call IDs; synthesize a unique one
+                                    // (index disambiguates parallel/repeat calls) and
+                                    // accumulate so the final aggregated response also
+                                    // carries the tool calls — not just the stream.
+                                    const idx = aggregatedToolCalls.length;
+                                    const name = delta.toolCall.function?.name || '';
+                                    const args = delta.toolCall.function?.arguments || '';
+                                    const tc: ToolCall = {
+                                        id: `${name}-${idx}`,
+                                        type: 'function',
+                                        function: { name, arguments: args },
+                                    };
+                                    aggregatedToolCalls.push(tc);
                                     const chunk: ChatCompletionResponse = {
                                         id: responseId,
                                         object: 'chat.completion.chunk',
@@ -599,7 +612,7 @@ async function parseGeminiStream(
                                         choices: [{
                                             index: 0,
                                             delta: {
-                                                toolCalls: [delta.toolCall],
+                                                toolCalls: [{ index: idx, ...tc }],
                                             },
                                         }],
                                     };
@@ -637,6 +650,7 @@ async function parseGeminiStream(
                     role: MessageRole.Assistant,
                     content: aggregatedText,
                     reasoningContent: aggregatedReasoning || undefined,
+                    toolCalls: aggregatedToolCalls.length > 0 ? aggregatedToolCalls : undefined,
                 },
                 finishReason: finishReason || 'stop',
             }],
@@ -671,8 +685,10 @@ export function geminiToOpenAIResponse(
                 } else if (part.text) {
                     content += (content ? '\n' : '') + part.text;
                 } else if (part.functionCall) {
+                    // Gemini omits call IDs; synthesize a unique one (the index
+                    // disambiguates parallel/repeat calls to the same function).
                     toolCalls.push({
-                        id: part.functionCall.name,
+                        id: `${part.functionCall.name}-${toolCalls.length}`,
                         type: 'function',
                         function: {
                             name: part.functionCall.name,
