@@ -154,6 +154,9 @@ export class MetricsCollector {
 
         const win = this.windows[this.windows.length - 1];
 
+        // Finalize percentiles before persisting (they're computed lazily).
+        this.finalizeWindow(win);
+
         // Flush window stats
         this._storage.flushWindow(win);
 
@@ -246,7 +249,9 @@ export class MetricsCollector {
     /** Get the current (in-progress) 5-minute window stats. */
     getCurrentWindow(): MetricsWindow {
         this.ensureCurrentWindow();
-        return this.deepCloneWindow(this.currentWindow());
+        const win = this.currentWindow();
+        this.finalizeWindow(win);
+        return this.deepCloneWindow(win);
     }
 
     /** Get window history, newest first. */
@@ -384,6 +389,7 @@ export class MetricsCollector {
             // Empty collector — return minimal valid Prometheus output
             return '# No metrics collected yet\n';
         }
+        this.finalizeWindow(now);
 
         // Per-model gauges (current window)
         for (const [modelId, stats] of Object.entries(now.models)) {
@@ -577,18 +583,29 @@ export class MetricsCollector {
         // Cost
         stats.totalCostUsd += entry.costUsd;
 
-        // Recompute derived fields
-        this.recomputeDerivedStats(stats);
+        // Recompute O(1) derived aggregates per request. Percentiles (which
+        // require sorting the full sample arrays) are NOT computed here — they
+        // are finalized lazily at the read/persist boundaries (getCurrentWindow,
+        // toPrometheusText, flushCurrentWindow) so a high-throughput window
+        // doesn't pay an O(n log n) re-sort on every single request.
+        this.updateDerivedAggregates(stats);
     }
 
-    private recomputeDerivedStats(stats: ModelWindowStats): void {
-        // Availability
+    /** O(1) per-request derived fields (availability, cache hit ratio). */
+    private updateDerivedAggregates(stats: ModelWindowStats): void {
         const completed = stats.successCount + stats.errorCount + stats.timeoutCount;
         stats.availability = completed > 0
             ? stats.successCount / completed
             : 1;
 
-        // Latency percentiles
+        const totalPrompt = stats.totalPromptTokens;
+        stats.cacheHitRatio = totalPrompt > 0
+            ? stats.totalCachedTokens / totalPrompt
+            : 0;
+    }
+
+    /** Compute latency percentiles from the current samples (O(n log n)). */
+    private finalizePercentiles(stats: ModelWindowStats): void {
         if (stats.ttfbSamples.length > 0) {
             const sortedTtfb = [...stats.ttfbSamples].sort((a, b) => a - b);
             stats.ttfbP50 = Math.round(percentile(sortedTtfb, 50));
@@ -601,12 +618,13 @@ export class MetricsCollector {
             stats.ttlbP90 = Math.round(percentile(sortedTtlb, 90));
             stats.ttlbP99 = Math.round(percentile(sortedTtlb, 99));
         }
+    }
 
-        // Cache hit ratio
-        const totalPrompt = stats.totalPromptTokens;
-        stats.cacheHitRatio = totalPrompt > 0
-            ? stats.totalCachedTokens / totalPrompt
-            : 0;
+    /** Finalize percentiles for every model in a window (call before read/persist). */
+    private finalizeWindow(win: MetricsWindow): void {
+        for (const stats of Object.values(win.models)) {
+            this.finalizePercentiles(stats);
+        }
     }
 
     private updateCompositeRouting(win: MetricsWindow, entry: MetricsRequestEntry): void {
