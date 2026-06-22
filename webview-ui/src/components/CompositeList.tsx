@@ -74,6 +74,8 @@ export default function CompositeList({ compositeModels, selectedId, onSelect, o
                 </div>
               </div>
               <button
+                aria-label={`Delete composite model ${cm.modelId}`}
+                title={`Delete ${cm.modelId}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(cm.modelId);

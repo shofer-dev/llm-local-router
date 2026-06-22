@@ -146,6 +146,7 @@ function SortableModelItem({ id, model, index, strategy, modelRegistry, onUpdate
             lineHeight: 1,
           }}
           title="Drag to reorder"
+          aria-label="Drag to reorder model"
         >
           ⠿
         </button>
@@ -197,6 +198,7 @@ function SortableModelItem({ id, model, index, strategy, modelRegistry, onUpdate
             fontSize: '14px',
           }}
           title="Remove model"
+          aria-label="Remove model"
         >
           ✕
         </button>

@@ -64,37 +64,24 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div style={styles.root}>
-        <div style={styles.tabBar}>
-          <button
-            style={activeTab === 'status' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('status')}
-          >
-            🔌 Status
-          </button>
-          <button
-            style={activeTab === 'config' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('config')}
-          >
-            ⚙️ Config
-          </button>
-          <button
-            style={activeTab === 'metrics' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('metrics')}
-          >
-            📊 Metrics
-          </button>
-          <button
-            style={activeTab === 'help' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('help')}
-          >
-            🧭 Help
-          </button>
-          <button
-            style={activeTab === 'about' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('about')}
-          >
-            ℹ️ About
-          </button>
+        <div style={styles.tabBar} role="tablist" aria-label="Shofer Router sections">
+          {([
+            ['status', '🔌 Status'],
+            ['config', '⚙️ Config'],
+            ['metrics', '📊 Metrics'],
+            ['help', '🧭 Help'],
+            ['about', 'ℹ️ About'],
+          ] as [Tab, string][]).map(([tab, label]) => (
+            <button
+              key={tab}
+              role="tab"
+              aria-selected={activeTab === tab}
+              style={activeTab === tab ? styles.tabActive : styles.tab}
+              onClick={() => setActiveTab(tab)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <div style={styles.content}>
