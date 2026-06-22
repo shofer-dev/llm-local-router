@@ -152,8 +152,8 @@ Each provider file handles protocol-specific transformations:
 - Uses `x-api-key` header + `anthropic-version: 2023-06-01`
 
 #### Google Gemini (`google.ts`)
-- OpenAI-compatible endpoint passthrough
-- Forwards `reasoning_effort` and `thinking_config` via extra_body
+- **Native Gemini API** (custom-send path, not OpenAI-compatible): translates to/from `generateContent`/streaming, surfaces thinking as `reasoningContent`, accumulates tool calls (with synthesized unique IDs) into the final response, and computes `costUsd` with cached tokens on the canonical field
+- Vertex reuses this native path via a no-op preparer (`vertex.ts`)
 
 #### DeepSeek (`deepseek.ts`)
 - **Reasoning content round-trip**: Injects `•` placeholder for missing `reasoning_content` on assistant messages (DeepSeek requires non-empty reasoning_content on every assistant message in thinking mode)
@@ -178,8 +178,8 @@ Each provider file handles protocol-specific transformations:
 #### Zhipu GLM (`zhipu.ts`)
 - **Thinking toggle**: Enables `extra_body.thinking` for GLM 4.x/5.x models
 
-#### OpenRouter (`openrouter.ts`)
-- Pure passthrough — catch-all for unknown models
+#### Plain OpenAI-compatible providers (OpenRouter, Mistral, xAI, Ollama, LM Studio, Fireworks, SambaNova, Baseten, Requesty, Unbound, Vercel AI Gateway)
+- No request transformation needed — they share a single `noopPreparer` in `provider-client.ts` (base URLs live in `PROVIDER_BASE_URLS`). OpenRouter is the catch-all for unknown models.
 
 ### 5. CompositeService (`composite.ts`)
 
@@ -187,9 +187,13 @@ Handles `shofer/*` composite models with reliability features — the primary pl
 
 **Strategies:**
 
+All four strategies return an **ordered candidate list** (preferred model first, then the
+remaining healthy models), so a pre-first-byte failure of the chosen model still fails over
+to the next — failover is not exclusive to the `failover` strategy.
+
 - **failover**: Tries models in strict order. On failure (HTTP error, timeout, stream abort), falls back to the next model.
-- **round_robin**: Smooth weighted round-robin (nginx-style). Each model has a `weight` (default: 1). The algorithm tracks per-model `currentWeight`, picks the highest, then subtracts the total — distributing proportionally without bursting to high-weight nodes. Unhealthy models are excluded.
-- **lowest_latency**: Always picks the model with the lowest average TTFB, computed via exponential moving average (EMA, α=0.3) over a configurable sliding window (default: 10 minutes). When no latency data exists (cold start), falls back to equal-weight round-robin.
+- **round_robin**: Smooth weighted round-robin (nginx-style). Each model has a `weight` (default: 1). The algorithm tracks per-model `currentWeight`, picks the highest, then subtracts the total — distributing proportionally without bursting to high-weight nodes. Unhealthy models are excluded; the remaining healthy models follow the SWRR pick as failover candidates.
+- **lowest_latency**: Picks the model with the lowest average TTFB over a configurable sliding window (default: 10 minutes), with the rest sorted by ascending latency behind it. The estimate is the **mean of in-window samples**, pruned at read time, so an idle model's stale latency never wins. When no in-window latency data exists (cold start), falls back to equal-weight round-robin.
 - **highest_reliability**: Always picks the model with the highest success ratio (successes ÷ attempts) over the same configurable sliding window (`latencyWindowMs`, default: 10 minutes). Remaining healthy models follow in descending reliability so failover still has candidates. Untested models are given the benefit of the doubt (treated as 1.0) so they get sampled rather than ranked below a known-unreliable model. When no reliability data exists at all (cold start), falls back to equal-weight round-robin.
 
 **Model configs** accept either a plain string (`"model-id"`) or an object:
@@ -200,8 +204,8 @@ Per-model `throttling` overrides composite-level defaults for that model only.
 
 **Latency tracking (lowest_latency strategy):**
 - TTFB is measured per-model on each successful composite request
-- Samples beyond the configurable `latencyWindowMs` (default: 600s) are pruned automatically
-- EMA smoothing (α=0.3) prevents noise from outliers affecting selection
+- The estimate is the **mean of samples within `latencyWindowMs`** (default: 600s), computed and pruned at read time — so a model that has gone idle past the window reports no estimate (and is not preferred) rather than a stale value
+- Mid-stream failures (after first byte) are recorded as health failures so a consistently mid-stream-failing model is still marked degraded/unhealthy
 
 **Reliability tracking (highest_reliability strategy):**
 - Each composite attempt records a success/failure outcome per-model (success = reached first byte)
@@ -262,6 +266,12 @@ cost = (uncached_prompt_tokens / 1000) × prompt_price
 ```
 
 Pricing is converted from per-1K-token form (registry) to per-1M-token form (Shofer convention) via `toPerMillionPricing()`.
+
+`computeCost()` is applied uniformly across all providers — including the custom-send
+adapters (Anthropic, Google/Gemini), which build their `UsageInfo` by hand and call
+`computeCost()` so `costUsd` is populated consistently (otherwise the cost ledger and
+metrics would record $0 for those providers). All providers normalize cached tokens onto
+the canonical `cachedTokens`/`cacheCreationTokens` fields that `computeCost` reads.
 
 ### 8. Secret Storage (`secret-storage.ts`)
 
@@ -348,10 +358,11 @@ The `onApiKeysChanged` listener detects external changes and triggers reload. Cu
 
 In-process, in-memory metrics aggregation with 5-minute aligned time windows, suitable for a VS Code extension.
 
-**Design rationale**: VS Code extensions cannot expose HTTP endpoints, so a Prometheus scrape endpoint is not feasible. Instead, metrics are aggregated in-memory and exposed via:
+**Design rationale**: metrics are aggregated in-memory and exposed via:
 - Webview dashboard with all 10 metric charts on a single scrollable page
 - Side-channel commands (`shofer.router.getMetrics`, `shofer.router.exportMetrics`, etc.)
 - SQLite persistence
+- An **optional** Prometheus scrape endpoint (`metrics-server.ts`) on `127.0.0.1`, gated behind the `shofer.router.experimental.prometheusEndpoint` setting (default off; loopback-only, no auth). Port via `SHOFER_ROUTER_METRICS_PORT` (default 30098).
 
 **Window structure**: Each 5-minute window aggregates per-model statistics:
 - Request counts by status (success/error/timeout/cancelled)
@@ -384,7 +395,9 @@ SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for sto
 
 **Read path**: `loadWindows(since)` reconstructs MetricsWindow objects from the per-model JSON blobs. `queryRequests(modelId, since)` returns raw request entries for detailed historical analysis. `getCostBreakdown(since)` returns per-model cost aggregates.
 
-**Maintenance**: Automatic pruning deletes data older than 30 days. WAL journal mode with 8MB cache for performance. The database file is stored in `vscode.ExtensionContext.globalStorageUri`.
+**Maintenance**: Automatic pruning deletes data older than 30 days. The database file is stored in `vscode.ExtensionContext.globalStorageUri`.
+
+**Persistence cost**: sql.js is an in-memory database; durability comes from exporting the whole DB and rewriting the file (the `journal_mode`/`synchronous` pragmas are inert under sql.js's in-memory VFS). Because that export+write is O(total DB size), it is **debounced** (~1.5s) so bursts of writes coalesce into one flush off the hot path; `close()` flushes synchronously so clean shutdowns stay durable (a crash can lose at most the debounce window of un-flushed data).
 
 
 ## Security
@@ -405,7 +418,7 @@ SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for sto
 
 ### Streaming
 - All chat completions use SSE streaming for real-time UX
-- Buffer-based SSE parsing with minimal allocations
+- A single shared SSE reader (`readSSE()` in `llm-client.ts`) backs all provider stream parsers (OpenAI-compatible, Anthropic, Gemini) — buffer-based line splitting with chunk-boundary handling, CRLF tolerance, lenient `data:` matching, comment/`event:`-line skipping, and a final-line flush at EOF
 - Tool call accumulation in memory during streaming
 
 ### Connection Reuse
@@ -415,7 +428,7 @@ SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for sto
 ### Memory
 - Cost ledger bounded at 1024 entries (LRU eviction)
 - Tool call accumulation maps cleared after each completion
-- Latency trackers per model (small samples array + EMA float)
+- Latency trackers per model (small in-window samples array, pruned at read time)
 - No persistent caches (no Redis dependency)
 
 ## Metrics & Observability

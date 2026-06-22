@@ -67,6 +67,7 @@ Custom provider metadata is stored in `settings.json` (`shofer.router.customProv
 | `shofer.router.compositeModelsFile` | string | `""` | Path to composite-models.json |
 | `shofer.router.compositeModelsConfig` | string | `""` | Inline JSON for composite models |
 | `shofer.router.customProviders` | string | `""` | Inline JSON for custom providers |
+| `shofer.router.experimental.prometheusEndpoint` | boolean | `false` | Expose a Prometheus scrape endpoint on `127.0.0.1` (loopback-only, no auth; port via `SHOFER_ROUTER_METRICS_PORT`, default 30098) |
 
 ### Composite Models
 
@@ -108,10 +109,10 @@ Define `shofer/*` composite models via the **Config → Composite Models** tab, 
 }
 ```
 
-**Strategies:**
+**Strategies** (all of them fall over: each returns an ordered candidate list, so a model that fails before its first byte falls back to the next):
 - **failover**: Tries models in strict order. On failure, falls back to the next.
-- **round_robin**: Smooth weighted round-robin (nginx-style) — distributes requests proportional to model weights.
-- **lowest_latency**: Always picks the model with the lowest average TTFB over a configurable sliding window. Falls back to equal-weight round-robin on cold start.
+- **round_robin**: Smooth weighted round-robin (nginx-style) — distributes requests proportional to model weights; remaining healthy models follow as failover candidates.
+- **lowest_latency**: Picks the model with the lowest mean TTFB over a configurable sliding window (idle/stale models are not preferred), with the rest sorted behind it. Falls back to equal-weight round-robin on cold start.
 - **highest_reliability**: Always picks the model with the highest success ratio over a configurable sliding window (`latencyWindowMs`). Falls back to equal-weight round-robin on cold start.
 
 **Model entries** accept either a plain string (`"model-id"`) or an object with per-model overrides:
@@ -177,22 +178,29 @@ extensions/shofer-router/
 │   ├── config-converter.ts          # Webview ↔ host config format conversion
 │   ├── model-registry.ts            # All built-in model definitions + pricing
 │   ├── metrics-collector.ts         # In-memory 5-min windowed metrics aggregation
-│   ├── metrics-storage.ts           # SQLite persistence for metrics
+│   ├── metrics-storage.ts           # SQLite persistence for metrics (debounced writes)
+│   ├── metrics-server.ts            # Optional loopback Prometheus scrape endpoint
+│   ├── health-checker.ts            # TCP keepalive provider connectivity monitor
 │   ├── secret-storage.ts            # SecretStorage API key + custom provider wrapper
 │   ├── router-config-provider.ts    # Webview panel host with message handling
 │   ├── logger.ts                    # Structured logging
 │   ├── types.ts                     # Shared TypeScript types
 │   ├── __tests__/                   # Unit tests
-│   └── providers/
+│   └── providers/                   # Only providers needing request/response transforms have a file;
+│       │                            # plain OpenAI-compatible ones (OpenRouter, Mistral, xAI, Ollama,
+│       │                            # LM Studio, Fireworks, SambaNova, Baseten, Requesty, Unbound,
+│       │                            # Vercel AI Gateway) share a no-op preparer in provider-client.ts.
 │       ├── openai.ts                # GPT-5.x max_completion_tokens remapping
 │       ├── anthropic.ts             # Messages API ↔ OpenAI translation
-│       ├── google.ts                # Gemini native API
+│       ├── google.ts                # Gemini native API (shared by Vertex)
+│       ├── vertex.ts                # Vertex no-op preparer (routes through google.ts)
+│       ├── bedrock.ts               # Bedrock (fails fast — not yet supported)
 │       ├── deepseek.ts              # Reasoning_content round-trip
 │       ├── minimax.ts               # <think> tag handling
 │       ├── moonshot.ts              # Kimi reasoning content
 │       ├── xiaomi.ts                # MiMo thinking injection
 │       ├── zhipu.ts                 # GLM thinking toggle
-│       └── openrouter.ts            # Passthrough fallback
+│       └── zai.ts                   # Z.ai thinking toggle
 ├── webview-ui/
 │   └── src/
 │       ├── App.tsx                  # Tab routing (Status, Config, Metrics, Help)
@@ -229,7 +237,7 @@ Shofer (vscode-lm handler)
     │
     ├─ Composite models (shofer/*)
     │    → CompositeService: failover / round_robin / lowest_latency / highest_reliability
-    │    → TTFB EMA tracking per model (lowest_latency)
+    │    → Windowed TTFB tracking per model (lowest_latency)
     │    → Success-ratio tracking per model (highest_reliability)
     │    → In-process health tracking + throttling
     │
