@@ -413,9 +413,11 @@ export class CompositeService {
             this.swrrState.set(compositeId, state);
         }
 
-        // Return a single-model array for the SWRR pick.
-        // The caller iterates; for round-robin we only return one candidate
-        // per call and rely on repeated calls to distribute.
+        // Pick the SWRR winner, but return ALL healthy models (winner first)
+        // so the caller's failover loop has fallbacks. The winner leads — that
+        // is what drives the round-robin distribution across repeated calls —
+        // and the remaining healthy models follow, ordered by current weight so
+        // the next-best picks come first if the winner fails pre-first-byte.
         let bestModel = '';
         let bestWeight = -1;
 
@@ -432,11 +434,17 @@ export class CompositeService {
             }
         }
 
-        if (bestModel) {
-            state.currentWeights.set(bestModel, bestWeight - totalWeight);
-        }
+        if (!bestModel) return [];
 
-        return bestModel ? [bestModel] : [];
+        // Subtract total weight from the winner (standard nginx SWRR step).
+        state.currentWeights.set(bestModel, bestWeight - totalWeight);
+
+        const fallbacks = resolvedModels
+            .filter(m => m.id !== bestModel && !this.isUnhealthy(m.id, healthCfg))
+            .sort((a, b) => (state!.currentWeights.get(b.id) ?? 0) - (state!.currentWeights.get(a.id) ?? 0))
+            .map(m => m.id);
+
+        return [bestModel, ...fallbacks];
     }
 
     // ─── Health tracking ───────────────────────────────────────────
@@ -557,20 +565,7 @@ export class CompositeService {
 
         if (healthy.length === 0) return [];
 
-        // Compute per-model weighted score: closer to 0 = faster.
-        // Using EMA-based estimate avoids noise from outliers.
-        let bestModel = '';
-        let bestLatency = Infinity;
-        let allUnknown = true;
-
-        for (const model of healthy) {
-            const est = this.getEstimatedLatency(model.id);
-            if (est < Infinity) allUnknown = false;
-            if (est < bestLatency) {
-                bestLatency = est;
-                bestModel = model.id;
-            }
-        }
+        const allUnknown = healthy.every(m => this.getEstimatedLatency(m.id) === Infinity);
 
         // If no latency data exists, fall back to equal weights for all healthy models
         if (allUnknown) {
@@ -579,7 +574,12 @@ export class CompositeService {
             return this.smoothWRRSelect(compositeId, equalModels, health);
         }
 
-        return bestModel ? [bestModel] : [];
+        // Sort ALL healthy models by estimated TTFB ascending: the fastest
+        // leads, and slower (or untested → Infinity) models remain as failover
+        // candidates rather than the request aborting if the fastest fails.
+        return [...healthy]
+            .sort((a, b) => this.getEstimatedLatency(a.id) - this.getEstimatedLatency(b.id))
+            .map(m => m.id);
     }
 
     // ─── Reliability-based selection ─────────────────────────────────
