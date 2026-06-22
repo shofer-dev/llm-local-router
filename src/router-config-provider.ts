@@ -526,15 +526,21 @@ export class RouterConfigProvider {
     if (!this.panel) return;
     const providerIds = Object.keys(PROVIDER_DEFAULTS);
     const models = this.languageModelProvider.getAvailableModels();
-    const providers: ProviderConfigEntry[] = [];
-    for (const id of providerIds) {
+    // Resolve all providers concurrently, and the per-provider secret reads in
+    // parallel, instead of serializing 100+ SecretStorage round-trips on every
+    // webview open/refresh. Promise.all preserves order, so the entry list stays
+    // stable.
+    const providers: ProviderConfigEntry[] = await Promise.all(providerIds.map(async (id) => {
       const def = PROVIDER_DEFAULTS[id];
       try {
-        const key = await this.context.secrets.get(`shofer-router.provider.${id}`);
-        const ep = await this.context.secrets.get(`shofer-router.provider.${id}.endpoint`);
-        const pricingRaw = await this.context.secrets.get(`shofer-router.provider.${id}.pricing`);
+        const [key, ep, pricingRaw, advancedRaw, modelEntries] = await Promise.all([
+          this.context.secrets.get(`shofer-router.provider.${id}`),
+          this.context.secrets.get(`shofer-router.provider.${id}.endpoint`),
+          this.context.secrets.get(`shofer-router.provider.${id}.pricing`),
+          this.context.secrets.get(`shofer-router.provider.${id}.advanced`),
+          this.buildModelConfigEntries(id),
+        ]);
         const pricing = pricingRaw ? JSON.parse(pricingRaw) : undefined;
-        const advancedRaw = await this.context.secrets.get(`shofer-router.provider.${id}.advanced`);
         const advancedValues = advancedRaw ? JSON.parse(advancedRaw) : undefined;
         const modelCount = models.filter(m => {
           for (const entry of ALL_MODELS) if (entry.id === m.id && entry.provider === id) return true;
@@ -546,22 +552,22 @@ export class RouterConfigProvider {
           completion: (registryEntry.pricing.completion ?? 0) * 1000,
           cacheRead: (registryEntry.pricing.contextCacheRead ?? 0) * 1000,
         } : undefined;
-        providers.push({
+        return {
           id, label: def.label, hasApiKey: !!key,
           endpointUrl: ep || def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint,
           modelCount, pricing, defaultPricing,
           advancedFields: def.advancedFields, advancedValues,
-          models: await this.buildModelConfigEntries(id),
-        });
+          models: modelEntries,
+        };
       } catch {
-        providers.push({
+        return {
           id, label: def.label, hasApiKey: false,
           endpointUrl: def.defaultEndpoint, defaultEndpoint: def.defaultEndpoint,
           modelCount: 0, models: [],
           advancedFields: def.advancedFields,
-        });
+        };
       }
-    }
+    }));
     this.panel.webview.postMessage({ type: 'initProviderConfig', providers });
   }
 
