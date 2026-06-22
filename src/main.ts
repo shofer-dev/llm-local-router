@@ -737,6 +737,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         getCostHistoryCommand,
         configChangeListener,
         secretsListener,
+        // These three are created lazily/conditionally and disposed explicitly in
+        // deactivate(); also register them here so VS Code disposes them
+        // deterministically even if activation throws before deactivate is wired.
+        // dispose() is idempotent for all three, so the double call is harmless.
+        { dispose: () => { healthChecker?.dispose(); routerConfigProvider?.dispose(); statusBarItem?.dispose(); } },
     );
 
     // First-install onboarding popup
