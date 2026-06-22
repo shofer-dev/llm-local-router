@@ -163,7 +163,37 @@ export class CompositeService {
         for (const [id, config] of Object.entries(configs)) {
             this.compositeConfigs.set(id, config);
         }
+        this.pruneStaleTrackers();
         getLogger().info(`Loaded ${this.compositeConfigs.size} composite model configs`);
+    }
+
+    /**
+     * Drop per-model/per-composite tracking state for models and composites no
+     * longer referenced by the current config, so long-lived processes don't
+     * accumulate unbounded stale entries across reconfigurations.
+     */
+    private pruneStaleTrackers(): void {
+        const liveModels = new Set<string>();
+        for (const id of this.compositeConfigs.keys()) {
+            for (const m of this.getResolvedModels(id)) liveModels.add(m.id);
+        }
+        const liveComposites = new Set<string>(this.compositeConfigs.keys());
+
+        for (const key of Array.from(this.health.keys())) {
+            if (!liveModels.has(key)) this.health.delete(key);
+        }
+        for (const key of Array.from(this.throttle.keys())) {
+            if (!liveModels.has(key)) this.throttle.delete(key);
+        }
+        for (const key of Array.from(this.latencyTrackers.keys())) {
+            if (!liveModels.has(key)) this.latencyTrackers.delete(key);
+        }
+        for (const key of Array.from(this.reliabilityTrackers.keys())) {
+            if (!liveModels.has(key)) this.reliabilityTrackers.delete(key);
+        }
+        for (const key of Array.from(this.swrrState.keys())) {
+            if (!liveComposites.has(key)) this.swrrState.delete(key);
+        }
     }
 
     /**
@@ -309,7 +339,7 @@ export class CompositeService {
 
                 if (timeoutId) clearTimeout(timeoutId);
 
-                this.recordSuccess(candidateModel, health);
+                this.recordSuccess(candidateModel);
                 if (ttfbMs > 0) {
                     this.recordLatency(candidateModel, ttfbMs, config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS);
                 }
@@ -476,7 +506,7 @@ export class CompositeService {
         return h;
     }
 
-    private recordSuccess(modelId: string, healthCfg: CompositeHealthConfig): void {
+    private recordSuccess(modelId: string): void {
         this.recordReliability(modelId, true);
         const h = this.getHealth(modelId);
         h.consecutiveFailures = 0;
