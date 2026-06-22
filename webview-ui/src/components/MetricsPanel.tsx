@@ -3,12 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import type { MetricsPayload } from '../types';
 import { postMessage, onMessage } from '../utils/vscode';
-
-interface Props {
-  metrics: MetricsPayload | null;
-}
 
 interface TimeSeriesPoint {
   windowStart: string;
@@ -299,7 +294,7 @@ function MetricChart({
  * models are split into separate groups with per-group ALL toggles,
  * preventing double-counting.
  */
-export default function MetricsPanel({ metrics: _metrics }: Props) {
+export default function MetricsPanel() {
   const [timeRange, setTimeRange] = React.useState(24);
   const [allData, setAllData] = React.useState<Record<string, TimeSeriesPoint[]>>({});
   const [loading, setLoading] = React.useState(false);

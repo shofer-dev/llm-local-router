@@ -5,7 +5,7 @@ import MetricsPanel from './components/MetricsPanel';
 import StatusPanel from './components/StatusPanel';
 import HelpPanel from './components/HelpPanel';
 import AboutPanel from './components/AboutPanel';
-import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, MetricsPayload, StatusPayload, ProviderConfigEntry } from './types';
+import type { CompositeModelConfig, ModelRegistrySummary, HostMessage, StatusPayload, ProviderConfigEntry } from './types';
 import { onMessage, postMessage } from './utils/vscode';
 
 type Tab = 'status' | 'config' | 'metrics' | 'help' | 'about';
@@ -26,7 +26,6 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState<Tab>('status');
   const [compositeModels, setCompositeModels] = React.useState<CompositeModelConfig[]>([]);
   const [modelRegistry, setModelRegistry] = React.useState<ModelRegistrySummary[]>([]);
-  const [metrics, setMetrics] = React.useState<MetricsPayload | null>(null);
   const [status, setStatus] = React.useState<StatusPayload | null>(null);
   const [providers, setProviders] = React.useState<ProviderConfigEntry[]>([]);
   const [version, setVersion] = React.useState<string>('');
@@ -44,8 +43,6 @@ export default function App() {
           setActiveTab(msg.activeTab);
         }
         setInitialized(true);
-      } else if (msg.type === 'metricsUpdate') {
-        setMetrics(msg.metrics);
       } else if (msg.type === 'statusUpdate') {
         setStatus(msg.status);
       } else if (msg.type === 'initProviderConfig') {
@@ -109,7 +106,7 @@ export default function App() {
               providers={providers}
             />
           )}
-          {activeTab === 'metrics' && <MetricsPanel metrics={metrics} />}
+          {activeTab === 'metrics' && <MetricsPanel />}
           {activeTab === 'help' && <HelpPanel />}
           {activeTab === 'about' && <AboutPanel version={version} />}
         </div>
