@@ -168,9 +168,7 @@ export function validateCompositeModels(models: WebviewCompositeModel[]): string
       seenUnderlying.add(um.modelId);
 
       // Check model exists in registry
-      const found = ALL_MODELS.find(
-        (r) => r.id === um.modelId || `${r.provider}/${r.id}` === um.modelId,
-      );
+      const found = findModel(um.modelId);
       if (!found) {
         errors.push(`${m.modelId}: underlying model "${um.modelId}" not found in registry.`);
       }
@@ -222,9 +220,13 @@ export function validateCompositeModels(models: WebviewCompositeModel[]): string
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-function resolveProvider(modelId: string): string {
-  const found = ALL_MODELS.find(
+/** Find a registry model by bare id or `provider/id` form. */
+function findModel(modelId: string) {
+  return ALL_MODELS.find(
     (m) => m.id === modelId || `${m.provider}/${m.id}` === modelId,
   );
-  return found?.provider ?? '';
+}
+
+function resolveProvider(modelId: string): string {
+  return findModel(modelId)?.provider ?? '';
 }
