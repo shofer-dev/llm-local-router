@@ -52,6 +52,7 @@ export class ProviderHealthChecker {
   private sockets = new Map<string, net.Socket>();
   private health = new Map<string, ProviderHealthState>();
   private callbacks: HealthChangeCallback[] = [];
+  private reconnectTimers = new Set<ReturnType<typeof setTimeout>>();
   private logger: Logger;
   private shutdown = false;
 
@@ -135,6 +136,10 @@ export class ProviderHealthChecker {
   /** Shut down all sockets. */
   dispose(): void {
     this.shutdown = true;
+    for (const timer of this.reconnectTimers) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
     for (const [provider] of this.sockets) {
       this.disconnect(provider);
     }
@@ -179,11 +184,15 @@ export class ProviderHealthChecker {
 
   private scheduleReconnect(provider: string, endpointUrl: string): void {
     if (this.shutdown) return;
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      this.reconnectTimers.delete(timer);
       if (!this.shutdown && this.sockets.has(provider)) {
         this.logger.debug(`Health check reconnecting to ${provider}...`);
         this.connect(provider, endpointUrl);
       }
     }, RECONNECT_DELAY_MS);
+    // Don't let a pending reconnect keep the extension host process alive.
+    timer.unref?.();
+    this.reconnectTimers.add(timer);
   }
 }
