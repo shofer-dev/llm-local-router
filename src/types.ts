@@ -223,6 +223,11 @@ export interface CompositeModelConfig {
      * to find the most reliable model).
      * Default: 600_000 (10 minutes).
      */
+    metricsWindowMs?: number;
+    /**
+     * @deprecated Back-compat alias for {@link metricsWindowMs}. Prefer
+     * `metricsWindowMs`; this is still read when `metricsWindowMs` is absent.
+     */
     latencyWindowMs?: number;
 }
 

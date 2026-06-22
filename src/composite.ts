@@ -341,7 +341,7 @@ export class CompositeService {
 
                 this.recordSuccess(candidateModel);
                 if (ttfbMs > 0) {
-                    this.recordLatency(candidateModel, ttfbMs, config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS);
+                    this.recordLatency(candidateModel, ttfbMs, config.metricsWindowMs ?? config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS);
                 }
 
                 logger.debug(
@@ -607,7 +607,7 @@ export class CompositeService {
         config: CompositeModelConfig,
         health: CompositeHealthConfig,
     ): string[] {
-        const latencyWindowMs = config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS;
+        const latencyWindowMs = config.metricsWindowMs ?? config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS;
         const healthy = resolvedModels.filter(m => !this.isUnhealthy(m.id, health));
 
         if (healthy.length === 0) return [];
@@ -686,7 +686,7 @@ export class CompositeService {
         config: CompositeModelConfig,
         health: CompositeHealthConfig,
     ): string[] {
-        const windowMs = config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS;
+        const windowMs = config.metricsWindowMs ?? config.latencyWindowMs ?? DEFAULT_LATENCY_WINDOW_MS;
         const healthy = resolvedModels.filter(m => !this.isUnhealthy(m.id, health));
 
         if (healthy.length === 0) return [];
