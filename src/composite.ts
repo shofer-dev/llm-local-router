@@ -99,6 +99,10 @@ interface SWRRState {
     models: string[];
     weights: Map<string, number>;
     currentWeights: Map<string, number>;
+    /** Signature of the {id,weight} set this state was built for; used to
+     *  detect config changes (model swapped or reweighted) that must reset
+     *  the accumulated current weights. */
+    signature: string;
 }
 
 /** Per-model latency tracking for lowest_latency strategy. */
@@ -404,11 +408,20 @@ export class CompositeService {
 
         if (totalWeight === 0) return [];
 
-        if (!state || state.models.length !== resolvedModels.length) {
+        // Rebuild when the {id,weight} set changes, not just its size — swapping
+        // a model for another (same count) or changing a weight must reset the
+        // accumulated current weights, otherwise routing uses stale weights or
+        // references models no longer present.
+        const signature = resolvedModels
+            .map(m => `${m.id}:${m.weight}`)
+            .sort()
+            .join('|');
+        if (!state || state.signature !== signature) {
             state = {
                 models: resolvedModels.map(m => m.id),
                 weights: new Map(resolvedModels.map(m => [m.id, m.weight])),
                 currentWeights: new Map(resolvedModels.map(m => [m.id, 0])),
+                signature,
             };
             this.swrrState.set(compositeId, state);
         }
