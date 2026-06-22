@@ -331,6 +331,10 @@ export class CompositeService {
                         `— cannot failover (first-byte rule)`
                     );
                     getMetricsCollector().recordMidstreamFailure(compositeModelId);
+                    // Still a real failure for health/reliability tracking — without
+                    // this, a model that consistently fails mid-stream never accrues
+                    // failures and is never marked degraded/unhealthy.
+                    this.recordFailure(candidateModel, health);
                     throw err;
                 }
 
