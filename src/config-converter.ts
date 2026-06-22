@@ -173,6 +173,18 @@ export function validateCompositeModels(models: WebviewCompositeModel[]): string
       const found = findModel(um.modelId);
       if (!found) {
         errors.push(`${m.modelId}: underlying model "${um.modelId}" not found in registry.`);
+      } else if (!um.modelId.includes('/')) {
+        // Bare IDs that exist for more than one provider (e.g. a Gemini model on
+        // both Google and Vertex) resolve to whichever was registered first,
+        // silently misattributing the provider. Require the "provider/id" form.
+        const ambiguous = ALL_MODELS.filter((r) => r.id === um.modelId);
+        if (ambiguous.length > 1) {
+          const providers = ambiguous.map((r) => r.provider).join(', ');
+          errors.push(
+            `${m.modelId}: "${um.modelId}" is ambiguous (provided by ${providers}); ` +
+            `use the "provider/id" form (e.g. "${ambiguous[0].provider}/${um.modelId}").`,
+          );
+        }
       }
     }
 
