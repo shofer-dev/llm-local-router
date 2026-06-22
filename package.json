@@ -134,11 +134,6 @@
           "default": false,
           "description": "Enable debug logging"
         },
-        "shofer.router.defaultModel": {
-          "type": "string",
-          "default": "deepseek-v4-pro",
-          "description": "Default model to use"
-        },
         "shofer.router.compositeModelsFile": {
           "type": "string",
           "default": "",

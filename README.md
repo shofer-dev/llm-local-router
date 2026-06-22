@@ -62,7 +62,6 @@ Custom provider metadata is stored in `settings.json` (`shofer.router.customProv
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `shofer.router.defaultModel` | string | `deepseek-v4-pro` | Default model |
 | `shofer.router.enabled` | boolean | `true` | Enable/disable |
 | `shofer.router.debug` | boolean | `false` | Debug logging |
 | `shofer.router.compositeModelsFile` | string | `""` | Path to composite-models.json |
