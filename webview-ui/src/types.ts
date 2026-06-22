@@ -235,7 +235,7 @@ export type WebviewMessage =
   | { type: 'exportConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'importConfig' }
   | { type: 'testModel'; modelId: string }
-  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing; modelPricing?: Record<string, ProviderPricing> }
+  | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing; modelPricing?: Record<string, ProviderPricing>; advancedValues?: Record<string, string> }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
   | { type: 'deleteCustomProvider'; providerId: string }
   | { type: 'requestCustomProviders' }

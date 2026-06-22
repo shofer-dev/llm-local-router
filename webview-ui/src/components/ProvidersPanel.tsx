@@ -315,6 +315,8 @@ export default function ProvidersPanel({ providers }: Props) {
   );
   const [forms, setForms] = React.useState<Record<string, ProviderForm>>({});
   const [modelPricing, setModelPricing] = React.useState<Record<string, Record<string, ProviderPricing>>>({});
+  // Locally-edited advanced-field values, keyed by providerId -> fieldKey.
+  const [advancedValues, setAdvancedValues] = React.useState<Record<string, Record<string, string>>>({});
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
 
@@ -459,12 +461,17 @@ export default function ProvidersPanel({ providers }: Props) {
       mpEntry => mpEntry.prompt || mpEntry.completion || mpEntry.cacheRead
     );
 
+    // Merge locally-edited advanced fields over any existing values so unedited
+    // fields are preserved.
+    const mergedAdvanced = { ...selected?.advancedValues, ...advancedValues[selectedId] };
+
     postMessage({
       type: 'saveProvider',
       provider: selectedId,
       apiKey: form.apiKey,
       endpointUrl: form.endpointUrl,
       modelPricing: hasAnyPricing ? mp : undefined,
+      advancedValues: Object.keys(mergedAdvanced).length > 0 ? mergedAdvanced : undefined,
     });
   };
 
@@ -618,13 +625,14 @@ export default function ProvidersPanel({ providers }: Props) {
                         type={field.type === 'password' ? 'password' : 'text'}
                         className="vscode-input"
                         style={{ width: '100%' }}
-                        value={selected.advancedValues?.[field.key] ?? ''}
+                        value={advancedValues[selectedId ?? '']?.[field.key] ?? selected.advancedValues?.[field.key] ?? ''}
                         onChange={(e) => {
                           if (!selectedId) return;
-                          // We need to store advanced values in provider-level advancedValues
-                          // For now this is handled by saving them in the form as part of the save
-                          // We'll rely on the host to read the form's advancedValues from state
-                          // (This is a simplified pass-through; full wiring in follow-up)
+                          const v = e.target.value;
+                          setAdvancedValues(prev => ({
+                            ...prev,
+                            [selectedId]: { ...prev[selectedId], [field.key]: v },
+                          }));
                           setSaved(false);
                         }}
                         placeholder={field.placeholder}
