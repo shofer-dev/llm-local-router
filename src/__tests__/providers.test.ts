@@ -354,24 +354,6 @@ describe('providers/zhipu', () => {
     });
 });
 
-// ─── Google ────────────────────────────────────────────────────────
-
-import { prepareGoogleRequest } from '../providers/google';
-
-describe('providers/google', () => {
-    it('prepareGoogleRequest is a no-op (native API path handles everything in customSend)', () => {
-        const req: ChatCompletionRequest = {
-            conversationId: 'test',
-            model: 'gemini-3.1-pro-preview',
-            messages: [],
-            reasoningEffort: 'high',
-        };
-        prepareGoogleRequest(req);
-        // Native API handles all preparation — the function is a no-op stub
-        assert.equal(req.extraBody, undefined);
-    });
-});
-
 // ─── OpenRouter ────────────────────────────────────────────────────
 
 import { prepareOpenRouterRequest } from '../providers/openrouter';
@@ -1206,7 +1188,7 @@ describe('providers/anthropic', () => {
 
 // ─── Vertex ──────────────────────────────────────────────────────────
 
-import { prepareVertexRequest, sendVertexNonStreamingRequest } from '../providers/vertex';
+import { prepareVertexRequest } from '../providers/vertex';
 
 describe('providers/vertex', () => {
     describe('prepareVertexRequest', () => {

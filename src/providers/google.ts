@@ -1,15 +1,4 @@
 /**
- * Google Gemini provider via native Gemini API.
- *
- * @deprecated Use the native sendGeminiStreamingRequest / sendGeminiNonStreamingRequest
- *             through the ProviderHandler.customSend path. This function is retained
- *             only for backward compatibility with tests and is a no-op.
- */
-export function prepareGoogleRequest(_req: ChatCompletionRequest): void {
-    // No-op — native API path handles everything in customSend
-}
-
-/**
  * Google Gemini provider native API implementation.
  *
  * Uses Google's native Gemini API (not the OpenAI-compatible endpoint) to get
