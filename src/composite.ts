@@ -254,8 +254,8 @@ export class CompositeService {
             attempts.push(candidateModel);
             if (attempts.length > 1) failoverOccurred = true;
 
-            // Acquire throttle slot
-            this.acquireThrottle(candidateModel);
+            // Acquire throttle slot (also advances the rate-limit window)
+            this.acquireThrottle(candidateModel, modelThrottle);
 
             let firstByteReceived = false;
 
@@ -674,23 +674,35 @@ export class CompositeService {
         return t;
     }
 
+    /**
+     * Read-only throttle predicate. Does NOT mutate window state — the window
+     * is advanced once, at acquire time, so repeated isThrottled() checks are
+     * deterministic and don't reset another model's counter as a side effect.
+     */
     private isThrottled(modelId: string, config: ThrottlingConfig): boolean {
         const t = this.getThrottle(modelId);
 
         if (t.inFlight >= config.maxConcurrent) return true;
 
         const windowMs = config.windowMinutes * 60 * 1000;
-        if (Date.now() - t.windowStart > windowMs) {
-            t.windowCount = 0;
-            t.windowStart = Date.now();
-            return false;
-        }
+        // If the window has elapsed it will be reset on the next acquire, so the
+        // effective count is 0 — not throttled by the per-window limit.
+        if (Date.now() - t.windowStart > windowMs) return false;
 
         return t.windowCount >= config.requestsPerWindow;
     }
 
-    private acquireThrottle(modelId: string): void {
+    private acquireThrottle(modelId: string, config?: ThrottlingConfig): void {
         const t = this.getThrottle(modelId);
+        // Advance the rate-limit window here (the single mutation point) before
+        // counting this request against it.
+        if (config) {
+            const windowMs = config.windowMinutes * 60 * 1000;
+            if (Date.now() - t.windowStart > windowMs) {
+                t.windowCount = 0;
+                t.windowStart = Date.now();
+            }
+        }
         t.inFlight++;
         t.windowCount++;
     }
