@@ -666,7 +666,13 @@ export class MetricsCollector {
 let globalCollector: MetricsCollector | undefined;
 
 export function initMetricsCollector(storage?: MetricsStorage): MetricsCollector {
-    globalCollector = new MetricsCollector();
+    // Reuse a collector that getMetricsCollector() may have lazily created
+    // before storage finished initializing — constructing a fresh one here
+    // would discard any metrics already recorded into it. loadFromStorage()
+    // merges (does not replace) in-memory windows, so early metrics survive.
+    if (!globalCollector) {
+        globalCollector = new MetricsCollector();
+    }
     if (storage) {
         globalCollector.setStorage(storage);
         globalCollector.loadFromStorage();
