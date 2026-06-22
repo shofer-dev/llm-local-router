@@ -80,8 +80,17 @@ export async function startMetricsServer(): Promise<void> {
         _server.on('error', (err) => {
             getLogger().errorWithError('[metrics-server] Server error', err);
             if (!_serverPort) {
+                // Failed before listen() succeeded — reject the start promise.
                 _server = undefined;
                 reject(err);
+            } else {
+                // Runtime error after a successful listen: tear the server down
+                // and reset state so a subsequent startMetricsServer() recreates
+                // it instead of short-circuiting on a wedged instance.
+                const dead = _server;
+                _server = undefined;
+                _serverPort = undefined;
+                dead?.close();
             }
         });
 
@@ -100,12 +109,17 @@ export async function stopMetricsServer(): Promise<void> {
             resolve();
             return;
         }
-        _server.close(() => {
+        const server = _server;
+        // Reset module state up front so a concurrent start sees "not running".
+        _server = undefined;
+        _serverPort = undefined;
+        server.close(() => {
             getLogger().info('[metrics-server] Stopped');
-            _server = undefined;
-            _serverPort = undefined;
             resolve();
         });
+        // Force-drain any in-flight scrape connections so close() can resolve
+        // promptly (VS Code does not await async deactivate work).
+        server.closeAllConnections?.();
     });
 }
 
