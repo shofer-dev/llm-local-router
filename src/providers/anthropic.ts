@@ -108,6 +108,8 @@ interface AnthropicSSEEvent {
         partial_json?: string;
         thinking?: string;
         signature?: string;
+        // On `message_delta`, Anthropic carries the final stop reason here.
+        stop_reason?: string;
     };
     usage?: { output_tokens: number };
 }
@@ -508,8 +510,10 @@ async function parseAnthropicStream(
                             break;
 
                         case 'message_delta':
-                            if (event.delta?.type === 'stop_reason') {
-                                stopReason = mapAnthropicStopReason(event.usage ? 'end_turn' : 'stop');
+                            // Anthropic delivers the final stop reason on the
+                            // message_delta event's delta.stop_reason field.
+                            if (event.delta?.stop_reason) {
+                                stopReason = mapAnthropicStopReason(event.delta.stop_reason);
                             }
                             if (event.usage?.output_tokens) {
                                 outputTokens = event.usage.output_tokens;
