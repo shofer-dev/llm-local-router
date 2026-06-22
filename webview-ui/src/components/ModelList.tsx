@@ -173,6 +173,7 @@ function SortableModelItem({ id, model, index, strategy, modelRegistry, onUpdate
             </span>
             <input
               type="number"
+              aria-label={`Weight for ${model.modelId}`}
               className="vscode-input"
               value={model.weight}
               min={1}

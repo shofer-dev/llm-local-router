@@ -81,6 +81,7 @@ export default function StatusPanel({ status }: Props) {
 
       <input
         type="text"
+        aria-label="Search models"
         placeholder="Search by name, ID, or provider..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}

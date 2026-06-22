@@ -54,7 +54,11 @@ export default function CompositeList({ compositeModels, selectedId, onSelect, o
           return (
             <div
               key={cm.modelId}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
               onClick={() => onSelect(cm.modelId)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(cm.modelId); } }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
