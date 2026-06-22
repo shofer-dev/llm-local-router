@@ -157,6 +157,12 @@ function stopConnectionRetry(): void {
 async function connectWithRetry(): Promise<void> {
     const logger = getLogger();
 
+    // Re-entry guard: if a retry chain is already running, don't start a
+    // parallel one — it would overwrite connectionRetryTimeout and leak the
+    // previous timer. Callers that intend to restart call stopConnectionRetry()
+    // first (which clears isConnecting), so they are not blocked.
+    if (isConnecting) return;
+
     if (!languageModelProvider || !config.enabled) {
         isConnecting = false;
         isConnected = false;
