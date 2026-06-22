@@ -31,9 +31,6 @@ const WINDOW_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 /** Maximum windows retained (24 hours = 288 windows). */
 const MAX_WINDOWS = 288;
 
-/** Default SLO target: fraction of requests that must succeed. */
-const DEFAULT_SLO_TARGET = 0.99;
-
 /**
  * Compute a percentile from a sorted array of numbers.
  * Uses linear interpolation between adjacent values.
@@ -437,6 +434,9 @@ export class MetricsCollector {
             lines.push(`# HELP shofer_router_composite_failover_total Failover events per composite model`);
             lines.push(`# TYPE shofer_router_composite_failover_total gauge`);
             lines.push(`shofer_router_composite_failover_total{composite="${compositeId}"} ${dist.failoverCount}`);
+            lines.push(`# HELP shofer_router_composite_midstream_failure_total Mid-stream (post-first-byte) failures per composite model`);
+            lines.push(`# TYPE shofer_router_composite_midstream_failure_total gauge`);
+            lines.push(`shofer_router_composite_midstream_failure_total{composite="${compositeId}"} ${dist.midstreamFailureCount}`);
         }
 
         // Throttle skips
