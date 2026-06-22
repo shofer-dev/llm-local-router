@@ -545,7 +545,7 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void
     updateStatusBar();
 }
 
-async function loadCompositeModels(context: vscode.ExtensionContext): Promise<void> {
+async function loadCompositeModels(): Promise<void> {
     if (!languageModelProvider) return;
 
     const filePath = config.compositeModelsFile;
@@ -583,20 +583,20 @@ async function loadCompositeModels(context: vscode.ExtensionContext): Promise<vo
 async function loadCustomProvidersIntoProvider(context: vscode.ExtensionContext, provider: LanguageModelProvider): Promise<void> {
     const logger = getLogger();
     const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
-    logger.info(`[customProvider:init] raw settings value length=${raw?.length ?? 0} hasContent=${!!raw?.trim()}`);
+    logger.debug(`[customProvider:init] raw settings value length=${raw?.length ?? 0} hasContent=${!!raw?.trim()}`);
     let customs: Record<string, CustomProviderConfig> = {};
     if (raw && raw.trim()) {
         try {
             customs = JSON.parse(raw);
-            logger.info(`[customProvider:init] parsed ${Object.keys(customs).length} providers: ${JSON.stringify(Object.keys(customs))}`);
+            logger.debug(`[customProvider:init] parsed ${Object.keys(customs).length} providers: ${JSON.stringify(Object.keys(customs))}`);
         } catch (err) {
             logger.warning(`[customProvider:init] JSON parse error: ${err}`);
         }
     } else {
-        logger.info(`[customProvider:init] no custom providers in settings`);
+        logger.debug(`[customProvider:init] no custom providers in settings`);
     }
     const customKeys = await loadCustomProviderApiKeys(context);
-    logger.info(`[customProvider:init] loaded ${Object.keys(customKeys).length} API keys: ${JSON.stringify(Object.keys(customKeys))}`);
+    logger.debug(`[customProvider:init] loaded ${Object.keys(customKeys).length} API keys: ${JSON.stringify(Object.keys(customKeys))}`);
     const customMap = new Map<string, CustomProviderConfig>(Object.entries(customs));
     provider.updateCustomProviders(customMap, customKeys);
     logger.info(`[customProvider:init] Loaded ${customMap.size} custom providers with ${Object.keys(customKeys).length} API keys`);
@@ -642,7 +642,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Load custom providers
     await loadCustomProvidersIntoProvider(context, languageModelProvider);
 
-    await loadCompositeModels(context);
+    await loadCompositeModels();
 
     try {
         await languageModelProvider.fetchModels();
@@ -737,7 +737,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const hasSeenOnboarding = context.globalState.get<boolean>('shofer.router.onboardingSeen');
     if (!hasSeenOnboarding) {
         vscode.window.showInformationMessage(
-            'Shofer Router is ready! \\u{1F44B} Click the rocket icon in the status bar to configure.',
+            'Shofer Router is ready! 👋 Click the rocket icon in the status bar to configure.',
             'Open Dashboard',
             'Dismiss',
         ).then(async (choice) => {
