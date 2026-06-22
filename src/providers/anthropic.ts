@@ -35,7 +35,7 @@ import {
     ToolDefinition,
     ToolCall,
 } from '../types';
-import { LLMClientError, computeCost } from '../llm-client';
+import { LLMClientError, computeCost, readSSE } from '../llm-client';
 import { getLogger } from '../logger';
 
 const ANTHROPIC_API_VERSION = '2023-06-01';
@@ -377,12 +377,6 @@ async function parseAnthropicStream(
     modelId: string,
     onChunk: (chunk: ChatCompletionResponse) => void,
 ): Promise<ChatCompletionResponse> {
-    const reader = response.body?.getReader();
-    if (!reader) throw new LLMClientError('Response body not readable');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
     // Track message-level state
     let messageId = '';
     let currentTextIndex = -1;
@@ -395,20 +389,7 @@ async function parseAnthropicStream(
     let cacheCreationTokens = 0;
     let stopReason = '';
 
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-                const data = trimmed.slice(6);
+    await readSSE(response, (data) => {
                 try {
                     const event: AnthropicSSEEvent = JSON.parse(data);
 
@@ -534,53 +515,49 @@ async function parseAnthropicStream(
                 } catch {
                     // Silently skip parse errors in streaming
                 }
-            }
-        }
+    });
 
-        // Build final aggregated response
-        const aggregatedContent = textContents.join('');
-        const aggregatedToolCalls: ToolCall[] = [];
-        for (const tc of toolCalls.values()) {
-            if (tc.id) {
-                aggregatedToolCalls.push({
-                    id: tc.id,
-                    type: 'function',
-                    function: {
-                        name: tc.name,
-                        arguments: tc.args || '{}',
-                    },
-                });
-            }
-        }
-
-        const finalResponse: ChatCompletionResponse = {
-            id: messageId || 'unknown',
-            object: 'chat.completion',
-            created: Math.floor(Date.now() / 1000),
-            model: modelId,
-            choices: [{
-                index: 0,
-                message: {
-                    role: MessageRole.Assistant,
-                    content: aggregatedContent,
-                    toolCalls: aggregatedToolCalls.length > 0 ? aggregatedToolCalls : undefined,
+    // Build final aggregated response
+    const aggregatedContent = textContents.join('');
+    const aggregatedToolCalls: ToolCall[] = [];
+    for (const tc of toolCalls.values()) {
+        if (tc.id) {
+            aggregatedToolCalls.push({
+                id: tc.id,
+                type: 'function',
+                function: {
+                    name: tc.name,
+                    arguments: tc.args || '{}',
                 },
-                finishReason: stopReason || 'stop',
-            }],
-            usage: {
-                promptTokens: inputTokens,
-                completionTokens: outputTokens,
-                totalTokens: inputTokens + outputTokens,
-                cachedTokens: cacheReadTokens,
-                cacheCreationTokens: cacheCreationTokens,
-                costUsd: computeCost(modelId, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens),
-            },
-        };
-
-        return finalResponse;
-    } finally {
-        reader.releaseLock();
+            });
+        }
     }
+
+    const finalResponse: ChatCompletionResponse = {
+        id: messageId || 'unknown',
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: modelId,
+        choices: [{
+            index: 0,
+            message: {
+                role: MessageRole.Assistant,
+                content: aggregatedContent,
+                toolCalls: aggregatedToolCalls.length > 0 ? aggregatedToolCalls : undefined,
+            },
+            finishReason: stopReason || 'stop',
+        }],
+        usage: {
+            promptTokens: inputTokens,
+            completionTokens: outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            cachedTokens: cacheReadTokens,
+            cacheCreationTokens: cacheCreationTokens,
+            costUsd: computeCost(modelId, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens),
+        },
+    };
+
+    return finalResponse;
 }
 
 export function getAnthropicBaseUrl(): string {

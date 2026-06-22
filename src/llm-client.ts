@@ -379,117 +379,139 @@ function parseChatResponse(obj: Record<string, unknown>, requestModel: string): 
     };
 }
 
-async function parseStreamingResponse(
+/**
+ * Read a Server-Sent Events response, invoking `onData` with each `data:`
+ * payload (the text after the `data:` prefix). Shared by all provider stream
+ * parsers so the read-loop/decode/line-split/buffer handling lives in one place.
+ *
+ * Handles: chunk-boundary line splitting, `\r\n` terminators (via trim),
+ * `data:` with or without a trailing space, `:`-comment/keepalive lines and
+ * non-`data:` fields (e.g. Anthropic's `event:` lines), and flushing the final
+ * line at end-of-stream. `onData` exceptions propagate (after the reader lock is
+ * released) so callers can abort on a fatal error.
+ */
+export async function readSSE(
     response: globalThis.Response,
-    requestModel: string,
-    onChunk?: (chunk: ChatCompletionResponse) => void,
-): Promise<ChatCompletionResponse> {
+    onData: (data: string) => void,
+): Promise<void> {
     const reader = response.body?.getReader();
     if (!reader) throw new LLMClientError('Response body is not readable');
 
     const decoder = new TextDecoder();
     let buffer = '';
-    let aggregated: ChatCompletionResponse | null = null;
+
+    const handleLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(':')) return; // blank or comment/keepalive
+        if (!trimmed.startsWith('data:')) return;         // ignore event:/id: fields
+        onData(trimmed.slice(5).trimStart());
+    };
 
     try {
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-                const data = trimmed.slice(6);
-                if (data === '[DONE]') continue;
-
-                try {
-                    const obj = JSON.parse(data);
-
-                    // Check for error in SSE chunk
-                    if (obj.error) {
-                        throw new LLMClientError(obj.error.message || 'Unknown streaming error');
-                    }
-
-                    const chunk = parseChatResponse(obj, requestModel);
-
-                    if (onChunk) onChunk(chunk);
-
-                    if (!aggregated) {
-                        aggregated = { ...chunk };
-                    } else {
-                        // Merge choices
-                        for (const choice of chunk.choices) {
-                            const existing = aggregated.choices.find(c => c.index === choice.index);
-                            if (existing) {
-                                if (choice.delta?.content) {
-                                    existing.delta = existing.delta || {};
-                                    existing.delta.content = (existing.delta.content || '') + choice.delta.content;
-                                }
-                                if (choice.delta?.reasoningContent) {
-                                    existing.delta = existing.delta || {};
-                                    existing.delta.reasoningContent = (existing.delta.reasoningContent || '') + choice.delta.reasoningContent;
-                                }
-                                if (choice.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
-                                    existing.delta = existing.delta || {};
-                                    existing.delta.toolCalls = existing.delta.toolCalls || [];
-                                    for (const tc of choice.delta.toolCalls) {
-                                        const tcIndex = tc.index ?? 0;
-                                        const existingTc = existing.delta.toolCalls.find(
-                                            (t, i) => (t.index !== undefined ? t.index === tcIndex : i === tcIndex)
-                                        );
-                                        if (existingTc) {
-                                            if (tc.function?.arguments) {
-                                                existingTc.function = existingTc.function || { name: '', arguments: '' };
-                                                existingTc.function.arguments = (existingTc.function.arguments || '') + tc.function.arguments;
-                                            }
-                                            if (tc.function?.name) {
-                                                existingTc.function = existingTc.function || { name: '', arguments: '' };
-                                                existingTc.function.name = tc.function.name;
-                                            }
-                                        } else {
-                                            existing.delta.toolCalls.push({
-                                                id: tc.id,
-                                                type: tc.type,
-                                                index: tcIndex,
-                                                function: tc.function ? {
-                                                    name: tc.function.name || '',
-                                                    arguments: tc.function.arguments || '',
-                                                } : undefined,
-                                            });
-                                        }
-                                    }
-                                }
-                                if (choice.finishReason) {
-                                    existing.finishReason = choice.finishReason;
-                                }
-                            } else {
-                                aggregated.choices.push({ ...choice });
-                            }
-                        }
-                        if (chunk.usage) {
-                            aggregated.usage = chunk.usage;
-                        }
-                    }
-                } catch (parseError) {
-                    if (parseError instanceof LLMClientError) throw parseError;
-                    getLogger().warning(`Failed to parse SSE chunk: ${parseError}`);
-                }
-            }
+            buffer = lines.pop() ?? '';
+            for (const line of lines) handleLine(line);
         }
-
-        if (!aggregated) {
-            throw new LLMClientError('No valid chunks received from streaming response');
-        }
-
-        return aggregated;
+        // Flush any final line not terminated by a newline.
+        if (buffer) handleLine(buffer);
     } finally {
         reader.releaseLock();
     }
+}
+
+async function parseStreamingResponse(
+    response: globalThis.Response,
+    requestModel: string,
+    onChunk?: (chunk: ChatCompletionResponse) => void,
+): Promise<ChatCompletionResponse> {
+    let aggregated: ChatCompletionResponse | null = null;
+
+    await readSSE(response, (data) => {
+        if (data === '[DONE]') return;
+
+        try {
+            const obj = JSON.parse(data);
+
+            // Check for error in SSE chunk
+            if (obj.error) {
+                throw new LLMClientError(obj.error.message || 'Unknown streaming error');
+            }
+
+            const chunk = parseChatResponse(obj, requestModel);
+
+            if (onChunk) onChunk(chunk);
+
+            if (!aggregated) {
+                aggregated = { ...chunk };
+            } else {
+                // Merge choices
+                for (const choice of chunk.choices) {
+                    const existing = aggregated.choices.find(c => c.index === choice.index);
+                    if (existing) {
+                        if (choice.delta?.content) {
+                            existing.delta = existing.delta || {};
+                            existing.delta.content = (existing.delta.content || '') + choice.delta.content;
+                        }
+                        if (choice.delta?.reasoningContent) {
+                            existing.delta = existing.delta || {};
+                            existing.delta.reasoningContent = (existing.delta.reasoningContent || '') + choice.delta.reasoningContent;
+                        }
+                        if (choice.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
+                            existing.delta = existing.delta || {};
+                            existing.delta.toolCalls = existing.delta.toolCalls || [];
+                            for (const tc of choice.delta.toolCalls) {
+                                const tcIndex = tc.index ?? 0;
+                                const existingTc = existing.delta.toolCalls.find(
+                                    (t, i) => (t.index !== undefined ? t.index === tcIndex : i === tcIndex)
+                                );
+                                if (existingTc) {
+                                    if (tc.function?.arguments) {
+                                        existingTc.function = existingTc.function || { name: '', arguments: '' };
+                                        existingTc.function.arguments = (existingTc.function.arguments || '') + tc.function.arguments;
+                                    }
+                                    if (tc.function?.name) {
+                                        existingTc.function = existingTc.function || { name: '', arguments: '' };
+                                        existingTc.function.name = tc.function.name;
+                                    }
+                                } else {
+                                    existing.delta.toolCalls.push({
+                                        id: tc.id,
+                                        type: tc.type,
+                                        index: tcIndex,
+                                        function: tc.function ? {
+                                            name: tc.function.name || '',
+                                            arguments: tc.function.arguments || '',
+                                        } : undefined,
+                                    });
+                                }
+                            }
+                        }
+                        if (choice.finishReason) {
+                            existing.finishReason = choice.finishReason;
+                        }
+                    } else {
+                        aggregated.choices.push({ ...choice });
+                    }
+                }
+                if (chunk.usage) {
+                    aggregated.usage = chunk.usage;
+                }
+            }
+        } catch (parseError) {
+            if (parseError instanceof LLMClientError) throw parseError;
+            getLogger().warning(`Failed to parse SSE chunk: ${parseError}`);
+        }
+    });
+
+    if (!aggregated) {
+        throw new LLMClientError('No valid chunks received from streaming response');
+    }
+
+    return aggregated;
 }
 
 function stringToRole(roleStr: string): MessageRole {

@@ -40,7 +40,7 @@ import {
     ChatChoice,
     ChatDelta,
 } from '../types';
-import { LLMClientError, computeCost } from '../llm-client';
+import { LLMClientError, computeCost, readSSE } from '../llm-client';
 import { getLogger } from '../logger';
 
 // ─── Gemini native API types ─────────────────────────────────────────
@@ -486,11 +486,6 @@ async function parseGeminiStream(
     modelId: string,
     onChunk: (chunk: ChatCompletionResponse) => void,
 ): Promise<ChatCompletionResponse> {
-    const reader = response.body?.getReader();
-    if (!reader) throw new LLMClientError('Response body is not readable');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
     let aggregatedText = '';
     let aggregatedReasoning = '';
     const aggregatedToolCalls: ToolCall[] = [];
@@ -503,21 +498,8 @@ async function parseGeminiStream(
     let cacheReadTokens = 0;
     let reasoningTokens = 0;
 
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-                const data = trimmed.slice(6);
-                if (data === '[DONE]') continue;
+    await readSSE(response, (data) => {
+                if (data === '[DONE]') return;
 
                 try {
                     const geminiChunk: GeminiResponse = JSON.parse(data);
@@ -613,41 +595,37 @@ async function parseGeminiStream(
                 } catch (parseError) {
                     getLogger().warning(`[GOOGLE-NATIVE] Failed to parse SSE chunk: ${parseError}`);
                 }
-            }
-        }
+    });
 
-        // Build final aggregated response. Use the canonical cachedTokens field
-        // (what computeCost and the metrics collector read) rather than the
-        // Gemini-specific cacheReadTokens, which nothing consumes.
-        const usage: UsageInfo = {
-            promptTokens,
-            completionTokens,
-            totalTokens,
-            cachedTokens: cacheReadTokens,
-            reasoningTokens,
-            costUsd: computeCost(modelVersion || modelId, promptTokens, completionTokens, cacheReadTokens),
-        };
+    // Build final aggregated response. Use the canonical cachedTokens field
+    // (what computeCost and the metrics collector read) rather than the
+    // Gemini-specific cacheReadTokens, which nothing consumes.
+    const usage: UsageInfo = {
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        cachedTokens: cacheReadTokens,
+        reasoningTokens,
+        costUsd: computeCost(modelVersion || modelId, promptTokens, completionTokens, cacheReadTokens),
+    };
 
-        return {
-            id: responseId || 'unknown',
-            object: 'chat.completion',
-            created: Math.floor(Date.now() / 1000),
-            model: modelVersion || modelId,
-            choices: [{
-                index: 0,
-                message: {
-                    role: MessageRole.Assistant,
-                    content: aggregatedText,
-                    reasoningContent: aggregatedReasoning || undefined,
-                    toolCalls: aggregatedToolCalls.length > 0 ? aggregatedToolCalls : undefined,
-                },
-                finishReason: finishReason || 'stop',
-            }],
-            usage,
-        };
-    } finally {
-        reader.releaseLock();
-    }
+    return {
+        id: responseId || 'unknown',
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: modelVersion || modelId,
+        choices: [{
+            index: 0,
+            message: {
+                role: MessageRole.Assistant,
+                content: aggregatedText,
+                reasoningContent: aggregatedReasoning || undefined,
+                toolCalls: aggregatedToolCalls.length > 0 ? aggregatedToolCalls : undefined,
+            },
+            finishReason: finishReason || 'stop',
+        }],
+        usage,
+    };
 }
 
 /**
