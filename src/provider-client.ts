@@ -38,19 +38,15 @@ import {
     sendGeminiStreamingRequest,
     sendGeminiNonStreamingRequest,
 } from './providers/google';
-import { prepareMistralRequest } from './providers/mistral';
-import { prepareXAIRequest } from './providers/xai';
 import { prepareBedrockRequest } from './providers/bedrock';
 import { prepareVertexRequest } from './providers/vertex';
-import { prepareOllamaRequest } from './providers/ollama';
-import { prepareLmStudioRequest } from './providers/lmstudio';
-import { prepareFireworksRequest } from './providers/fireworks';
-import { prepareSambaNovaRequest } from './providers/sambanova';
-import { prepareBasetenRequest } from './providers/baseten';
-import { prepareRequestyRequest } from './providers/requesty';
-import { prepareUnboundRequest } from './providers/unbound';
-import { prepareVercelAiGatewayRequest } from './providers/vercel-ai-gateway';
 import { prepareZAiRequest } from './providers/zai';
+
+/**
+ * Shared no-op request preparer for plain OpenAI-compatible providers that need
+ * no request transformation (their base URLs live in PROVIDER_BASE_URLS).
+ */
+const noopPreparer = (_req: ChatCompletionRequest): void => { /* no transformation needed */ };
 
 // ─── Provider endpoint configuration ───────────────────────────────
 
@@ -179,12 +175,12 @@ export class ProviderRouter {
 
         // Mistral: OpenAI-compatible
         this.handlerCache.set(ProviderType.Mistral, {
-            preparer: prepareMistralRequest,
+            preparer: noopPreparer,
         });
 
         // xAI (Grok): OpenAI-compatible
         this.handlerCache.set(ProviderType.XAI, {
-            preparer: prepareXAIRequest,
+            preparer: noopPreparer,
         });
 
         // Bedrock: not yet supported. It requires the AWS Converse API with
@@ -225,42 +221,42 @@ export class ProviderRouter {
 
         // Ollama: OpenAI-compatible
         this.handlerCache.set(ProviderType.Ollama, {
-            preparer: prepareOllamaRequest,
+            preparer: noopPreparer,
         });
 
         // LM Studio: OpenAI-compatible
         this.handlerCache.set(ProviderType.LmStudio, {
-            preparer: prepareLmStudioRequest,
+            preparer: noopPreparer,
         });
 
         // Fireworks: OpenAI-compatible
         this.handlerCache.set(ProviderType.Fireworks, {
-            preparer: prepareFireworksRequest,
+            preparer: noopPreparer,
         });
 
         // SambaNova: OpenAI-compatible
         this.handlerCache.set(ProviderType.SambaNova, {
-            preparer: prepareSambaNovaRequest,
+            preparer: noopPreparer,
         });
 
         // Baseten: OpenAI-compatible
         this.handlerCache.set(ProviderType.Baseten, {
-            preparer: prepareBasetenRequest,
+            preparer: noopPreparer,
         });
 
         // Requesty: OpenAI-compatible router
         this.handlerCache.set(ProviderType.Requesty, {
-            preparer: prepareRequestyRequest,
+            preparer: noopPreparer,
         });
 
         // Unbound: OpenAI-compatible router
         this.handlerCache.set(ProviderType.Unbound, {
-            preparer: prepareUnboundRequest,
+            preparer: noopPreparer,
         });
 
         // Vercel AI Gateway: OpenAI-compatible proxying
         this.handlerCache.set(ProviderType.VercelAiGateway, {
-            preparer: prepareVercelAiGatewayRequest,
+            preparer: noopPreparer,
         });
 
         // Z.ai: OpenAI-compatible with thinking support
