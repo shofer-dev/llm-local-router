@@ -31,27 +31,21 @@ bugs/a11y, and type-safety hardening (see `git log` on `master`). The items belo
 risk, or low-value polish that's better done as focused, individually-scoped work (ideally
 with the extension running) rather than blind. IDs match the original review.
 
-### Webview refactors (large, no runtime test here)
+### Webview refactors (large; best done with the extension running — see TODO-testing.md)
 - [ ] **#W10** — split `ProvidersPanel.tsx` (~894 lines) into `BuiltInProviderForm` /
   `ModelPricingEditor` / `ProviderList`; hoist inline style objects to module scope.
 - [ ] **#W11** — split `MetricsPanel.tsx` (~558 lines): extract a `useMetricsData(timeRange)`
   hook, a `MetricsModelPicker`, and metric definitions/formatters; fix the broken memos
-  (`visibleKeysVal`/`allLineKeys` rebuilt each render).
+  (`visibleKeysVal`/`allLineKeys`/`allColors` rebuilt each render).
 - [ ] **#W13** — dedupe provider-list-item / panel-header markup (part of #W10).
 - [ ] **#W14** — centralize per-metric formatting in the `MetricDef` (part of #W11).
 - [ ] **#W3** — MetricsPanel query effect re-registers a listener + 20ms timeout per
   `timeRange` change; rework alongside #W11 (single mount-once listener + request-id).
-- [ ] **#W20 (partial)** — remaining keyboard operability: `ProvidersPanel` provider rows
-  and the `MetricsPanel` model-picker options are still clickable `<div>`s. (Composite
-  rows, tab bar, icon buttons, and inputs are done.)
 
 ### Metrics perf / durability
-- [ ] **#M6** — per-request percentile recompute re-sorts the full sample arrays on every
-  `recordRequest` (O(n log n)). A safe fix recomputes lazily at the read sites
-  (`toPrometheusText`, the webview snapshot in `router-config-provider`) — note a unit test
-  asserts the fields right after `recordRequest`, so it must be updated too.
 - [ ] **#M7** — `getAllModelSummaries` materializes every sample across all windows per
-  model; cache per range or aggregate without materializing (same area as #M6).
+  model; cache per range or aggregate without materializing. Read-time (dashboard refresh),
+  so lower priority than the now-fixed per-request path (#M6).
 - [ ] **#M1** — up to one window (~5 min) of in-memory raw metrics is lost on a non-graceful
   shutdown (crash). Would need incremental raw-entry persistence; currently a documented
   tradeoff.
@@ -61,17 +55,16 @@ with the extension running) rather than blind. IDs match the original review.
   (`WebviewCompositeModel.underlyingModels` has no throttling field). Needs a webview type +
   UI to edit it. _(The "weight 0 coerced to 1" half was a **false positive** — intended,
   test-asserted behavior for round_robin.)_
-- [ ] **#C16** — `gemini-3.1-pro-preview` / `gemini-3-flash-preview` exist for both Google
-  and Vertex; bare `getModelById` returns the first inserted (Google), so a Vertex-intended
-  composite is misattributed. Needs registry disambiguation (require `provider/id` form for
-  ambiguous models). _(verify)_
-- [ ] **#C18** — `latencyWindowMs` is overloaded as the reliability window too; rename to
-  `metricsWindowMs` with a back-compat alias (renaming the config field outright would break
-  existing config JSON).
 - [ ] **#P17** — `provideTokenCount` uses a `length/4` heuristic and ignores image / thinking /
   tool-result parts; wire a real tokenizer or document it as an estimate.
 - [ ] **#P5** — harden Anthropic streaming token accounting (read all `usage` fields on
   `message_delta`, not just gated ones). _(verify — low confidence)_
+
+### Done since the review (this session)
+- ✅ **#C16** — composite validation now rejects ambiguous bare model IDs (require `provider/id`).
+- ✅ **#C18** — added `metricsWindowMs` (with `latencyWindowMs` back-compat alias).
+- ✅ **#W20** — keyboard operability completed across composite/provider rows, metric options, tab bar, icon buttons, inputs.
+- ✅ **#M6** — latency percentiles now computed lazily at read/persist, not per request.
 
 ### Intentionally not doing
 - **#M8** — the Prometheus endpoint has no auth. Left per maintainer decision; it stays
