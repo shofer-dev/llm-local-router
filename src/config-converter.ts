@@ -46,7 +46,9 @@ export function convertToHostConfig(wm: WebviewCompositeModel): HostCompositeCon
     }
   } else {
     for (const um of wm.underlyingModels) {
-      models.push({ id: um.modelId, weight: um.weight || 1 });
+      // Use ?? so an explicit weight of 0 is preserved (and surfaced by
+      // validation) rather than silently rewritten to 1.
+      models.push({ id: um.modelId, weight: um.weight ?? 1 });
     }
   }
 
