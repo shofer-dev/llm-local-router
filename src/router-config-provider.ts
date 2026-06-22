@@ -579,7 +579,7 @@ export class RouterConfigProvider {
       else { await deleteApiKey(this.context, provider); logger.info(`Deleted API key for ${provider}`); }
       const def = PROVIDER_DEFAULTS[provider];
       const epKey = `shofer-router.provider.${provider}.endpoint`;
-      if (endpointUrl.trim() && endpointUrl !== def?.defaultEndpoint) { await this.context.secrets.store(epKey, endpointUrl.trim()); logger.info(`Saved custom endpoint for ${provider}: ${endpointUrl}`); }
+      if (endpointUrl.trim() && endpointUrl !== def?.defaultEndpoint) { await this.context.secrets.store(epKey, endpointUrl.trim()); logger.info(`Saved custom endpoint for ${provider}`); }
       else { await this.context.secrets.delete(epKey); }
       const pKey = `shofer-router.provider.${provider}.pricing`;
       if (pricing && (pricing.prompt || pricing.completion || pricing.cacheRead)) { await this.context.secrets.store(pKey, JSON.stringify(pricing)); logger.info(`Saved pricing overrides for ${provider}`); }
@@ -629,7 +629,7 @@ export class RouterConfigProvider {
 
   private async handleSaveCustomProvider(provider: CustomProviderConfig, apiKey: string): Promise<void> {
     const logger = (await import('./logger')).getLogger();
-    logger.info(`[customProvider:save] START — id=${provider.id} label=${provider.label} protocol=${provider.protocol} endpointUrl=${provider.endpointUrl} modelsCount=${provider.models?.length ?? 0} hasApiKey=${!!apiKey?.trim()}`);
+    logger.debug(`[customProvider:save] START — id=${provider.id} label=${provider.label} protocol=${provider.protocol} modelsCount=${provider.models?.length ?? 0} hasApiKey=${!!apiKey?.trim()}`);
     try {
       // Validate provider ID — must not collide with built-in ProviderType values
       const builtInProviders = ['openai', 'anthropic', 'google', 'deepseek', 'minimax', 'moonshot', 'xiaomi', 'zhipu', 'openrouter'];
@@ -640,30 +640,22 @@ export class RouterConfigProvider {
 
       // Load existing, then update/add
       const customProviders = await this.loadCustomProvidersFromSettings();
-      logger.info(`[customProvider:save] loaded existing providers count=${Object.keys(customProviders).length}`);
       customProviders[provider.id] = provider;
       await this.saveCustomProvidersToSettings(customProviders);
-      logger.info(`[customProvider:save] saved to settings — total providers now=${Object.keys(customProviders).length}`);
-      // Verify the write took effect
-      const verifyRead = await this.loadCustomProvidersFromSettings();
-      logger.info(`[customProvider:save] verify re-read — count=${Object.keys(verifyRead).length} hasKey=${!!verifyRead[provider.id]}`);
+      logger.debug(`[customProvider:save] saved to settings — total providers now=${Object.keys(customProviders).length}`);
 
       // Store API key if provided; otherwise keep existing (don't delete on edit)
       if (apiKey.trim()) {
         await storeCustomProviderApiKey(this.context, provider.id, apiKey.trim());
-        logger.info(`[customProvider:save] stored API key for ${provider.id}`);
-      } else {
-        logger.info(`[customProvider:save] no API key provided — keeping existing key if any`);
+        logger.debug(`[customProvider:save] stored API key for ${provider.id}`);
       }
 
       // Reload into LanguageModelProvider
-      logger.info(`[customProvider:save] reloading into LanguageModelProvider...`);
       await this.reloadCustomProviders();
       await this.languageModelProvider.fetchModels();
-      logger.info(`[customProvider:save] fetchModels complete`);
 
       this.panel?.webview.postMessage({ type: 'customProviderSaved', provider });
-      logger.info(`[customProvider:save] DONE — id=${provider.id} (${provider.label})`);
+      logger.info(`[customProvider:save] saved id=${provider.id} (${provider.label})`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error(`[customProvider:save] FAILED — id=${provider.id}: ${message}`);
