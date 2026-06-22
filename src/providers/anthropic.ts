@@ -35,7 +35,7 @@ import {
     ToolDefinition,
     ToolCall,
 } from '../types';
-import { LLMClientError } from '../llm-client';
+import { LLMClientError, computeCost } from '../llm-client';
 import { getLogger } from '../logger';
 
 const ANTHROPIC_API_VERSION = '2023-06-01';
@@ -289,6 +289,13 @@ export function transformAnthropicResponse(
             totalTokens: anthropicResp.usage.input_tokens + anthropicResp.usage.output_tokens,
             cachedTokens: anthropicResp.usage.cache_read_input_tokens,
             cacheCreationTokens: anthropicResp.usage.cache_creation_input_tokens,
+            costUsd: computeCost(
+                requestModel,
+                anthropicResp.usage.input_tokens,
+                anthropicResp.usage.output_tokens,
+                anthropicResp.usage.cache_read_input_tokens,
+                anthropicResp.usage.cache_creation_input_tokens,
+            ),
         },
     };
 }
@@ -566,6 +573,7 @@ async function parseAnthropicStream(
                 totalTokens: inputTokens + outputTokens,
                 cachedTokens: cacheReadTokens,
                 cacheCreationTokens: cacheCreationTokens,
+                costUsd: computeCost(modelId, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens),
             },
         };
 

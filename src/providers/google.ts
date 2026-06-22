@@ -51,7 +51,7 @@ import {
     ChatChoice,
     ChatDelta,
 } from '../types';
-import { LLMClientError } from '../llm-client';
+import { LLMClientError, computeCost } from '../llm-client';
 import { getLogger } from '../logger';
 
 // ─── Gemini native API types ─────────────────────────────────────────
@@ -614,13 +614,16 @@ async function parseGeminiStream(
             }
         }
 
-        // Build final aggregated response
+        // Build final aggregated response. Use the canonical cachedTokens field
+        // (what computeCost and the metrics collector read) rather than the
+        // Gemini-specific cacheReadTokens, which nothing consumes.
         const usage: UsageInfo = {
             promptTokens,
             completionTokens,
             totalTokens,
-            cacheReadTokens,
+            cachedTokens: cacheReadTokens,
             reasoningTokens,
+            costUsd: computeCost(modelVersion || modelId, promptTokens, completionTokens, cacheReadTokens),
         };
 
         return {
@@ -689,8 +692,14 @@ export function geminiToOpenAIResponse(
         promptTokens: geminiResp.usageMetadata.promptTokenCount,
         completionTokens: geminiResp.usageMetadata.candidatesTokenCount,
         totalTokens: geminiResp.usageMetadata.totalTokenCount,
-        cacheReadTokens: geminiResp.usageMetadata.cachedContentTokenCount,
+        cachedTokens: geminiResp.usageMetadata.cachedContentTokenCount,
         reasoningTokens: geminiResp.usageMetadata.thoughtsTokenCount,
+        costUsd: computeCost(
+            modelId,
+            geminiResp.usageMetadata.promptTokenCount,
+            geminiResp.usageMetadata.candidatesTokenCount,
+            geminiResp.usageMetadata.cachedContentTokenCount,
+        ),
     } : undefined;
 
     return {
