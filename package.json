@@ -171,6 +171,8 @@
     "prepare": "husky",
     "compile": "tsc -p ./tsconfig.json",
     "watch": "tsc -p ./tsconfig.json --watch",
+    "typecheck": "tsc -p ./tsconfig.json --noEmit",
+    "test": "./run-tests.sh",
     "package": "npm run compile && npx @vscode/vsce package"
   },
   "dependencies": {
