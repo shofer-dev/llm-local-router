@@ -36,6 +36,10 @@ export class MetricsStorage {
     private constructor(db: SqlJsDatabase, dbPath: string) {
         this.db = db;
         this.dbPath = dbPath;
+        // NOTE: sql.js runs an in-memory VFS with no real file backing, so the
+        // journal_mode/synchronous pragmas are inert (there is no WAL); durability
+        // comes solely from saveToDisk() exporting the whole DB. Kept only so the
+        // schema matches a real SQLite file if the DB is ever opened natively.
         this.db.run('PRAGMA journal_mode = WAL');
         this.db.run('PRAGMA synchronous = NORMAL');
         this.db.run('PRAGMA cache_size = -8000'); // 8MB cache
@@ -180,34 +184,6 @@ export class MetricsStorage {
             :cache_creation_tokens, :cost_usd, :failover_occurred, :attempts
         )
     `;
-
-    /**
-     * Insert a single request entry into the database.
-     * Called after each window closes (batch insert) or on each request
-     * if real-time persistence is desired.
-     */
-    insertRequest(entry: MetricsRequestEntry): void {
-        this.runWrite(this.INSERT_REQUEST_SQL, {
-            ':timestamp': entry.timestamp,
-            ':model_id': entry.modelId,
-            ':provider': entry.provider,
-            ':is_composite': entry.isComposite ? 1 : 0,
-            ':composite_model_id': entry.compositeModelId ?? null,
-            ':served_by_model': entry.servedByModel,
-            ':status': entry.status,
-            ':error_type': entry.errorType ?? null,
-            ':error_message': entry.errorMessage ?? null,
-            ':ttfb_ms': entry.ttfbMs,
-            ':ttlb_ms': entry.ttlbMs,
-            ':prompt_tokens': entry.promptTokens,
-            ':completion_tokens': entry.completionTokens,
-            ':cached_tokens': entry.cachedTokens,
-            ':cache_creation_tokens': entry.cacheCreationTokens,
-            ':cost_usd': entry.costUsd,
-            ':failover_occurred': entry.failoverOccurred ? 1 : 0,
-            ':attempts': entry.attempts,
-        });
-    }
 
     /**
      * Batch-insert multiple request entries in a transaction.
