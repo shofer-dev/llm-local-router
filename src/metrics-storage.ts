@@ -446,6 +446,10 @@ export class MetricsStorage {
         modelIds: string[],
         metric: string,
     ): Array<{ windowStart: string; modelId: string; value: number }> {
+        // valueExpr is interpolated into SQL, so it MUST only ever be one of
+        // these hard-coded constants — never derived from caller input. Reject
+        // unknown metrics rather than silently defaulting (defense-in-depth
+        // against a future caller routing user input into `metric`).
         let valueExpr: string;
         switch (metric) {
             case 'cost': valueExpr = 'COALESCE(SUM(cost_usd), 0)'; break;
@@ -457,7 +461,7 @@ export class MetricsStorage {
             case 'latency_ttfb': valueExpr = 'COALESCE(AVG(ttfb_ms), 0)'; break;
             case 'latency_ttlb': valueExpr = 'COALESCE(AVG(ttlb_ms), 0)'; break;
             case 'cache_hit_ratio': valueExpr = 'COALESCE(SUM(cached_tokens) * 1.0 / NULLIF(SUM(prompt_tokens), 0), 0)'; break;
-            default: valueExpr = 'COUNT(*)';
+            default: throw new Error(`Unknown metric: ${metric}`);
         }
 
         const modelPlaceholders = modelIds.length > 0
