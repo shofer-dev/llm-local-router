@@ -110,10 +110,10 @@ function formatTick(value: number, metricKey: string): string {
 }
 
 function tooltipVal(value: number, metricKey: string): string {
-  if (metricKey === 'cost') return `$${(value as number).toFixed(6)}`;
-  if (metricKey === 'cache_hit_ratio') return `${((value as number) * 100).toFixed(1)}%`;
-  if (isLatency(metricKey)) return `${((value as number) / 1000).toFixed(3)}s`; // ms → seconds
-  return String(Math.round(value as number));
+  if (metricKey === 'cost') return `$${value.toFixed(6)}`;
+  if (metricKey === 'cache_hit_ratio') return `${(value * 100).toFixed(1)}%`;
+  if (isLatency(metricKey)) return `${(value / 1000).toFixed(3)}s`; // ms → seconds
+  return String(Math.round(value));
 }
 
 /** Classify a model ID as primary or composite. */
@@ -342,12 +342,15 @@ export default function MetricsPanel() {
     return () => { unsub(); clearTimeout(id); };
   }, [timeRange]);
 
-  const allPoints = Object.values(allData).flat();
+  const allPoints = React.useMemo(() => Object.values(allData).flat(), [allData]);
   const modelsInData = React.useMemo(() => [...new Set(allPoints.map(d => d.modelId))].sort(), [allPoints]);
   const primaryKeys = modelsInData.filter(m => !isComposite(m));
   const compositeKeys = modelsInData.filter(m => isComposite(m));
 
-  const modelColors = new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]]));
+  const modelColors = React.useMemo(
+    () => new Map(modelsInData.map((m, i) => [m, COLORS[i % COLORS.length]])),
+    [modelsInData],
+  );
 
   // Build the full list of selectable keys: ALL_PRIMARY, ALL_COMPOSITE, then individual models
   const allSelectableKeys = React.useMemo(() => {

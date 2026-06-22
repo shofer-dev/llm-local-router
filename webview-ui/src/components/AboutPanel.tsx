@@ -122,7 +122,7 @@ const styles: Record<string, React.CSSProperties> = {
   sectionTitle: {
     fontSize: '13px',
     fontWeight: 600,
-    margin: '0 0 ' + '6px',
+    margin: '0 0 6px',
     color: 'var(--vscode-descriptionForeground, #999)',
     textTransform: 'uppercase',
   },
