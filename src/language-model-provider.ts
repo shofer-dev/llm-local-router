@@ -298,8 +298,9 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         // Extract systemPrompt from modelOptions (VS Code API lacks System role)
         const systemPrompt = options.modelOptions?.systemPrompt as string | undefined;
 
-        // Extract maxTokens from modelOptions
+        // Extract maxTokens / temperature from modelOptions (caller-overridable)
         const maxTokens = options.modelOptions?.maxTokens as number | undefined;
+        const temperature = (options.modelOptions?.temperature as number | undefined) ?? 0.7;
 
         // Convert VS Code messages to our message format
         const chatMessages = this.convertVSCodeMessages(messages);
@@ -325,7 +326,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             rootConversationId,
             model: modelId,
             messages: chatMessages,
-            temperature: 0.7,
+            temperature,
             maxTokens,
             stream: true,
             tools: tools.length > 0 ? tools : undefined,
