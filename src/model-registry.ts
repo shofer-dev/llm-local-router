@@ -211,7 +211,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
         pricing: $(0.0014, 0.0044, 0.00026),
-        imageInput: false, toolCalling: true,
+        imageInput: true, toolCalling: true,
     },
     {
         id: 'glm-5.1', name: 'GLM-5.1',
@@ -219,7 +219,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
         pricing: $(0.0014, 0.0044, 0.00026),
-        imageInput: false, toolCalling: true,
+        imageInput: true, toolCalling: true,
     },
     {
         id: 'glm-5', name: 'GLM-5',
@@ -227,7 +227,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
         pricing: $(0.001, 0.0032, 0.0002),
-        imageInput: false, toolCalling: true,
+        imageInput: true, toolCalling: true,
     },
     {
         id: 'glm-4.7', name: 'GLM-4.7',
@@ -475,7 +475,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
         pricing: $(0.0014, 0.0044, 0.00026),
-        imageInput: false, toolCalling: true,
+        imageInput: true, toolCalling: true,
     },
     {
         id: 'glm-4.7-zai', name: 'GLM-4.7 (Z.ai)',
@@ -483,7 +483,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
         pricing: $(0.0006, 0.0022, 0.00011),
-        imageInput: false, toolCalling: true,
+        imageInput: true, toolCalling: true,
     },
     {
         id: 'glm-5-zai', name: 'GLM-5 (Z.ai)',
@@ -491,7 +491,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
         pricing: $(0.001, 0.0032, 0.0002),
-        imageInput: false, toolCalling: true,
+        imageInput: true, toolCalling: true,
     },
 ];
 
