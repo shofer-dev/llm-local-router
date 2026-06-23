@@ -65,6 +65,14 @@ export interface ModelRegistryEntry {
     pricing: ModelPricing;
     imageInput: boolean;
     toolCalling: boolean;
+    /**
+     * Per-model native-tool preferences (availability + dialect/naming). Optional
+     * per-entry override; when unset, provider-family defaults apply (see
+     * resolveModelToolPrefs in llm-client). This catalog is the integrator-owned
+     * source of truth for tool selection on the VS Code LM API path.
+     */
+    includedTools?: string[];
+    excludedTools?: string[];
 }
 
 // ─── Chat message types (OpenAI-compatible) ─────────────────────────
@@ -310,6 +318,15 @@ export interface ModelCapabilities {
     imageInput: boolean;
     toolCalling: boolean;
     promptCache: boolean;
+    /**
+     * Per-model native-tool preferences, surfaced via the `getModelCapabilities`
+     * side-channel command so Shofer's vscode-lm provider can map them onto
+     * ModelInfo.includedTools / excludedTools. The standard VS Code
+     * LanguageModelChatInformation.capabilities cannot carry arbitrary arrays, so
+     * this side-channel is the only path for them.
+     */
+    includedTools?: string[];
+    excludedTools?: string[];
 }
 
 /** Pricing in USD per 1M tokens (the form Shofer expects). */

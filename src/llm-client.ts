@@ -16,7 +16,9 @@ import {
     ChatMessage,
     MessageRole,
     ModelPricingPerMillion,
+    ModelRegistryEntry,
     ProviderModelInfo,
+    ProviderType,
     ToolCall,
     UsageInfo,
 } from './types';
@@ -149,9 +151,28 @@ export function getProviderModelInfoList(): ProviderModelInfo[] {
             imageInput: m.imageInput,
             toolCalling: m.toolCalling,
             promptCache: !!(m.pricing.contextCacheRead && m.pricing.contextCacheRead > 0),
+            ...resolveModelToolPrefs(m),
         },
         pricing: toPerMillionPricing(m.id),
     }));
+}
+
+/**
+ * Resolve a model's native-tool preferences for the capabilities side-channel:
+ * explicit per-entry values win, otherwise provider-family defaults apply. Kept
+ * in sync with llm-router's resolveModelToolPrefs so both router paths agree on
+ * the same integrator-owned defaults. Returns only set keys so the spread leaves
+ * capabilities untouched when there are no preferences.
+ */
+function resolveModelToolPrefs(m: ModelRegistryEntry): { includedTools?: string[]; excludedTools?: string[] } {
+    if (m.includedTools?.length || m.excludedTools?.length) {
+        return { includedTools: m.includedTools, excludedTools: m.excludedTools };
+    }
+    if (m.provider === ProviderType.OpenAI) {
+        // OpenAI models perform better with apply_patch than apply_diff/write_to_file.
+        return { includedTools: ['apply_patch'], excludedTools: ['apply_diff', 'write_to_file'] };
+    }
+    return {};
 }
 
 /**

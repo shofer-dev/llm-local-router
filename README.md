@@ -243,9 +243,21 @@ Shofer (vscode-lm handler)
     │
     └─ Side-channel commands:
          shofer.router.getModelPricing(modelId)    → Registry + custom provider pricing
-         shofer.router.getModelCapabilities(modelId) → Capabilities
+         shofer.router.getModelCapabilities(modelId) → Capabilities (incl. tool prefs)
          shofer.router.getRequestCost(conversationId) → Per-conversation cost ledger
 ```
+
+### Per-model tool preferences
+
+Registry entries (`src/model-registry.ts`, `ModelRegistryEntry`) may declare
+`includedTools` / `excludedTools` — the integrator-owned native-tool availability
+and dialect/naming for that model (or inherit provider-family defaults via
+`resolveModelToolPrefs` in `src/llm-client.ts`, e.g. OpenAI → `apply_patch`). The
+VS Code `LanguageModelChatInformation.capabilities` type cannot carry arbitrary
+arrays, so these ride the `shofer.router.getModelCapabilities` side-channel (in
+the `ModelCapabilities` payload). Shofer's `vscode-lm` provider reads them and
+maps them onto `ModelInfo.includedTools` / `excludedTools`. See
+`extensions/shofer/docs/tool_preferences.md` for the full cross-path picture.
 
 ## License
 

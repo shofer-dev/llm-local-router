@@ -78,7 +78,10 @@ Implements `vscode.LanguageModelChatProvider<vscode.LanguageModelChatInformation
 - Emit structured `tool_preparing` markers for long tool argument streams
 - Validate OpenAI tool-call message sequence constraints
 - Maintain per-conversation cost ledger
-- Expose side-channel commands (`getPricing`, `getCapabilities`, `getRequestCost`)
+- Expose side-channel commands (`getPricing`, `getCapabilities`, `getRequestCost`).
+  `getCapabilities` also carries per-model native-tool preferences
+  (`includedTools`/`excludedTools`) since the VS Code LM API's `capabilities`
+  cannot — see "Per-model tool preferences" in the README.
 
 ### 2. ProviderRouter (`provider-client.ts`)
 
