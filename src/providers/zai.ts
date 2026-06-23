@@ -10,7 +10,7 @@ import { ChatCompletionRequest, ChatCompletionResponse } from '../types';
 export function prepareZAiRequest(req: ChatCompletionRequest): void {
     // Z.ai supports thinking mode for GLM models
     // The thinking parameter is sent via extraBody
-    const isThinkingModel = req.model.startsWith('glm-4.7') || req.model.startsWith('glm-5');
+    const isThinkingModel = req.model.startsWith('glm-4.5') || req.model.startsWith('glm-4.6') || req.model.startsWith('glm-4.7') || req.model.startsWith('glm-5');
     if (isThinkingModel) {
         if (!req.extraBody) req.extraBody = {};
         // Only set thinking if not already configured

@@ -161,7 +161,7 @@ describe('model-registry', () => {
 
         it('returns Zhipu models', () => {
             const models = getModelsByProvider(ProviderType.Zhipu);
-            assert.equal(models.length, 7);
+            assert.equal(models.length, 9);
         });
 
         it('returns Mistral models', () => {

@@ -205,13 +205,15 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
     },
 
     // ═══ Zhipu GLM ═══
+    // NOTE: GLM-5.x and GLM-4.x (non-v) models are text-only. Vision requires
+    // the v-suffixed variants (glm-4.6v, glm-4.5v) — see entries below.
     {
         id: 'glm-5.2', name: 'GLM-5.2',
         description: 'Zhipu AI GLM-5.2 next-gen flagship for agentic engineering with interleaved thinking and 1M lossless context',
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
         pricing: $(0.0014, 0.0044, 0.00026),
-        imageInput: true, toolCalling: true,
+        imageInput: false, toolCalling: true,
     },
     {
         id: 'glm-5.1', name: 'GLM-5.1',
@@ -219,7 +221,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
         pricing: $(0.0014, 0.0044, 0.00026),
-        imageInput: true, toolCalling: true,
+        imageInput: false, toolCalling: true,
     },
     {
         id: 'glm-5', name: 'GLM-5',
@@ -227,7 +229,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
         pricing: $(0.001, 0.0032, 0.0002),
-        imageInput: true, toolCalling: true,
+        imageInput: false, toolCalling: true,
     },
     {
         id: 'glm-4.7', name: 'GLM-4.7',
@@ -260,6 +262,22 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         provider: ProviderType.Zhipu,
         pricing: $(0.0002, 0.0011, 0.00003),
         imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'glm-4.6v', name: 'GLM-4.6V',
+        description: 'Zhipu AI GLM-4.6V vision model with auto-determined thinking and multimodal image understanding',
+        contextLength: 131_072, maxOutputTokens: 32_768,
+        provider: ProviderType.Zhipu,
+        pricing: $(0.0003, 0.0009, 0.00005),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'glm-4.5v', name: 'GLM-4.5V',
+        description: 'Zhipu AI GLM-4.5V vision model with compulsory thinking and multimodal image understanding',
+        contextLength: 65_536, maxOutputTokens: 16_384,
+        provider: ProviderType.Zhipu,
+        pricing: $(0.0006, 0.0018, 0.00011),
+        imageInput: true, toolCalling: true,
     },
     // ═══ Mistral ═══
     {
@@ -469,13 +487,15 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
     },
 
     // ═══ Z.ai ═══
+    // NOTE: GLM-5.x and GLM-4.x (non-v) models are text-only. Vision requires
+    // the v-suffixed variants (glm-4.6v, glm-4.5v).
     {
         id: 'glm-5.2-zai', name: 'GLM-5.2 (Z.ai)',
         description: 'Zhipu GLM-5.2 via Z.ai international API with interleaved thinking and 1M lossless context',
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
         pricing: $(0.0014, 0.0044, 0.00026),
-        imageInput: true, toolCalling: true,
+        imageInput: false, toolCalling: true,
     },
     {
         id: 'glm-4.7-zai', name: 'GLM-4.7 (Z.ai)',
@@ -483,7 +503,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
         pricing: $(0.0006, 0.0022, 0.00011),
-        imageInput: true, toolCalling: true,
+        imageInput: false, toolCalling: true,
     },
     {
         id: 'glm-5-zai', name: 'GLM-5 (Z.ai)',
@@ -491,6 +511,22 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
         pricing: $(0.001, 0.0032, 0.0002),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'glm-4.6v-zai', name: 'GLM-4.6V (Z.ai)',
+        description: 'Zhipu GLM-4.6V via Z.ai international API — vision model with auto-determined thinking and multimodal image understanding',
+        contextLength: 131_072, maxOutputTokens: 32_768,
+        provider: ProviderType.ZAi,
+        pricing: $(0.0003, 0.0009, 0.00005),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'glm-4.5v-zai', name: 'GLM-4.5V (Z.ai)',
+        description: 'Zhipu GLM-4.5V via Z.ai international API — vision model with compulsory thinking and multimodal image understanding',
+        contextLength: 65_536, maxOutputTokens: 16_384,
+        provider: ProviderType.ZAi,
+        pricing: $(0.0006, 0.0018, 0.00011),
         imageInput: true, toolCalling: true,
     },
 ];

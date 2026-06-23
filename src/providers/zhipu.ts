@@ -15,6 +15,7 @@ import { ChatCompletionRequest } from '../types';
  */
 const THINKING_MODELS = new Set([
     'glm-5.2', 'glm-5.1', 'glm-5', 'glm-4.7', 'glm-4.6', 'glm-4.5', 'glm-4.5-air',
+    'glm-4.6v', 'glm-4.5v',
 ]);
 
 export function prepareZhipuRequest(req: ChatCompletionRequest): void {
