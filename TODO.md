@@ -2,19 +2,11 @@
 
 ## Provider verification
 
-Test each provider end-to-end (Basic = simple completion, Tools = tool calling,
-Thinking = reasoning content, Image = image input):
-
-- OpenRouter — Basic:? Tools: Thinking: Image:
-- OpenAI — Basic:Y Tools: Thinking: Image:
-- Anthropic — Basic:Y Tools: Thinking: Image:
-- Google — Basic:N Tools: Thinking: Image:
-- Minimax — Basic:Y Tools: Thinking: Image:
-- Moonshot — Basic:N Tools: Thinking: Image:
-- Deepseek — Basic:Y Tools:Y Thinking:Y Image:NA
-- Xiaomi — Basic:Y Tools: Thinking: Image:
-- Zhipu — Basic:Y Tools: Thinking: Image:
-- Test with Copilot
+Provider verification is exercised through the integration harness
+(`extensions/integration`). The three paths — (a) llm-router, (b) direct egress,
+(c) shofer-router — are tracked in
+[`extensions/integration/TODO.md`](../integration/TODO.md). This doc owns none of
+them and should not duplicate.
 
 ## P2
 
