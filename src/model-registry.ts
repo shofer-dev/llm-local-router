@@ -180,6 +180,31 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         pricing: $(0.0006, 0.003, 0.0001),
         imageInput: true, toolCalling: true,
     },
+    {
+        id: 'kimi-k2.6', name: 'Kimi K2.6',
+        description: 'Moonshot Kimi K2.6 multimodal model',
+        contextLength: 262_144, maxOutputTokens: 32_768,
+        provider: ProviderType.Moonshot,
+        pricing: $(0.00066, 0.00341),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code',
+        description: 'Moonshot Kimi K2.7 Code — agentic coding model (256K context), vision-capable',
+        contextLength: 262_144, maxOutputTokens: 32_768,
+        provider: ProviderType.Moonshot,
+        pricing: $(0.00095, 0.004, 0.00019),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'kimi-k2.7-code-highspeed', name: 'Kimi K2.7 Code Highspeed',
+        description: 'Moonshot Kimi K2.7 Code Highspeed — faster variant of K2.7 Code, vision-capable',
+        // Pricing mirrors kimi-k2.7-code; a separate highspeed rate is not published.
+        contextLength: 262_144, maxOutputTokens: 32_768,
+        provider: ProviderType.Moonshot,
+        pricing: $(0.00095, 0.004, 0.00019),
+        imageInput: true, toolCalling: true,
+    },
 
     // ═══ Xiaomi MiMo ═══
     {
