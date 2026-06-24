@@ -76,6 +76,10 @@ const PROVIDER_BASE_URLS: Record<ProviderType, string> = {
     [ProviderType.Unbound]: 'https://api.getunbound.ai/v1',
     [ProviderType.VercelAiGateway]: 'https://ai-gateway.vercel.sh/v1',
     [ProviderType.ZAi]: 'https://api.z.ai/api/coding/paas/v4',
+    // Alibaba DashScope (Qwen) — OpenAI-compatible. International (Singapore)
+    // endpoint by default; override per-instance via endpointUrls (e.g. the
+    // Beijing host https://dashscope.aliyuncs.com/compatible-mode/v1).
+    [ProviderType.DashScope]: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
 };
 
 /**
@@ -175,6 +179,11 @@ export class ProviderRouter {
 
         // Mistral: OpenAI-compatible
         this.handlerCache.set(ProviderType.Mistral, {
+            preparer: noopPreparer,
+        });
+
+        // DashScope (Qwen): OpenAI-compatible
+        this.handlerCache.set(ProviderType.DashScope, {
             preparer: noopPreparer,
         });
 

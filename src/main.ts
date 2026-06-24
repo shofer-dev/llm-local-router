@@ -258,6 +258,7 @@ function getDefaultEndpoint(provider: string): string {
         moonshot: 'https://api.moonshot.cn',
         xiaomi: 'https://api.xiaomimimo.com',
         zhipu: 'https://api.z.ai',
+        dashscope: 'https://dashscope-intl.aliyuncs.com',
         openrouter: 'https://openrouter.ai',
     };
     return defaults[provider] || '';

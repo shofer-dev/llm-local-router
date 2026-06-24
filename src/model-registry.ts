@@ -597,6 +597,67 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         pricing: $(0.0006, 0.0018, 0.00011),
         imageInput: true, toolCalling: true,
     },
+
+    // ═══ Alibaba Qwen (DashScope, OpenAI-compatible) ═══
+    // Prices are the DashScope base-tier rates (Coder models use input-length
+    // tiered pricing; the entry-tier rate is listed). qwen3-vl-flash pricing is
+    // an estimate pending an official rate.
+    {
+        id: 'qwen3-max', name: 'Qwen3-Max',
+        description: 'Alibaba Qwen3-Max — flagship general model',
+        contextLength: 262_144, maxOutputTokens: 65_536,
+        provider: ProviderType.DashScope,
+        pricing: $(0.0012, 0.006),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'qwen3.6-plus', name: 'Qwen3.6-Plus',
+        description: 'Alibaba Qwen3.6-Plus — latest flagship-tier model with 1M context',
+        contextLength: 1_000_000, maxOutputTokens: 65_536,
+        provider: ProviderType.DashScope,
+        pricing: $(0.0005, 0.003),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'qwen3.6-flash', name: 'Qwen3.6-Flash',
+        description: 'Alibaba Qwen3.6-Flash — fast, cost-efficient model with 1M context',
+        contextLength: 1_000_000, maxOutputTokens: 65_536,
+        provider: ProviderType.DashScope,
+        pricing: $(0.00019, 0.00113),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'qwen3-coder-plus', name: 'Qwen3-Coder-Plus',
+        description: 'Alibaba Qwen3-Coder-Plus — high-performance agentic coding model with 1M context',
+        contextLength: 1_000_000, maxOutputTokens: 65_536,
+        provider: ProviderType.DashScope,
+        pricing: $(0.001, 0.005),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'qwen3-coder-flash', name: 'Qwen3-Coder-Flash',
+        description: 'Alibaba Qwen3-Coder-Flash — fast coding model with 1M context optimized for speed',
+        contextLength: 1_000_000, maxOutputTokens: 65_536,
+        provider: ProviderType.DashScope,
+        pricing: $(0.0003, 0.0015),
+        imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'qwen3-vl-plus', name: 'Qwen3-VL-Plus',
+        description: 'Alibaba Qwen3-VL-Plus — multimodal vision-language model (high-res image + video) with long context',
+        contextLength: 262_144, maxOutputTokens: 32_768,
+        provider: ProviderType.DashScope,
+        pricing: $(0.0002, 0.0016),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'qwen3-vl-flash', name: 'Qwen3-VL-Flash',
+        description: 'Alibaba Qwen3-VL-Flash — fast, cost-efficient multimodal vision-language model',
+        contextLength: 262_144, maxOutputTokens: 32_768,
+        provider: ProviderType.DashScope,
+        pricing: $(0.0001, 0.0008),
+        imageInput: true, toolCalling: true,
+    },
 ];
 
 // ─── Lookup helpers ──────────────────────────────────────────────────

@@ -30,6 +30,7 @@ export enum ProviderType {
     Unbound = 'unbound',
     VercelAiGateway = 'vercel-ai-gateway',
     ZAi = 'zai',
+    DashScope = 'dashscope',
 }
 
 // ─── Model registry ─────────────────────────────────────────────────
@@ -250,6 +251,7 @@ export interface ProviderApiKeys {
     moonshot?: string;
     xiaomi?: string;
     zhipu?: string;
+    dashscope?: string;
     openrouter?: string;
 }
 

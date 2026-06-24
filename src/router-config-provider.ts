@@ -45,6 +45,7 @@ const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string
   moonshot: { label: 'Moonshot / Kimi', defaultEndpoint: 'https://api.moonshot.cn/v1' },
   xiaomi: { label: 'Xiaomi MiMo', defaultEndpoint: 'https://api.xiaomimimo.com/v1' },
   zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://api.z.ai/api/coding/paas/v4' },
+  dashscope: { label: 'DashScope (Qwen)', defaultEndpoint: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
   openrouter: { label: 'OpenRouter', defaultEndpoint: 'https://openrouter.ai/api/v1' },
   mistral: { label: 'Mistral AI', defaultEndpoint: 'https://api.mistral.ai/v1' },
   xai: { label: 'xAI (Grok)', defaultEndpoint: 'https://api.x.ai/v1' },
@@ -638,7 +639,7 @@ export class RouterConfigProvider {
     logger.debug(`[customProvider:save] START — id=${provider.id} label=${provider.label} protocol=${provider.protocol} modelsCount=${provider.models?.length ?? 0} hasApiKey=${!!apiKey?.trim()}`);
     try {
       // Validate provider ID — must not collide with built-in ProviderType values
-      const builtInProviders = ['openai', 'anthropic', 'google', 'deepseek', 'minimax', 'moonshot', 'xiaomi', 'zhipu', 'openrouter'];
+      const builtInProviders = ['openai', 'anthropic', 'google', 'deepseek', 'minimax', 'moonshot', 'xiaomi', 'zhipu', 'dashscope', 'openrouter'];
       if (builtInProviders.includes(provider.id)) {
         logger.warning(`[customProvider:save] REJECTED — id=${provider.id} collides with built-in provider`);
         throw new Error(`Provider ID "${provider.id}" collides with a built-in provider. Choose a different ID.`);
