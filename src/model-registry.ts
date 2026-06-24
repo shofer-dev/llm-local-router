@@ -316,6 +316,14 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         imageInput: true, toolCalling: true,
     },
     {
+        id: 'glm-4.6v-flash', name: 'GLM-4.6V-Flash',
+        description: 'Zhipu AI GLM-4.6V-Flash — free high-speed multimodal vision model (9B) for rapid image understanding',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.Zhipu,
+        pricing: $(0, 0),
+        imageInput: true, toolCalling: true,
+    },
+    {
         id: 'glm-4.5v', name: 'GLM-4.5V',
         description: 'Zhipu AI GLM-4.5V vision model with compulsory thinking and multimodal image understanding',
         contextLength: 65_536, maxOutputTokens: 16_384,
@@ -571,6 +579,14 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 131_072, maxOutputTokens: 32_768,
         provider: ProviderType.ZAi,
         pricing: $(0.0003, 0.0009, 0.00005),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        id: 'glm-4.6v-flash-zai', name: 'GLM-4.6V-Flash (Z.ai)',
+        description: 'Zhipu GLM-4.6V-Flash via Z.ai international API — free high-speed multimodal vision model (9B)',
+        contextLength: 131_072, maxOutputTokens: 16_384,
+        provider: ProviderType.ZAi,
+        pricing: $(0, 0),
         imageInput: true, toolCalling: true,
     },
     {
