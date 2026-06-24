@@ -34,6 +34,7 @@ import { prepareMiniMaxRequest, transformMiniMaxStreamChunk } from './providers/
 import { prepareMoonshotRequest } from './providers/moonshot';
 import { prepareXiaomiRequest } from './providers/xiaomi';
 import { prepareZhipuRequest } from './providers/zhipu';
+import { prepareDashScopeRequest } from './providers/dashscope';
 import {
     sendGeminiStreamingRequest,
     sendGeminiNonStreamingRequest,
@@ -182,9 +183,9 @@ export class ProviderRouter {
             preparer: noopPreparer,
         });
 
-        // DashScope (Qwen): OpenAI-compatible
+        // DashScope (Qwen): OpenAI-compatible; enables Qwen thinking by default
         this.handlerCache.set(ProviderType.DashScope, {
-            preparer: noopPreparer,
+            preparer: prepareDashScopeRequest,
         });
 
         // xAI (Grok): OpenAI-compatible
