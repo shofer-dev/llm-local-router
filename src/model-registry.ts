@@ -300,6 +300,14 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         imageInput: false, toolCalling: true,
     },
     {
+        id: 'glm-5v-turbo', name: 'GLM-5V-Turbo',
+        description: 'Zhipu AI GLM-5V-Turbo — next-gen native multimodal vision model (image + video) with multimodal tool use and GUI task execution',
+        contextLength: 202_752, maxOutputTokens: 131_072,
+        provider: ProviderType.Zhipu,
+        pricing: $(0.0012, 0.004),
+        imageInput: true, toolCalling: true,
+    },
+    {
         id: 'glm-4.6v', name: 'GLM-4.6V',
         description: 'Zhipu AI GLM-4.6V vision model with auto-determined thinking and multimodal image understanding',
         contextLength: 131_072, maxOutputTokens: 32_768,
@@ -548,6 +556,14 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         provider: ProviderType.ZAi,
         pricing: $(0.001, 0.0032, 0.0002),
         imageInput: false, toolCalling: true,
+    },
+    {
+        id: 'glm-5v-turbo-zai', name: 'GLM-5V-Turbo (Z.ai)',
+        description: 'Zhipu GLM-5V-Turbo via Z.ai international API — native multimodal vision model (image + video) with multimodal tool use',
+        contextLength: 202_752, maxOutputTokens: 131_072,
+        provider: ProviderType.ZAi,
+        pricing: $(0.0012, 0.004),
+        imageInput: true, toolCalling: true,
     },
     {
         id: 'glm-4.6v-zai', name: 'GLM-4.6V (Z.ai)',
