@@ -136,6 +136,17 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
 
     // ═══ MiniMax ═══
     {
+        id: 'MiniMax-M3', name: 'MiniMax M3',
+        description: 'MiniMax M3 — frontier coding model with 1M context and native multimodality (text/image/video input)',
+        // 1M context; >512K is billed at the long-context tier (2x). maxOutput is
+        // not published — mirrors the M2.x family. Base pricing is the standard PAYG
+        // rate ($0.60/$2.40 per 1M); the 50% launch discount is modeled via `discount`.
+        contextLength: 1_000_000, maxOutputTokens: 65_536,
+        provider: ProviderType.MiniMax,
+        pricing: $(0.0006, 0.0024, undefined, undefined, 0.5),
+        imageInput: true, toolCalling: true,
+    },
+    {
         id: 'MiniMax-M2.7', name: 'MiniMax M2.7',
         description: 'MiniMax M2.7 model',
         contextLength: 204_800, maxOutputTokens: 65_536,
