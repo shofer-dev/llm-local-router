@@ -8,12 +8,14 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { LanguageModelProvider, RouterConfig } from './language-model-provider';
 import { RouterConfigProvider } from './router-config-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
-import { loadApiKeys, loadEndpointUrls, loadCustomProviderApiKeys, loadModelPricingOverrides, onApiKeysChanged } from './secret-storage';
+import { loadApiKeys, loadEndpointUrls, loadCustomProviderApiKeys, loadModelPricingOverrides, onApiKeysChanged, storeApiKey } from './secret-storage';
 import { setModelPricingOverrides } from './llm-client';
-import { CustomProviderConfig } from './types';
+import { CustomProviderConfig, ProviderType } from './types';
+import { getProviderForModel } from './model-registry';
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
 import { startMetricsServer, stopMetricsServer } from './metrics-server';
@@ -259,6 +261,122 @@ function getDefaultEndpoint(provider: string): string {
         openrouter: 'https://openrouter.ai',
     };
     return defaults[provider] || '';
+}
+
+// ─── Config import/export ─────────────────────────────────────────
+
+/** Shape accepted by `shofer.router.importConfig`. All fields optional. */
+interface RouterImportConfig {
+    /** provider id (ProviderType) → API key. Written to SecretStorage. */
+    apiKeys?: Record<string, string>;
+    /** provider id → custom base URL. Written to SecretStorage. */
+    endpoints?: Record<string, string>;
+    /** `shofer.router.*` workspace settings to apply (e.g. { enabled: true }). */
+    settings?: Record<string, unknown>;
+}
+
+interface RouterImportResult {
+    importedKeys: string[];
+    importedEndpoints: string[];
+    appliedSettings: string[];
+    skipped: string[];
+}
+
+/**
+ * Bring the router to a known state from a single config object (or a path to a
+ * JSON file holding one). Keys/endpoints go to SecretStorage — that fires
+ * onApiKeysChanged, so the provider reloads them automatically; we also refresh
+ * models so newly-keyed providers surface immediately for the caller.
+ */
+async function importRouterConfig(
+    context: vscode.ExtensionContext,
+    input: RouterImportConfig | string,
+): Promise<RouterImportResult> {
+    const logger = getLogger();
+    let cfg: RouterImportConfig;
+    if (typeof input === 'string') {
+        cfg = JSON.parse(fs.readFileSync(input, 'utf8')) as RouterImportConfig;
+    } else {
+        cfg = input ?? {};
+    }
+
+    const validProviders = new Set<string>(Object.values(ProviderType));
+    const result: RouterImportResult = { importedKeys: [], importedEndpoints: [], appliedSettings: [], skipped: [] };
+
+    for (const [provider, key] of Object.entries(cfg.apiKeys ?? {})) {
+        if (!key) { continue; }
+        if (!validProviders.has(provider)) { result.skipped.push(provider); continue; }
+        await storeApiKey(context, provider, key);
+        result.importedKeys.push(provider);
+    }
+    for (const [provider, url] of Object.entries(cfg.endpoints ?? {})) {
+        if (!url) { continue; }
+        if (!validProviders.has(provider)) { result.skipped.push(provider); continue; }
+        // Same key shape loadEndpointUrls() reads; the prefix makes onApiKeysChanged fire.
+        await context.secrets.store(`shofer-router.provider.${provider}.endpoint`, url);
+        result.importedEndpoints.push(provider);
+    }
+    if (cfg.settings) {
+        const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+        for (const [k, v] of Object.entries(cfg.settings)) {
+            await wsConfig.update(k, v, vscode.ConfigurationTarget.Global);
+            result.appliedSettings.push(k);
+        }
+    }
+    // The secrets listener reloads keys asynchronously; force a model refresh so the
+    // caller sees a consistent state on return.
+    try { await languageModelProvider?.fetchModels(); } catch (err) { logger.warning(`importConfig fetchModels: ${err}`); }
+    logger.info(`importConfig: keys=[${result.importedKeys}] endpoints=[${result.importedEndpoints}] ` +
+        `settings=[${result.appliedSettings}] skipped=[${result.skipped}]`);
+    return result;
+}
+
+interface RouterExportResult {
+    providersWithKeys: string[];
+    providersWithEndpoints: string[];
+    settings: Record<string, unknown>;
+    /** Live runtime state — what the vscode.lm provider currently exposes. */
+    runtime: {
+        enabled: boolean;
+        ready: boolean;
+        configuredProviderCount: number;
+        /** Models the provider exposes to vscode.lm (id + family + owning provider),
+         * so a caller can pick a valid `vsCodeLmModelSelector`. Only models whose
+         * provider is keyed are exposed — i.e. actually selectable right now. */
+        availableModels: Array<{ id: string; family: string; provider: string | undefined }>;
+    };
+}
+
+/** Return the router's current state WITHOUT secret values — which providers are
+ * keyed, the non-secret `shofer.router.*` settings, and live runtime state. Safe to
+ * log/serialise. */
+async function exportRouterConfig(context: vscode.ExtensionContext): Promise<RouterExportResult> {
+    const keys = await loadApiKeys(context);
+    const endpoints = await loadEndpointUrls(context);
+    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const keyed = new Set(Object.keys(keys));
+    const allModels = languageModelProvider?.getAvailableModels() ?? [];
+    // Mirror provideLanguageModelChatInformation: only models whose owning provider is
+    // keyed (or composite shofer/* models) are actually exposed to / selectable via
+    // vscode.lm. Reporting only those keeps the caller from picking an unselectable model.
+    const exposed = allModels
+        .map((m) => ({ id: m.id, family: m.family, provider: getProviderForModel(m.id) as string | undefined }))
+        .filter((m) => m.id.startsWith('shofer/') || (m.provider !== undefined && keyed.has(m.provider)));
+    return {
+        providersWithKeys: Object.keys(keys),
+        providersWithEndpoints: Object.keys(endpoints),
+        settings: {
+            enabled: wsConfig.get('enabled'),
+            debug: wsConfig.get('debug'),
+            customProviders: wsConfig.get('customProviders'),
+        },
+        runtime: {
+            enabled: languageModelProvider?.getConfig().enabled ?? false,
+            ready: languageModelProvider?.isReady() ?? false,
+            configuredProviderCount: languageModelProvider?.getConfiguredProviderCount() ?? 0,
+            availableModels: exposed,
+        },
+    };
 }
 
 // ─── Commands ─────────────────────────────────────────────────────
@@ -678,6 +796,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const refreshModelsCommand = vscode.commands.registerCommand('shofer.router.refreshModels', handleRefreshModels);
     const testConnectionCommand = vscode.commands.registerCommand('shofer.router.testConnection', handleTestConnection);
 
+    // Import/export the router's configuration as a single object — used to bring the
+    // router to a known state (e.g. by the L2 integration harness) without clicking
+    // through the Configure UI. Accepts the config inline OR as a path to a JSON file
+    // (parity with shofer.importSettings). Secret values are written to SecretStorage
+    // (which fires onApiKeysChanged → the provider reloads keys automatically); export
+    // returns only WHICH providers are keyed, never the key values.
+    const importConfigCommand = vscode.commands.registerCommand(
+        'shofer.router.importConfig',
+        async (input: RouterImportConfig | string) => importRouterConfig(context, input),
+    );
+    const exportConfigCommand = vscode.commands.registerCommand(
+        'shofer.router.exportConfig',
+        async () => exportRouterConfig(context),
+    );
+
     const getModelPricingCommand = vscode.commands.registerCommand(
         'shofer.router.getModelPricing',
         (modelId: string) => languageModelProvider?.getPricing(modelId),
@@ -727,6 +860,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         showModelsCommand,
         refreshModelsCommand,
         testConnectionCommand,
+        importConfigCommand,
+        exportConfigCommand,
         getModelPricingCommand,
         getModelCapabilitiesCommand,
         getRequestCostCommand,
