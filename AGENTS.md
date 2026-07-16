@@ -8,9 +8,9 @@ hosts (never China/regional endpoints), docs describe current state only. See
 ## What it is
 
 Self-contained VS Code extension: direct multi-provider LLM access + composite
-models (`shofer/*` namespace) with in-process failover. No external router
-service. The VS Code Language Model vendor id is `shofer` and composite models
-are referenced under the `shofer/*` prefix — these are fixed identifiers, not
+models (`local/*` namespace) with in-process failover. No external router
+service. The VS Code Language Model vendor id is `local` and composite models
+are referenced under the `local/*` prefix — these are fixed identifiers, not
 branding.
 
 ## Two separate builds — do not conflate
@@ -56,8 +56,8 @@ matching VS Code release when bumping the `engines.vscode` floor.
 ## Architecture (files)
 
 `language-model-provider.ts` = the VS Code `LanguageModelChatProvider` (vendor
-`shofer`) + cost ledger; `provider-client.ts` = ProviderRouter (model → built-in
-or custom provider, base URLs); `composite.ts` = `shofer/*`
+`local`) + cost ledger; `provider-client.ts` = ProviderRouter (model → built-in
+or custom provider, base URLs); `composite.ts` = `local/*`
 failover/round_robin/lowest_latency/highest_reliability + health + throttling;
 `llm-client.ts` = HTTP/SSE + cost; `model-registry.ts` = built-in models + pricing.
 

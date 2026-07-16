@@ -118,7 +118,7 @@ function tooltipVal(value: number, metricKey: string): string {
 
 /** Classify a model ID as primary or composite. */
 function isComposite(modelId: string): boolean {
-  return modelId.startsWith('shofer/');
+  return modelId.startsWith('local/');
 }
 
 /** Human-readable label for a line key (aggregate keys → friendly names). */

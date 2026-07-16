@@ -414,7 +414,7 @@ export class RouterConfigProvider {
       .filter(m => {
         const registry = registryMap.get(m.id);
         const provider = registry?.provider ?? m.family;
-        return configuredProviders.has(provider) || m.id.startsWith('shofer/');
+        return configuredProviders.has(provider) || m.id.startsWith('local/');
       })
       .map(m => {
         const registry = registryMap.get(m.id);
@@ -424,7 +424,7 @@ export class RouterConfigProvider {
           imageInput: m.capabilities.imageInput ?? false,
           toolCalling: m.capabilities.toolCalling ?? false,
           promptCache: m.capabilities.promptCache ?? false,
-          isComposite: m.id.startsWith('shofer/'),
+          isComposite: m.id.startsWith('local/'),
           pricing: m.pricing ? { inputPrice: m.pricing.inputPrice ?? 0, outputPrice: m.pricing.outputPrice ?? 0 } : undefined,
         };
       });

@@ -10,7 +10,7 @@ interface Props {
 }
 
 function generateModelId(): string {
-  return `shofer/composite-${Date.now()}`;
+  return `local/composite-${Date.now()}`;
 }
 
 function createDefaultComposite(modelId: string): CompositeModelConfig {

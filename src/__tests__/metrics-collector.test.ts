@@ -176,35 +176,35 @@ function testPercentiles(): void {
 function testCompositeDistribution(): void {
     const c = new MetricsCollector();
     c.recordRequest(makeEntry({
-        modelId: 'shofer/code',
+        modelId: 'local/code',
         provider: 'deepseek',
         isComposite: true,
-        compositeModelId: 'shofer/code',
+        compositeModelId: 'local/code',
         servedByModel: 'deepseek-v4-pro',
         failoverOccurred: false,
         attempts: 1,
     }));
     c.recordRequest(makeEntry({
-        modelId: 'shofer/code',
+        modelId: 'local/code',
         provider: 'anthropic',
         isComposite: true,
-        compositeModelId: 'shofer/code',
+        compositeModelId: 'local/code',
         servedByModel: 'claude-sonnet-4-6',
         failoverOccurred: false,
         attempts: 1,
     }));
     c.recordRequest(makeEntry({
-        modelId: 'shofer/code',
+        modelId: 'local/code',
         provider: 'deepseek',
         isComposite: true,
-        compositeModelId: 'shofer/code',
+        compositeModelId: 'local/code',
         servedByModel: 'deepseek-v4-pro',
         failoverOccurred: true,
         attempts: 2,
     }));
 
-    const dist = c.getCompositeDistribution('shofer/code');
-    if (!dist) throw new Error('Expected distribution for shofer/code');
+    const dist = c.getCompositeDistribution('local/code');
+    if (!dist) throw new Error('Expected distribution for local/code');
     if (dist.modelCounts['deepseek-v4-pro'] !== 2) throw new Error(`Expected 2 for deepseek, got ${dist.modelCounts['deepseek-v4-pro']}`);
     if (dist.modelCounts['claude-sonnet-4-6'] !== 1) throw new Error(`Expected 1 for claude, got ${dist.modelCounts['claude-sonnet-4-6']}`);
     if (dist.failoverCount !== 1) throw new Error(`Expected 1 failover, got ${dist.failoverCount}`);
@@ -270,15 +270,15 @@ function testMidstreamFailure(): void {
     const c = new MetricsCollector();
     // First ensure routing is set up with a normal request
     c.recordRequest(makeEntry({
-        modelId: 'shofer/code',
+        modelId: 'local/code',
         provider: 'deepseek',
         isComposite: true,
-        compositeModelId: 'shofer/code',
+        compositeModelId: 'local/code',
         servedByModel: 'deepseek-v4-pro',
     }));
-    c.recordMidstreamFailure('shofer/code');
+    c.recordMidstreamFailure('local/code');
 
-    const dist = c.getCompositeDistribution('shofer/code');
+    const dist = c.getCompositeDistribution('local/code');
     if (!dist) throw new Error('Expected distribution');
     if (dist.midstreamFailureCount !== 1) throw new Error(`Expected 1 midstream failure, got ${dist.midstreamFailureCount}`);
 }

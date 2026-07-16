@@ -16,7 +16,7 @@ import type { CompositeModelConfig as HostCompositeConfig } from '../types';
 // ─── Test data ──────────────────────────────────────────────────────
 
 const WEBVIEW_FAILOVER: WebviewCompositeModel = {
-  modelId: 'shofer/code',
+  modelId: 'local/code',
   strategy: 'failover',
   streamingTimeoutMs: 30000,
   nonStreamingTimeoutMs: 120000,
@@ -28,7 +28,7 @@ const WEBVIEW_FAILOVER: WebviewCompositeModel = {
 };
 
 const WEBVIEW_ROUND_ROBIN: WebviewCompositeModel = {
-  modelId: 'shofer/balanced',
+  modelId: 'local/balanced',
   strategy: 'round_robin',
   streamingTimeoutMs: 45000,
   nonStreamingTimeoutMs: 90000,
@@ -133,7 +133,7 @@ describe('convertToHostConfig', () => {
 describe('convertFromHostConfigs', () => {
   it('converts host configs back to webview format', () => {
     const hostConfigs: Record<string, HostCompositeConfig> = {
-      'shofer/code': {
+      'local/code': {
         strategy: 'failover',
         models: ['deepseek-v4-pro', 'claude-sonnet-4-6'],
         streamingTimeoutMs: 30000,
@@ -144,7 +144,7 @@ describe('convertFromHostConfigs', () => {
 
     const result = convertFromHostConfigs(hostConfigs);
     assert.equal(result.length, 1);
-    assert.equal(result[0].modelId, 'shofer/code');
+    assert.equal(result[0].modelId, 'local/code');
     assert.equal(result[0].strategy, 'failover');
     assert.equal(result[0].streamingTimeoutMs, 30000);
     assert.equal(result[0].nonStreamingTimeoutMs, 120000);
@@ -160,7 +160,7 @@ describe('convertFromHostConfigs', () => {
 
   it('converts weight objects for round_robin', () => {
     const hostConfigs: Record<string, HostCompositeConfig> = {
-      'shofer/balanced': {
+      'local/balanced': {
         strategy: 'round_robin',
         models: [
           { id: 'deepseek-v4-pro', weight: 3 },
@@ -176,7 +176,7 @@ describe('convertFromHostConfigs', () => {
 
   it('applies defaults for missing timeout fields', () => {
     const hostConfigs: Record<string, HostCompositeConfig> = {
-      'shofer/minimal': {
+      'local/minimal': {
         strategy: 'failover',
         models: ['deepseek-v4-pro'],
       },
@@ -210,12 +210,12 @@ describe('validateCompositeModels', () => {
     assert.ok(errors.some((e) => e.includes('missing a model_id')));
   });
 
-  it('reports model_id not starting with shofer/', () => {
+  it('reports model_id not starting with local/', () => {
     const models: WebviewCompositeModel[] = [
       { ...WEBVIEW_FAILOVER, modelId: 'my-model' },
     ];
     const errors = validateCompositeModels(models);
-    assert.ok(errors.some((e) => e.includes('must start with "shofer/"')));
+    assert.ok(errors.some((e) => e.includes('must start with "local/"')));
   });
 
   it('reports duplicate model_id across composites', () => {

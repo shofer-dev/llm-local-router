@@ -1,7 +1,7 @@
 /**
  * Composite model failover and load-balancing logic.
  *
- * Handles shofer/* composite models that wrap multiple underlying models
+ * Handles local/* composite models that wrap multiple underlying models
  * with configurable routing strategies:
  *   - failover: tries models in strict order; on failure, falls back
  *   - round_robin: smooth weighted round-robin (nginx-style) across models
@@ -200,7 +200,7 @@ export class CompositeService {
      * Check if a model ID is a composite model.
      */
     isCompositeModel(modelId: string): boolean {
-        return modelId.startsWith('shofer/') && this.compositeConfigs.has(modelId);
+        return modelId.startsWith('local/') && this.compositeConfigs.has(modelId);
     }
 
     /**

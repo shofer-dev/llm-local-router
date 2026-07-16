@@ -5,11 +5,11 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 ## Features
 
 - **9 built-in LLM providers + custom providers**: OpenAI, Anthropic, Google Gemini, DeepSeek, MiniMax, Moonshot/Kimi, Xiaomi MiMo, Zhipu GLM, OpenRouter — plus **user-registered custom providers** via the webview UI
-- **Composite models** (`shofer/*`): **Failover**, **weighted round-robin**, **lowest-latency**, and **highest-reliability** strategies across multiple underlying models with in-process health monitoring and throttling
+- **Composite models** (`local/*`): **Failover**, **weighted round-robin**, **lowest-latency**, and **highest-reliability** strategies across multiple underlying models with in-process health monitoring and throttling
 - **Full protocol translation**: Anthropic Messages API ↔ OpenAI Chat Completions, MiniMax `<think>` tag handling, DeepSeek/Moonshot reasoning_content round-trip, Xiaomi max_completion_tokens remapping, Zhipu thinking toggle
 - **Streaming**: SSE streaming for all providers with real-time tool call accumulation
 - **Cost tracking**: Per-token pricing from the built-in model registry, per-conversation cost ledger
-- **VS Code LM API**: Implements `LanguageModelChatProvider` (vendor `shofer`) so GitHub Copilot Chat and any extension using `vscode.lm` can consume the models
+- **VS Code LM API**: Implements `LanguageModelChatProvider` (vendor `local`) so GitHub Copilot Chat and any extension using `vscode.lm` can consume the models
 - **Metrics dashboard**: All 10 metric charts on a single page with ToC navigation, categorized Primary/Composite model picker
 - **Side-channel commands**: `llmLocalRouter.getModelPricing`, `llmLocalRouter.getModelCapabilities`, `llmLocalRouter.getRequestCost`
 - **Secure API keys**: Stored via VS Code's `SecretStorage` API
@@ -71,11 +71,11 @@ Custom provider metadata is stored in `settings.json` (`llmLocalRouter.customPro
 
 ### Composite Models
 
-Define `shofer/*` composite models via the **Config → Composite Models** tab, or in `llmLocalRouter.compositeModelsConfig`:
+Define `local/*` composite models via the **Config → Composite Models** tab, or in `llmLocalRouter.compositeModelsConfig`:
 
 ```json
 {
-  "shofer/code": {
+  "local/code": {
     "strategy": "failover",
     "models": ["deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.5"],
     "throttling": { "maxConcurrent": 50, "requestsPerWindow": 100, "windowMinutes": 5 },
@@ -88,7 +88,7 @@ Define `shofer/*` composite models via the **Config → Composite Models** tab, 
       "cooldownMs": 30000
     }
   },
-  "shofer/balanced": {
+  "local/balanced": {
     "strategy": "round_robin",
     "models": [
       { "id": "deepseek-v4-pro", "weight": 3 },
@@ -96,12 +96,12 @@ Define `shofer/*` composite models via the **Config → Composite Models** tab, 
     ],
     "streamingTimeoutMs": 30000
   },
-  "shofer/fastest": {
+  "local/fastest": {
     "strategy": "lowest_latency",
     "models": ["deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.5"],
     "latencyWindowMs": 600000
   },
-  "shofer/most-reliable": {
+  "local/most-reliable": {
     "strategy": "highest_reliability",
     "models": ["deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.5"],
     "latencyWindowMs": 600000
@@ -136,7 +136,7 @@ Define `shofer/*` composite models via the **Config → Composite Models** tab, 
 Any VS Code extension can consume these models through the standard LM API:
 
 ```ts
-const models = await vscode.lm.selectChatModels({ vendor: "shofer" })
+const models = await vscode.lm.selectChatModels({ vendor: "local" })
 ```
 
 Consumers that want richer metadata than the LM API surfaces can call the
@@ -229,7 +229,7 @@ extensions/llm-local-router/
 ```
 VS Code LM consumer (e.g. Copilot Chat)
     │
-    ├─ vscode.lm.selectChatModels({vendor:"shofer"})
+    ├─ vscode.lm.selectChatModels({vendor:"local"})
     │    → LanguageModelProvider registers all models from registry + custom providers
     │
     ├─ client.sendRequest(messages, options)
@@ -238,7 +238,7 @@ VS Code LM consumer (e.g. Copilot Chat)
     │    → Provider-specific request preparation (Anthropic translation, etc.)
     │    → Direct HTTP/SSE call to provider API (OpenAI, Anthropic, etc.)
     │
-    ├─ Composite models (shofer/*)
+    ├─ Composite models (local/*)
     │    → CompositeService: failover / round_robin / lowest_latency / highest_reliability
     │    → Windowed TTFB tracking per model (lowest_latency)
     │    → Success-ratio tracking per model (highest_reliability)

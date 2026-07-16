@@ -228,10 +228,10 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             : await this.fetchModels();
 
         // Only expose models from providers with API keys configured.
-        // Composite models (shofer/*) are always included since they
+        // Composite models (local/*) are always included since they
         // route through configured underlying providers.
         const models = allModels.filter(m => {
-            if (m.id.startsWith('shofer/')) return true;
+            if (m.id.startsWith('local/')) return true;
             const provider = getProviderForModel(m.id);
             if (provider) return this.router.hasApiKeyForProvider(provider);
             // Custom provider models (family = custom provider ID). A custom

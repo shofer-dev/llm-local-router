@@ -227,7 +227,7 @@ function connectHealthChecker(): void {
     const configuredProviders = new Set<string>();
     const models = languageModelProvider.getAvailableModels();
     for (const m of models) {
-        if (m.id.startsWith('shofer/')) continue;
+        if (m.id.startsWith('local/')) continue;
         configuredProviders.add(m.family || m.id.split('-')[0]);
     }
 
@@ -358,11 +358,11 @@ async function exportRouterConfig(context: vscode.ExtensionContext): Promise<Rou
     const keyed = new Set(Object.keys(keys));
     const allModels = languageModelProvider?.getAvailableModels() ?? [];
     // Mirror provideLanguageModelChatInformation: only models whose owning provider is
-    // keyed (or composite shofer/* models) are actually exposed to / selectable via
+    // keyed (or composite local/* models) are actually exposed to / selectable via
     // vscode.lm. Reporting only those keeps the caller from picking an unselectable model.
     const exposed = allModels
         .map((m) => ({ id: m.id, family: m.family, provider: getProviderForModel(m.id) as string | undefined }))
-        .filter((m) => m.id.startsWith('shofer/') || (m.provider !== undefined && keyed.has(m.provider)));
+        .filter((m) => m.id.startsWith('local/') || (m.provider !== undefined && keyed.has(m.provider)));
     return {
         providersWithKeys: Object.keys(keys),
         providersWithEndpoints: Object.keys(endpoints),
@@ -466,7 +466,7 @@ async function handleGetModelStats(modelId?: string): Promise<void> {
     if (!modelId) {
         modelId = await vscode.window.showInputBox({
             title: 'Model ID',
-            placeHolder: 'e.g., deepseek-v4-pro, shofer/code',
+            placeHolder: 'e.g., deepseek-v4-pro, local/code',
         });
     }
     if (!modelId) return;
@@ -571,7 +571,7 @@ async function handleGetCompositeDistribution(compositeId?: string): Promise<voi
     if (!compositeId) {
         compositeId = await vscode.window.showInputBox({
             title: 'Composite Model ID',
-            placeHolder: 'e.g., shofer/code',
+            placeHolder: 'e.g., local/code',
         });
     }
     if (!compositeId) return;
@@ -786,7 +786,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     routerConfigProvider = new RouterConfigProvider(languageModelProvider, context);
 
     const providerDisposable = vscode.lm.registerLanguageModelChatProvider(
-        'shofer',
+        'local',
         languageModelProvider,
     );
 
@@ -900,7 +900,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         setTimeout(async () => {
             try {
-                const availableModels = await vscode.lm.selectChatModels({ vendor: 'shofer' });
+                const availableModels = await vscode.lm.selectChatModels({ vendor: 'local' });
                 logger.info(`VS Code LM API reports ${availableModels.length} models available`);
             } catch (err) {
                 logger.warning(`Failed to query available models: ${err}`);

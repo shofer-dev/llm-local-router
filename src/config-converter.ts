@@ -139,8 +139,8 @@ export function validateCompositeModels(models: WebviewCompositeModel[]): string
       errors.push('A composite model is missing a model_id.');
       continue;
     }
-    if (!m.modelId.startsWith('shofer/')) {
-      errors.push(`${m.modelId}: model_id must start with "shofer/".`);
+    if (!m.modelId.startsWith('local/')) {
+      errors.push(`${m.modelId}: model_id must start with "local/".`);
     }
     if (seenIds.has(m.modelId)) {
       errors.push(`${m.modelId}: duplicate model_id.`);

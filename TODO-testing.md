@@ -34,7 +34,7 @@ turn, and (if supported) an image input. Record Y/N/NA.
 - [ ] Zhipu GLM / Z.ai
 - [ ] OpenRouter
 - [ ] A **custom provider** (register via webview → + New)
-- [ ] Drive it all through **GitHub Copilot Chat** (vendor `shofer`) end-to-end
+- [ ] Drive it all through **GitHub Copilot Chat** (vendor `local`) end-to-end
 
 ## 2. Streaming correctness (validates #P3, #P6, #P7)
 

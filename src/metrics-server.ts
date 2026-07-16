@@ -6,9 +6,8 @@
  * (default 30098). Gated behind the `llmLocalRouter.experimental.prometheusEndpoint`
  * configuration flag (default: false).
  *
- * Design mirrors `extensions/shofer/src/metrics/server.ts` but uses the
- * existing `MetricsCollector.toPrometheusText()` directly instead of
- * `prom-client`, keeping the dependency footprint minimal.
+ * Serves the existing `MetricsCollector.toPrometheusText()` output directly
+ * instead of pulling in `prom-client`, keeping the dependency footprint minimal.
  *
  * ## Endpoints
  *

@@ -41,7 +41,7 @@ const okResponse: ChatCompletionResponse = {
     usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150, costUsd: 0.001 },
 };
 
-const reqStub: ChatCompletionRequest = { conversationId: 'c', model: 'shofer/t', messages: [], stream: true };
+const reqStub: ChatCompletionRequest = { conversationId: 'c', model: 'local/t', messages: [], stream: true };
 
 describe('CompositeService', () => {
     describe('failover', () => {
@@ -50,8 +50,8 @@ describe('CompositeService', () => {
                 ['model-a', okResponse], ['model-b', okResponse],
             ]));
             const service = new CompositeService(router);
-            service.loadConfigs({ 'shofer/t': { strategy: 'failover', models: ['model-a', 'model-b'] } });
-            const r = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            service.loadConfigs({ 'local/t': { strategy: 'failover', models: ['model-a', 'model-b'] } });
+            const r = await service.sendCompositeRequest('local/t', reqStub, () => {}, new AbortController());
             assert.equal(r.servedByModel, 'model-a');
             assert.equal(r.failoverOccurred, false);
         });
@@ -61,8 +61,8 @@ describe('CompositeService', () => {
                 ['model-a', new Error('down')], ['model-b', okResponse],
             ]));
             const service = new CompositeService(router);
-            service.loadConfigs({ 'shofer/t': { strategy: 'failover', models: ['model-a', 'model-b'] } });
-            const r = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            service.loadConfigs({ 'local/t': { strategy: 'failover', models: ['model-a', 'model-b'] } });
+            const r = await service.sendCompositeRequest('local/t', reqStub, () => {}, new AbortController());
             assert.equal(r.servedByModel, 'model-b');
             assert.equal(r.failoverOccurred, true);
         });
@@ -72,9 +72,9 @@ describe('CompositeService', () => {
                 ['a', new Error('down')], ['b', new Error('also')],
             ]));
             const service = new CompositeService(router);
-            service.loadConfigs({ 'shofer/t': { strategy: 'failover', models: ['a', 'b'] } });
+            service.loadConfigs({ 'local/t': { strategy: 'failover', models: ['a', 'b'] } });
             await assert.rejects(
-                () => service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController()),
+                () => service.sendCompositeRequest('local/t', reqStub, () => {}, new AbortController()),
                 /All models failed/,
             );
         });
@@ -85,14 +85,14 @@ describe('CompositeService', () => {
             ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/t': {
+                'local/t': {
                     strategy: 'failover',
                     models: ['model-a'],
                     streamingTimeoutMs: 99_999,
                     perAttemptTimeoutMs: 50_000,
                 },
             });
-            const r = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            const r = await service.sendCompositeRequest('local/t', reqStub, () => {}, new AbortController());
             assert.equal(r.servedByModel, 'model-a');
         });
     });
@@ -104,7 +104,7 @@ describe('CompositeService', () => {
             ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/rr': {
+                'local/rr': {
                     strategy: 'round_robin',
                     models: [{ id: 'a', weight: 5 }, { id: 'b', weight: 1 }, { id: 'c', weight: 1 }],
                 },
@@ -112,7 +112,7 @@ describe('CompositeService', () => {
 
             const counts = new Map<string, number>();
             for (let i = 0; i < 14; i++) {
-                const r = await service.sendCompositeRequest('shofer/rr', reqStub, () => {}, new AbortController());
+                const r = await service.sendCompositeRequest('local/rr', reqStub, () => {}, new AbortController());
                 counts.set(r.servedByModel, (counts.get(r.servedByModel) ?? 0) + 1);
             }
 
@@ -129,17 +129,17 @@ describe('CompositeService', () => {
             ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/rel': { strategy: 'highest_reliability', models: ['a', 'b'] },
+                'local/rel': { strategy: 'highest_reliability', models: ['a', 'b'] },
             });
 
             // Cold start routes via round-robin and seeds reliability data
             // (whichever model it picks; 'a' always fails, 'b' always succeeds).
-            await service.sendCompositeRequest('shofer/rel', reqStub, () => {}, new AbortController()).catch(() => {});
+            await service.sendCompositeRequest('local/rel', reqStub, () => {}, new AbortController()).catch(() => {});
 
             // 'b' now has a strictly better success ratio than 'a', so it leads
             // and serves the request — never the known-failing 'a'.
             for (let i = 0; i < 3; i++) {
-                const r = await service.sendCompositeRequest('shofer/rel', reqStub, () => {}, new AbortController());
+                const r = await service.sendCompositeRequest('local/rel', reqStub, () => {}, new AbortController());
                 assert.equal(r.servedByModel, 'b');
             }
         });
@@ -150,9 +150,9 @@ describe('CompositeService', () => {
             ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/rel2': { strategy: 'highest_reliability', models: ['a', 'b'] },
+                'local/rel2': { strategy: 'highest_reliability', models: ['a', 'b'] },
             });
-            const r = await service.sendCompositeRequest('shofer/rel2', reqStub, () => {}, new AbortController());
+            const r = await service.sendCompositeRequest('local/rel2', reqStub, () => {}, new AbortController());
             assert.ok(r.servedByModel === 'a' || r.servedByModel === 'b');
         });
     });
@@ -164,7 +164,7 @@ describe('CompositeService', () => {
             ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/h': {
+                'local/h': {
                     strategy: 'failover',
                     models: ['a', 'b'],
                     health: { failureThreshold: 2, cooldownMs: 60_000, degradedThreshold: 1 },
@@ -172,9 +172,9 @@ describe('CompositeService', () => {
             });
 
             // Fail model-a twice to make it unhealthy
-            await service.sendCompositeRequest('shofer/h', reqStub, () => {}, new AbortController()).catch(() => {});
+            await service.sendCompositeRequest('local/h', reqStub, () => {}, new AbortController()).catch(() => {});
             // After 2 failures, model-a is unhealthy. Next call should skip it.
-            const r = await service.sendCompositeRequest('shofer/h', reqStub, () => {}, new AbortController());
+            const r = await service.sendCompositeRequest('local/h', reqStub, () => {}, new AbortController());
             assert.equal(r.servedByModel, 'b');
         });
     });
@@ -186,7 +186,7 @@ describe('CompositeService', () => {
             ]));
             const service = new CompositeService(router);
             service.loadConfigs({
-                'shofer/t': {
+                'local/t': {
                     strategy: 'failover',
                     models: [
                         { id: 'a', throttling: { maxConcurrent: 10, requestsPerWindow: 1, windowMinutes: 60 } },
@@ -195,20 +195,20 @@ describe('CompositeService', () => {
                 },
             });
 
-            const r1 = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            const r1 = await service.sendCompositeRequest('local/t', reqStub, () => {}, new AbortController());
             assert.equal(r1.servedByModel, 'a');
 
             // Second call: 'a' throttled (1 req per 60min window)
-            const r2 = await service.sendCompositeRequest('shofer/t', reqStub, () => {}, new AbortController());
+            const r2 = await service.sendCompositeRequest('local/t', reqStub, () => {}, new AbortController());
             assert.equal(r2.servedByModel, 'b');
         });
     });
 
     describe('isCompositeModel', () => {
-        it('returns true for shofer/* with config', () => {
+        it('returns true for local/* with config', () => {
             const service = new CompositeService(new ProviderRouter());
-            service.loadConfigs({ 'shofer/code': { strategy: 'failover', models: ['gpt-5.5'] } });
-            assert.equal(service.isCompositeModel('shofer/code'), true);
+            service.loadConfigs({ 'local/code': { strategy: 'failover', models: ['gpt-5.5'] } });
+            assert.equal(service.isCompositeModel('local/code'), true);
         });
 
         it('returns false for non-composite', () => {
@@ -219,8 +219,8 @@ describe('CompositeService', () => {
     describe('getResolvedModels', () => {
         it('handles string model list', () => {
             const service = new CompositeService(new ProviderRouter());
-            service.loadConfigs({ 'shofer/s': { strategy: 'failover', models: ['a', 'b'] } });
-            const r = service.getResolvedModels('shofer/s');
+            service.loadConfigs({ 'local/s': { strategy: 'failover', models: ['a', 'b'] } });
+            const r = service.getResolvedModels('local/s');
             assert.equal(r.length, 2);
             assert.equal(r[0].weight, 1);
         });
@@ -228,12 +228,12 @@ describe('CompositeService', () => {
         it('handles mixed with weights', () => {
             const service = new CompositeService(new ProviderRouter());
             service.loadConfigs({
-                'shofer/m': {
+                'local/m': {
                     strategy: 'round_robin',
                     models: ['a', { id: 'b', weight: 3 }],
                 },
             });
-            const r = service.getResolvedModels('shofer/m');
+            const r = service.getResolvedModels('local/m');
             assert.equal(r[1].weight, 3);
         });
     });

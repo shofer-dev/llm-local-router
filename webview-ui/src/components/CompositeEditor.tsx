@@ -67,7 +67,7 @@ export default function CompositeEditor({ composite, modelRegistry, onChange }: 
           className="vscode-input"
           value={composite.modelId}
           onChange={(e) => update({ modelId: e.target.value })}
-          placeholder="shofer/my-composite"
+          placeholder="local/my-composite"
           style={{ width: '100%' }}
         />
       </div>

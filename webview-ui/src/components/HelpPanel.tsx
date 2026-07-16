@@ -43,7 +43,7 @@ export default function HelpPanel() {
 
       <Section title="Composite Models">
         <p>
-          Create <strong>composite models</strong> (e.g. <code>shofer/code</code>) that combine
+          Create <strong>composite models</strong> (e.g. <code>local/code</code>) that combine
           multiple underlying models with configurable routing strategies. If one model fails,
           the next one takes over automatically.
         </p>

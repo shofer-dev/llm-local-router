@@ -514,10 +514,10 @@ describe('providers/custom', () => {
             r.updateCustomProviders(map);
             r.updateCustomApiKeys({ [cfg.id]: 'sk-test-key' });
             r.updateCompositeModels({
-                'shofer/bedrock': { strategy: 'failover', models: ['bedrock-claude', 'bedrock-gpt'] },
+                'local/bedrock': { strategy: 'failover', models: ['bedrock-claude', 'bedrock-gpt'] },
             });
 
-            const resolved = r.resolveProvider('shofer/bedrock');
+            const resolved = r.resolveProvider('local/bedrock');
             assert.ok(resolved);
             assert.equal(resolved.customProviderId, 'my-bedrock');
             assert.equal(resolved.modelId, 'bedrock-claude');

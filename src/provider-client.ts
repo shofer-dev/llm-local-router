@@ -355,7 +355,7 @@ export class ProviderRouter {
 
     /**
      * Determine the resolved provider for a model ID.
-     * Composite models (shofer/*) are handled by the composite layer, not here.
+     * Composite models (local/*) are handled by the composite layer, not here.
      * Custom providers are resolved first, then the built-in registry.
      */
     /**
@@ -378,7 +378,7 @@ export class ProviderRouter {
         customProtocol?: string;
     } | undefined {
         // Check if it's a composite model
-        if (modelId.startsWith('shofer/') && this.compositeModels[modelId]) {
+        if (modelId.startsWith('local/') && this.compositeModels[modelId]) {
             // Return the first model's provider as a hint (composite layer overrides)
             const comp = this.compositeModels[modelId];
             const firstEntry = comp.models[0];

@@ -2,7 +2,7 @@
   "name": "llm-local-router",
   "displayName": "LLM Local Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "license": "AGPL-3.0-only",
   "publisher": "llm-local-router",
   "icon": "assets/icon.png",
@@ -54,7 +54,7 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "shofer",
+        "vendor": "local",
         "displayName": "LLM Local Router",
         "configurationSchema": {
           "type": "object",
@@ -128,7 +128,7 @@
       {
         "command": "llmLocalRouter.configureWebview",
         "title": "LLM Local Router: Configure Composite Models",
-        "description": "Configure composite (shofer/*) models with a visual editor"
+        "description": "Configure composite (local/*) models with a visual editor"
       }
     ],
     "configuration": {
@@ -147,12 +147,12 @@
         "llmLocalRouter.compositeModelsFile": {
           "type": "string",
           "default": "",
-          "description": "Path to a JSON file defining composite (shofer/*) models"
+          "description": "Path to a JSON file defining composite (local/*) models"
         },
         "llmLocalRouter.compositeModelsConfig": {
           "type": "string",
           "default": "",
-          "description": "Inline JSON defining composite (shofer/*) models"
+          "description": "Inline JSON defining composite (local/*) models"
         },
         "llmLocalRouter.webviewDevServer": {
           "type": "string",

@@ -381,7 +381,7 @@ export type ErrorType =
 export interface MetricsRequestEntry {
     /** ISO timestamp of when the request was initiated. */
     timestamp: string;
-    /** The model ID that was requested (may be composite, e.g. "shofer/code"). */
+    /** The model ID that was requested (may be composite, e.g. "local/code"). */
     modelId: string;
     /** The provider type (openai, anthropic, etc.) of the model that served. */
     provider: string;

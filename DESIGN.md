@@ -109,7 +109,7 @@ Routes requests to the correct provider based on model ID. Supports both built-i
 | `kimi-*` | Moonshot |
 | `mimo-*` | Xiaomi |
 | `glm-*` | Zhipu |
-| `shofer/*` | Composite (routed by CompositeService) |
+| `local/*` | Composite (routed by CompositeService) |
 | Custom provider model | Resolved via customModelIndex |
 | Anything else | OpenRouter |
 
@@ -186,7 +186,7 @@ Each provider file handles protocol-specific transformations:
 
 ### 5. CompositeService (`composite.ts`)
 
-Handles `shofer/*` composite models with reliability features — the primary place where health monitoring, throttling, and timeout policies live. Any model (even a single one) can be wrapped in a composite config to get these guarantees.
+Handles `local/*` composite models with reliability features — the primary place where health monitoring, throttling, and timeout policies live. Any model (even a single one) can be wrapped in a composite config to get these guarantees.
 
 **Strategies:**
 
@@ -299,7 +299,7 @@ The `onApiKeysChanged` listener detects external changes and triggers reload. Cu
 3. Prepend system prompt as System role message
 4. Validate OpenAI tool-call sequence constraints
 5. Build ChatCompletionRequest
-6. Check if model is composite (shofer/*)
+6. Check if model is composite (local/*)
    a. YES → CompositeService.sendCompositeRequest()
       - Select candidates via strategy (failover / round_robin / lowest_latency)
       - For each candidate: acquire throttle slot, send via ProviderRouter
@@ -470,7 +470,7 @@ Every chat completion request (success or failure) is recorded automatically. Th
 | `successCount / errorCount / timeoutCount / cancelledCount` | Request outcome counters |
 
 #### (c) Primary & Composite Models
-Both primary models (e.g., `deepseek-v4-pro`) and composite models (e.g., `shofer/code`) are tracked identically. The `isComposite` flag distinguishes them.
+Both primary models (e.g., `deepseek-v4-pro`) and composite models (e.g., `local/code`) are tracked identically. The `isComposite` flag distinguishes them.
 
 #### (d) Composite Load-Balancing Distribution
 | Metric | Description |
