@@ -2,18 +2,18 @@
  * SecretStorage wrapper for API keys.
  *
  * Uses VSCode's SecretStorage API to securely persist provider API keys.
- * Keys are stored under namespaced keys: `shofer-router.provider.{name}`.
+ * Keys are stored under namespaced keys: `llm-local-router.provider.{name}`.
  *
- * Custom provider API keys are stored under `shofer-router.provider.custom.{id}`.
+ * Custom provider API keys are stored under `llm-local-router.provider.custom.{id}`.
  * Custom provider metadata (label, protocol, endpoint, models, pricing) is stored
- * in settings.json (shofer.router.customProviders) — NOT here.
+ * in settings.json (llmLocalRouter.customProviders) — NOT here.
  */
 
 import * as vscode from 'vscode';
 import { ProviderApiKeys, ProviderType } from './types';
 import { getLogger } from './logger';
 
-const SECRET_KEY_PREFIX = 'shofer-router.provider.';
+const SECRET_KEY_PREFIX = 'llm-local-router.provider.';
 
 function secretKey(provider: string): string {
     return `${SECRET_KEY_PREFIX}${provider}`;
@@ -79,7 +79,7 @@ export async function deleteApiKey(
 
 /**
  * Load all custom endpoint URLs from SecretStorage.
- * Stored under keys: shofer-router.provider.{name}.endpoint
+ * Stored under keys: llm-local-router.provider.{name}.endpoint
  */
 export async function loadEndpointUrls(context: vscode.ExtensionContext): Promise<Record<string, string>> {
     const logger = getLogger();
@@ -88,7 +88,7 @@ export async function loadEndpointUrls(context: vscode.ExtensionContext): Promis
 
     for (const provider of providers) {
         try {
-            const epKey = `shofer-router.provider.${provider}.endpoint`;
+            const epKey = `llm-local-router.provider.${provider}.endpoint`;
             const value = await context.secrets.get(epKey);
             if (value) {
                 urls[provider] = value;
@@ -106,7 +106,7 @@ export async function loadEndpointUrls(context: vscode.ExtensionContext): Promis
 
 /**
  * Store an API key for a custom provider in SecretStorage.
- * Keys are stored under `shofer-router.provider.custom.{id}`.
+ * Keys are stored under `llm-local-router.provider.custom.{id}`.
  */
 export async function storeCustomProviderApiKey(
     context: vscode.ExtensionContext,
@@ -129,7 +129,7 @@ export async function deleteCustomProviderApiKey(
 /**
  * Load API keys for all custom providers.
  *
- * Scans SecretStorage for keys matching `shofer-router.provider.custom.*`
+ * Scans SecretStorage for keys matching `llm-local-router.provider.custom.*`
  * and returns a map of provider ID → API key.
  *
  * NOTE: This does NOT read the custom provider metadata from settings.json —
@@ -143,7 +143,7 @@ export async function loadCustomProviderApiKeys(context: vscode.ExtensionContext
     // Since SecretStorage doesn't support listing keys, we load the custom
     // provider IDs from settings.json and check each one.
     try {
-        const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
+        const raw = vscode.workspace.getConfiguration('llmLocalRouter').get<string>('customProviders');
         if (raw && raw.trim()) {
             const providers = JSON.parse(raw) as Record<string, unknown>;
             for (const providerId of Object.keys(providers)) {
@@ -168,7 +168,7 @@ export async function loadCustomProviderApiKeys(context: vscode.ExtensionContext
 /**
  * Load all per-model pricing overrides from SecretStorage across all providers.
  *
- * Reads `shofer-router.provider.{providerId}.modelPricing` for every built-in
+ * Reads `llm-local-router.provider.{providerId}.modelPricing` for every built-in
  * provider and returns a flat map of modelId → { prompt?, completion?, cacheRead? }
  * where values are in USD per 1M tokens (the form stored by the Config panel).
  * Converted to per-1K-token form compatible with ModelPricing.

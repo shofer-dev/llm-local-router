@@ -8,7 +8,7 @@ interface Props {
 export default function AboutPanel({ version }: Props) {
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Shofer Router</h2>
+      <h2 style={styles.title}>LLM Local Router</h2>
       <p style={styles.version}>Version {version || 'unknown'}</p>
 
       <div style={styles.section}>
@@ -54,22 +54,12 @@ export default function AboutPanel({ version }: Props) {
         <h3 style={styles.sectionTitle}>Links</h3>
         <p>
           <a
-            href="https://shofer.dev/router"
+            href="https://github.com/shofer-dev/llm-local-router"
             target="_blank"
             rel="noreferrer"
             style={styles.link}
           >
-            🌐 Website — shofer.dev/router
-          </a>
-        </p>
-        <p>
-          <a
-            href="https://github.com/shofer-dev/shofer-router"
-            target="_blank"
-            rel="noreferrer"
-            style={styles.link}
-          >
-            📦 Source Code — github.com/shofer-dev/shofer-router
+            📦 Source Code — github.com/shofer-dev/llm-local-router
           </a>
         </p>
       </div>
@@ -89,7 +79,7 @@ export default function AboutPanel({ version }: Props) {
       </div>
 
       <div style={styles.footer}>
-        <p>Shofer Router &copy; {new Date().getFullYear()} Shofer.dev</p>
+        <p>LLM Local Router &copy; {new Date().getFullYear()}</p>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 /**
- * Structured logger for the Shofer Router extension.
+ * Structured logger for the LLM Local Router extension.
  *
  * Writes to a VSCode output channel with timestamps and log levels.
  * When running outside of VS Code (e.g., unit tests), falls back to console.
@@ -104,7 +104,7 @@ export function initLogger(channelName: string, enableDebug: boolean = false): v
 
 export function getLogger(): Logger {
     if (!globalLogger) {
-        globalLogger = new Logger('Shofer Router', false);
+        globalLogger = new Logger('LLM Local Router', false);
     }
     return globalLogger;
 }

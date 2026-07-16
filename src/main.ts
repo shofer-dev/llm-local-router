@@ -1,5 +1,5 @@
 /**
- * Shofer Router — Extension Entry Point
+ * LLM Local Router — Extension Entry Point
  *
  * A VS Code extension that provides direct access to multiple LLM providers
  * provider's API from within the VS Code extension host.
@@ -47,7 +47,7 @@ const RETRY_BACKOFF_MULTIPLIER = 2;
 // ─── Configuration ────────────────────────────────────────────────
 
 function getConfiguration(): RouterConfig {
-    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
     return {
         enabled: wsConfig.get('enabled', true),
         compositeModelsFile: wsConfig.get('compositeModelsFile', ''),
@@ -60,7 +60,7 @@ function getConfiguration(): RouterConfig {
 
 async function handleStatusBarClick(): Promise<void> {
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
+        vscode.window.showErrorMessage('LLM Local Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('status');
@@ -69,8 +69,8 @@ async function handleStatusBarClick(): Promise<void> {
 function updateStatusBar(): void {
     if (!statusBarItem) {
         statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1);
-        statusBarItem.command = 'shofer.router.statusBarClick';
-        statusBarItem.name = 'Shofer Router';
+        statusBarItem.command = 'llmLocalRouter.statusBarClick';
+        statusBarItem.name = 'LLM Local Router';
     }
 
     const providerCount = languageModelProvider?.getConfiguredProviderCount() ?? 0;
@@ -80,27 +80,27 @@ function updateStatusBar(): void {
     let statusText: string;
 
     if (!config.enabled) {
-        statusText = '$(circle-slash) Shofer Router';
-        statusBarItem.tooltip = 'Shofer Router — disabled. Click to open settings.';
+        statusText = '$(circle-slash) LLM Local Router';
+        statusBarItem.tooltip = 'LLM Local Router — disabled. Click to open settings.';
         statusBarItem.backgroundColor = undefined;
     } else if (!hasAnyApiKey) {
-        statusText = '$(warning) Shofer Router';
-        statusBarItem.tooltip = 'Shofer Router — no API keys configured. Click to set up providers.';
+        statusText = '$(warning) LLM Local Router';
+        statusBarItem.tooltip = 'LLM Local Router — no API keys configured. Click to set up providers.';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else if (isConnecting) {
-        statusText = '$(sync~spin) Shofer Router';
-        statusBarItem.tooltip = 'Shofer Router — connecting...';
+        statusText = '$(sync~spin) LLM Local Router';
+        statusBarItem.tooltip = 'LLM Local Router — connecting...';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else if (totalMonitored > 0 && healthyCount === 0) {
-        statusText = '$(error) Shofer Router';
-        statusBarItem.tooltip = 'Shofer Router — all providers unreachable. Click for status.';
+        statusText = '$(error) LLM Local Router';
+        statusBarItem.tooltip = 'LLM Local Router — all providers unreachable. Click for status.';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     } else {
-        statusText = '$(rocket) Shofer Router';
+        statusText = '$(rocket) LLM Local Router';
         if (totalMonitored > 0) {
-            statusBarItem.tooltip = `Shofer Router — ${healthyCount}/${totalMonitored} provider${totalMonitored !== 1 ? 's' : ''} healthy. Click for status.`;
+            statusBarItem.tooltip = `LLM Local Router — ${healthyCount}/${totalMonitored} provider${totalMonitored !== 1 ? 's' : ''} healthy. Click for status.`;
         } else {
-            statusBarItem.tooltip = `Shofer Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured. Click for status.`;
+            statusBarItem.tooltip = `LLM Local Router — ${providerCount} provider${providerCount !== 1 ? 's' : ''} configured. Click for status.`;
         }
         statusBarItem.backgroundColor = undefined;
     }
@@ -266,13 +266,13 @@ function getDefaultEndpoint(provider: string): string {
 
 // ─── Config import/export ─────────────────────────────────────────
 
-/** Shape accepted by `shofer.router.importConfig`. All fields optional. */
+/** Shape accepted by `llmLocalRouter.importConfig`. All fields optional. */
 interface RouterImportConfig {
     /** provider id (ProviderType) → API key. Written to SecretStorage. */
     apiKeys?: Record<string, string>;
     /** provider id → custom base URL. Written to SecretStorage. */
     endpoints?: Record<string, string>;
-    /** `shofer.router.*` workspace settings to apply (e.g. { enabled: true }). */
+    /** `llmLocalRouter.*` workspace settings to apply (e.g. { enabled: true }). */
     settings?: Record<string, unknown>;
 }
 
@@ -314,11 +314,11 @@ async function importRouterConfig(
         if (!url) { continue; }
         if (!validProviders.has(provider)) { result.skipped.push(provider); continue; }
         // Same key shape loadEndpointUrls() reads; the prefix makes onApiKeysChanged fire.
-        await context.secrets.store(`shofer-router.provider.${provider}.endpoint`, url);
+        await context.secrets.store(`llm-local-router.provider.${provider}.endpoint`, url);
         result.importedEndpoints.push(provider);
     }
     if (cfg.settings) {
-        const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+        const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
         for (const [k, v] of Object.entries(cfg.settings)) {
             await wsConfig.update(k, v, vscode.ConfigurationTarget.Global);
             result.appliedSettings.push(k);
@@ -349,12 +349,12 @@ interface RouterExportResult {
 }
 
 /** Return the router's current state WITHOUT secret values — which providers are
- * keyed, the non-secret `shofer.router.*` settings, and live runtime state. Safe to
+ * keyed, the non-secret `llmLocalRouter.*` settings, and live runtime state. Safe to
  * log/serialise. */
 async function exportRouterConfig(context: vscode.ExtensionContext): Promise<RouterExportResult> {
     const keys = await loadApiKeys(context);
     const endpoints = await loadEndpointUrls(context);
-    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
     const keyed = new Set(Object.keys(keys));
     const allModels = languageModelProvider?.getAvailableModels() ?? [];
     // Mirror provideLanguageModelChatInformation: only models whose owning provider is
@@ -385,7 +385,7 @@ async function exportRouterConfig(context: vscode.ExtensionContext): Promise<Rou
 async function handleConfigure(): Promise<void> {
     getLogger().info('Opening webview configuration panel');
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
+        vscode.window.showErrorMessage('LLM Local Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('config');
@@ -398,7 +398,7 @@ async function handleConfigureWebview(): Promise<void> {
 async function handleShowModels(): Promise<void> {
     getLogger().info('Opening webview status panel');
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
+        vscode.window.showErrorMessage('LLM Local Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('status');
@@ -407,7 +407,7 @@ async function handleShowModels(): Promise<void> {
 async function handleRefreshModels(): Promise<void> {
     const logger = getLogger();
     if (!languageModelProvider) {
-        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
+        vscode.window.showErrorMessage('LLM Local Router: Provider not initialized');
         return;
     }
 
@@ -417,7 +417,7 @@ async function handleRefreshModels(): Promise<void> {
         languageModelProvider.updateConfig(config);
         const models = await languageModelProvider.fetchModels();
         updateStatusBar();
-        vscode.window.showInformationMessage(`Shofer Router: ${models.length} models available`);
+        vscode.window.showInformationMessage(`LLM Local Router: ${models.length} models available`);
         logger.info(`Refreshed ${models.length} models`);
     } catch (error) {
         const message = `Failed to refresh models: ${error}`;
@@ -429,7 +429,7 @@ async function handleRefreshModels(): Promise<void> {
 async function handleTestConnection(): Promise<void> {
     const logger = getLogger();
     if (!languageModelProvider) {
-        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
+        vscode.window.showErrorMessage('LLM Local Router: Provider not initialized');
         return;
     }
 
@@ -441,11 +441,11 @@ async function handleTestConnection(): Promise<void> {
         if (connected) {
             const modelCount = languageModelProvider.getAvailableModels().length;
             vscode.window.showInformationMessage(
-                `Shofer Router: Connected — ${modelCount} models available`
+                `LLM Local Router: Connected — ${modelCount} models available`
             );
         } else {
             vscode.window.showWarningMessage(
-                'Shofer Router: No API keys configured. Use "Shofer Router: Configure" to set up provider API keys.'
+                'LLM Local Router: No API keys configured. Use "LLM Local Router: Configure" to set up provider API keys.'
             );
         }
     } catch (error) {
@@ -456,7 +456,7 @@ async function handleTestConnection(): Promise<void> {
 async function handleGetMetrics(): Promise<void> {
     getLogger().info('Opening webview metrics panel');
     if (!routerConfigProvider) {
-        vscode.window.showErrorMessage('Shofer Router: Provider not initialized');
+        vscode.window.showErrorMessage('LLM Local Router: Provider not initialized');
         return;
     }
     await routerConfigProvider.show('metrics');
@@ -625,14 +625,14 @@ async function handleGetCompositeDistribution(compositeId?: string): Promise<voi
 // ─── Lifecycle ────────────────────────────────────────────────────
 
 function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void {
-    if (!event.affectsConfiguration('shofer.router')) return;
+    if (!event.affectsConfiguration('llmLocalRouter')) return;
 
     const logger = getLogger();
     logger.info('Configuration changed');
 
     const newConfig = getConfiguration();
-    const debugChanged = event.affectsConfiguration('shofer.router.debug');
-    const prometheusChanged = event.affectsConfiguration('shofer.router.experimental.prometheusEndpoint');
+    const debugChanged = event.affectsConfiguration('llmLocalRouter.debug');
+    const prometheusChanged = event.affectsConfiguration('llmLocalRouter.experimental.prometheusEndpoint');
 
     if (debugChanged) setDebugMode(newConfig.debug);
 
@@ -643,7 +643,7 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void
     config = newConfig;
 
     if (prometheusChanged) {
-        const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+        const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
         if (wsConfig.get('experimental.prometheusEndpoint', false)) {
             startMetricsServer().catch(err =>
                 logger.warning(`Failed to start Prometheus metrics server: ${err}`)
@@ -694,7 +694,7 @@ async function loadCompositeModels(): Promise<void> {
             const models = JSON.parse(inlineConfig);
             if (Object.keys(models).length > 0) {
                 languageModelProvider.updateCompositeModels(models);
-                getLogger().info('Loaded composite models from inline settings (shofer.router.compositeModelsConfig)');
+                getLogger().info('Loaded composite models from inline settings (llmLocalRouter.compositeModelsConfig)');
             }
         } catch (error) {
             getLogger().warning(`Failed to parse inline composite models JSON: ${error}`);
@@ -707,7 +707,7 @@ async function loadCompositeModels(): Promise<void> {
  */
 async function loadCustomProvidersIntoProvider(context: vscode.ExtensionContext, provider: LanguageModelProvider): Promise<void> {
     const logger = getLogger();
-    const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
+    const raw = vscode.workspace.getConfiguration('llmLocalRouter').get<string>('customProviders');
     logger.debug(`[customProvider:init] raw settings value length=${raw?.length ?? 0} hasContent=${!!raw?.trim()}`);
     let customs: Record<string, CustomProviderConfig> = {};
     if (raw && raw.trim()) {
@@ -729,9 +729,9 @@ async function loadCustomProvidersIntoProvider(context: vscode.ExtensionContext,
 
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
     const debugEnabled = wsConfig.get('debug', false);
-    initLogger('Shofer Router', debugEnabled);
+    initLogger('LLM Local Router', debugEnabled);
 
     config = getConfiguration();
     updateStatusBar();
@@ -746,7 +746,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     initMetricsCollector(storage);
 
     const logger = getLogger();
-    logger.info('Shofer Router activating...');
+    logger.info('LLM Local Router activating...');
 
     const apiKeys = await loadApiKeys(context);
     const endpointUrls = await loadEndpointUrls(context);
@@ -790,46 +790,46 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         languageModelProvider,
     );
 
-    const statusBarClickCommand = vscode.commands.registerCommand('shofer.router.statusBarClick', handleStatusBarClick);
-    const configureCommand = vscode.commands.registerCommand('shofer.router.configure', handleConfigure);
-    const configureWebviewCommand = vscode.commands.registerCommand('shofer.router.configureWebview', handleConfigureWebview);
-    const showModelsCommand = vscode.commands.registerCommand('shofer.router.showModels', handleShowModels);
-    const refreshModelsCommand = vscode.commands.registerCommand('shofer.router.refreshModels', handleRefreshModels);
-    const testConnectionCommand = vscode.commands.registerCommand('shofer.router.testConnection', handleTestConnection);
+    const statusBarClickCommand = vscode.commands.registerCommand('llmLocalRouter.statusBarClick', handleStatusBarClick);
+    const configureCommand = vscode.commands.registerCommand('llmLocalRouter.configure', handleConfigure);
+    const configureWebviewCommand = vscode.commands.registerCommand('llmLocalRouter.configureWebview', handleConfigureWebview);
+    const showModelsCommand = vscode.commands.registerCommand('llmLocalRouter.showModels', handleShowModels);
+    const refreshModelsCommand = vscode.commands.registerCommand('llmLocalRouter.refreshModels', handleRefreshModels);
+    const testConnectionCommand = vscode.commands.registerCommand('llmLocalRouter.testConnection', handleTestConnection);
 
     // Import/export the router's configuration as a single object — used to bring the
     // router to a known state (e.g. by the L2 integration harness) without clicking
     // through the Configure UI. Accepts the config inline OR as a path to a JSON file
-    // (parity with shofer.importSettings). Secret values are written to SecretStorage
+    // (mirrors a settings-import command). Secret values are written to SecretStorage
     // (which fires onApiKeysChanged → the provider reloads keys automatically); export
     // returns only WHICH providers are keyed, never the key values.
     const importConfigCommand = vscode.commands.registerCommand(
-        'shofer.router.importConfig',
+        'llmLocalRouter.importConfig',
         async (input: RouterImportConfig | string) => importRouterConfig(context, input),
     );
     const exportConfigCommand = vscode.commands.registerCommand(
-        'shofer.router.exportConfig',
+        'llmLocalRouter.exportConfig',
         async () => exportRouterConfig(context),
     );
 
     const getModelPricingCommand = vscode.commands.registerCommand(
-        'shofer.router.getModelPricing',
+        'llmLocalRouter.getModelPricing',
         (modelId: string) => languageModelProvider?.getPricing(modelId),
     );
     const getModelCapabilitiesCommand = vscode.commands.registerCommand(
-        'shofer.router.getModelCapabilities',
+        'llmLocalRouter.getModelCapabilities',
         (modelId: string) => languageModelProvider?.getCapabilities(modelId),
     );
     const getRequestCostCommand = vscode.commands.registerCommand(
-        'shofer.router.getRequestCost',
+        'llmLocalRouter.getRequestCost',
         (conversationId: string) => languageModelProvider?.getRequestCost(conversationId),
     );
 
-    const getMetricsCommand = vscode.commands.registerCommand('shofer.router.getMetrics', handleGetMetrics);
-    const getModelStatsCommand = vscode.commands.registerCommand('shofer.router.getModelStats', handleGetModelStats);
-    const exportMetricsCommand = vscode.commands.registerCommand('shofer.router.exportMetrics', handleExportMetrics);
-    const getCompositeDistributionCommand = vscode.commands.registerCommand('shofer.router.getCompositeDistribution', handleGetCompositeDistribution);
-    const getCostHistoryCommand = vscode.commands.registerCommand('shofer.router.getCostHistory', handleGetCostHistory);
+    const getMetricsCommand = vscode.commands.registerCommand('llmLocalRouter.getMetrics', handleGetMetrics);
+    const getModelStatsCommand = vscode.commands.registerCommand('llmLocalRouter.getModelStats', handleGetModelStats);
+    const exportMetricsCommand = vscode.commands.registerCommand('llmLocalRouter.exportMetrics', handleExportMetrics);
+    const getCompositeDistributionCommand = vscode.commands.registerCommand('llmLocalRouter.getCompositeDistribution', handleGetCompositeDistribution);
+    const getCostHistoryCommand = vscode.commands.registerCommand('llmLocalRouter.getCostHistory', handleGetCostHistory);
 
     const configChangeListener = vscode.workspace.onDidChangeConfiguration(handleConfigurationChange);
 
@@ -881,17 +881,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // First-install onboarding popup
-    const hasSeenOnboarding = context.globalState.get<boolean>('shofer.router.onboardingSeen');
+    const hasSeenOnboarding = context.globalState.get<boolean>('llmLocalRouter.onboardingSeen');
     if (!hasSeenOnboarding) {
         vscode.window.showInformationMessage(
-            'Shofer Router is ready! 👋 Click the rocket icon in the status bar to configure.',
+            'LLM Local Router is ready! 👋 Click the rocket icon in the status bar to configure.',
             'Open Dashboard',
             'Dismiss',
         ).then(async (choice) => {
             if (choice === 'Open Dashboard') {
                 await handleStatusBarClick();
             }
-            await context.globalState.update('shofer.router.onboardingSeen', true);
+            await context.globalState.update('llmLocalRouter.onboardingSeen', true);
         });
     }
 
@@ -907,16 +907,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }, 5000);
     } else {
-        logger.info('Shofer Router is disabled');
+        logger.info('LLM Local Router is disabled');
         updateStatusBar();
     }
 
-    logger.info('Shofer Router activated');
+    logger.info('LLM Local Router activated');
 }
 
 export function deactivate(): void {
     const logger = getLogger();
-    logger.info('Shofer Router deactivating...');
+    logger.info('LLM Local Router deactivating...');
 
     stopHealthCheck();
     stopConnectionRetry();
@@ -940,5 +940,5 @@ export function deactivate(): void {
         statusBarItem.dispose();
     }
 
-    logger.info('Shofer Router deactivated');
+    logger.info('LLM Local Router deactivated');
 }

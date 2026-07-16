@@ -5,7 +5,7 @@
  * composite model configurations, provider API keys, and viewing metrics dashboards.
  *
  * Lifecycle:
- *   1. User runs "Shofer Router: Configure" command
+ *   1. User runs "LLM Local Router: Configure" command
  *   2. Panel is created (or revealed if already open)
  *   3. Host sends initConfig with current composite models + model registry
  *   4. Webview renders the UI
@@ -238,7 +238,7 @@ type WebviewMessage =
 
 // ─── Constants ─────────────────────────────────────────────────────
 
-const VIEW_TYPE = 'shoferRouterConfig';
+const VIEW_TYPE = 'llmLocalRouterConfig';
 const WEBVIEW_UI_DIR = path.join(__dirname, '..', 'webview-ui');
 const WEBVIEW_BUILD_DIR = path.join(WEBVIEW_UI_DIR, 'build');
 
@@ -264,7 +264,7 @@ export class RouterConfigProvider {
       this.sendInitConfig(activeTab);
       return;
     }
-    this.panel = vscode.window.createWebviewPanel(VIEW_TYPE, 'Shofer Router', vscode.ViewColumn.Active, {
+    this.panel = vscode.window.createWebviewPanel(VIEW_TYPE, 'LLM Local Router', vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.file(WEBVIEW_BUILD_DIR)],
@@ -288,7 +288,7 @@ export class RouterConfigProvider {
     if (!this.panel) return;
     const webview = this.panel.webview;
     const nonce = crypto.randomBytes(16).toString('base64');
-    const devServer = vscode.workspace.getConfiguration('shofer.router').get<string>('webviewDevServer');
+    const devServer = vscode.workspace.getConfiguration('llmLocalRouter').get<string>('webviewDevServer');
     const html = devServer
       ? await this.getDevModeHtml(devServer, nonce, webview)
       : await this.getProdModeHtml(nonce, webview);
@@ -296,13 +296,13 @@ export class RouterConfigProvider {
   }
 
   private async getDevModeHtml(devServer: string, nonce: string, webview: vscode.Webview): Promise<string> {
-    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}' ${devServer} 'unsafe-inline'; style-src 'nonce-${nonce}' ${devServer} 'unsafe-inline'; font-src 'nonce-${nonce}' ${devServer} data:; img-src 'nonce-${nonce}' ${devServer} data:; connect-src ${devServer} ws://localhost:* wss://localhost:*;"/><title>Shofer Router</title></head><body><div id="root"></div><script type="module" nonce="${nonce}" src="${devServer}/@vite/client"></script><script type="module" nonce="${nonce}" src="${devServer}/src/main.tsx"></script></body></html>`;
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}' ${devServer} 'unsafe-inline'; style-src 'nonce-${nonce}' ${devServer} 'unsafe-inline'; font-src 'nonce-${nonce}' ${devServer} data:; img-src 'nonce-${nonce}' ${devServer} data:; connect-src ${devServer} ws://localhost:* wss://localhost:*;"/><title>LLM Local Router</title></head><body><div id="root"></div><script type="module" nonce="${nonce}" src="${devServer}/@vite/client"></script><script type="module" nonce="${nonce}" src="${devServer}/src/main.tsx"></script></body></html>`;
   }
 
   private async getProdModeHtml(nonce: string, webview: vscode.Webview): Promise<string> {
     const indexPath = path.join(WEBVIEW_BUILD_DIR, 'index.html');
     if (!fs.existsSync(indexPath)) {
-      return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}' 'unsafe-inline';"/></head><body><div style="padding:20px;color:var(--vscode-errorForeground,#f48771);"><h3>Webview not built</h3><p>Run <code>cd webview-ui && npm install && npm run build</code> to build the webview,<br/>or set <code>shofer.router.webviewDevServer</code> to a Vite dev server URL.</p></div></body></html>`;
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}' 'unsafe-inline';"/></head><body><div style="padding:20px;color:var(--vscode-errorForeground,#f48771);"><h3>Webview not built</h3><p>Run <code>cd webview-ui && npm install && npm run build</code> to build the webview,<br/>or set <code>llmLocalRouter.webviewDevServer</code> to a Vite dev server URL.</p></div></body></html>`;
     }
     let html = fs.readFileSync(indexPath, 'utf-8');
     html = html.replace(/REPLACE_NONCE/g, nonce);
@@ -376,7 +376,7 @@ export class RouterConfigProvider {
   }
 
   private async buildStatusPayload(): Promise<StatusPayload> {
-    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
     const enabled = wsConfig.get('enabled', true);
     const connected = this.languageModelProvider.isReady();
     const availableModels = this.languageModelProvider.getAvailableModels();
@@ -391,7 +391,7 @@ export class RouterConfigProvider {
     for (const entry of ALL_MODELS) {
       if (configuredProviders.has(entry.provider)) continue;
       try {
-        const key = await this.context.secrets.get(`shofer-router.provider.${entry.provider}`);
+        const key = await this.context.secrets.get(`llm-local-router.provider.${entry.provider}`);
         if (key) configuredProviders.add(entry.provider);
       } catch { /* not configured */ }
     }
@@ -507,7 +507,7 @@ export class RouterConfigProvider {
     // Load per-model pricing overrides from SecretStorage
     let modelPricingOverrides: Record<string, { prompt?: number; completion?: number; cacheRead?: number }> = {};
     try {
-      const raw = await this.context.secrets.get(`shofer-router.provider.${providerId}.modelPricing`);
+      const raw = await this.context.secrets.get(`llm-local-router.provider.${providerId}.modelPricing`);
       if (raw) modelPricingOverrides = JSON.parse(raw);
     } catch { /* not set yet */ }
 
@@ -535,10 +535,10 @@ export class RouterConfigProvider {
       const def = PROVIDER_DEFAULTS[id];
       try {
         const [key, ep, pricingRaw, advancedRaw, modelEntries] = await Promise.all([
-          this.context.secrets.get(`shofer-router.provider.${id}`),
-          this.context.secrets.get(`shofer-router.provider.${id}.endpoint`),
-          this.context.secrets.get(`shofer-router.provider.${id}.pricing`),
-          this.context.secrets.get(`shofer-router.provider.${id}.advanced`),
+          this.context.secrets.get(`llm-local-router.provider.${id}`),
+          this.context.secrets.get(`llm-local-router.provider.${id}.endpoint`),
+          this.context.secrets.get(`llm-local-router.provider.${id}.pricing`),
+          this.context.secrets.get(`llm-local-router.provider.${id}.advanced`),
           this.buildModelConfigEntries(id),
         ]);
         const pricing = pricingRaw ? JSON.parse(pricingRaw) : undefined;
@@ -585,20 +585,20 @@ export class RouterConfigProvider {
       if (apiKey.trim()) { await storeApiKey(this.context, provider, apiKey.trim()); logger.info(`Saved API key for ${provider}`); }
       else { await deleteApiKey(this.context, provider); logger.info(`Deleted API key for ${provider}`); }
       const def = PROVIDER_DEFAULTS[provider];
-      const epKey = `shofer-router.provider.${provider}.endpoint`;
+      const epKey = `llm-local-router.provider.${provider}.endpoint`;
       if (endpointUrl.trim() && endpointUrl !== def?.defaultEndpoint) { await this.context.secrets.store(epKey, endpointUrl.trim()); logger.info(`Saved custom endpoint for ${provider}`); }
       else { await this.context.secrets.delete(epKey); }
-      const pKey = `shofer-router.provider.${provider}.pricing`;
+      const pKey = `llm-local-router.provider.${provider}.pricing`;
       if (pricing && (pricing.prompt || pricing.completion || pricing.cacheRead)) { await this.context.secrets.store(pKey, JSON.stringify(pricing)); logger.info(`Saved pricing overrides for ${provider}`); }
       else { await this.context.secrets.delete(pKey); }
       // Per-model pricing overrides
       if (modelPricing && Object.keys(modelPricing).length > 0) {
-        const mpKey = `shofer-router.provider.${provider}.modelPricing`;
+        const mpKey = `llm-local-router.provider.${provider}.modelPricing`;
         await this.context.secrets.store(mpKey, JSON.stringify(modelPricing));
         logger.info(`Saved per-model pricing overrides for ${provider} (${Object.keys(modelPricing).length} models)`);
       }
       // Save advanced field values
-      const advKey = `shofer-router.provider.${provider}.advanced`;
+      const advKey = `llm-local-router.provider.${provider}.advanced`;
       if (advancedValues && Object.keys(advancedValues).some(k => advancedValues[k]?.trim())) {
         await this.context.secrets.store(advKey, JSON.stringify(advancedValues));
         logger.info(`Saved advanced config for ${provider}`);
@@ -725,10 +725,10 @@ export class RouterConfigProvider {
   }
 
   /**
-   * Load custom providers from the shofer.router.customProviders setting.
+   * Load custom providers from the llmLocalRouter.customProviders setting.
    */
   private async loadCustomProvidersFromSettings(): Promise<CustomProvidersMap> {
-    const raw = vscode.workspace.getConfiguration('shofer.router').get<string>('customProviders');
+    const raw = vscode.workspace.getConfiguration('llmLocalRouter').get<string>('customProviders');
     if (raw && raw.trim()) {
       try {
         const parsed = JSON.parse(raw) as CustomProvidersMap;
@@ -744,13 +744,13 @@ export class RouterConfigProvider {
   }
 
   /**
-   * Save custom providers to the shofer.router.customProviders workspace setting.
+   * Save custom providers to the llmLocalRouter.customProviders workspace setting.
    */
   private async saveCustomProvidersToSettings(providers: CustomProvidersMap): Promise<void> {
     const logger = (await import('./logger')).getLogger();
     const json = JSON.stringify(providers, null, 2);
     logger.info(`[customProvider] saveCustomProvidersToSettings — writing ${Object.keys(providers).length} providers, json=${json.length} bytes`);
-    await vscode.workspace.getConfiguration('shofer.router').update(
+    await vscode.workspace.getConfiguration('llmLocalRouter').update(
       'customProviders',
       Object.keys(providers).length > 0 ? json : '',
       vscode.ConfigurationTarget.Workspace,
@@ -765,7 +765,7 @@ export class RouterConfigProvider {
     try {
       const config: Record<string, import('./types').CompositeModelConfig> = {};
       for (const wm of models) config[wm.modelId] = convertToHostConfig(wm);
-      await vscode.workspace.getConfiguration('shofer.router').update('compositeModelsConfig', JSON.stringify(config, null, 2), vscode.ConfigurationTarget.Workspace);
+      await vscode.workspace.getConfiguration('llmLocalRouter').update('compositeModelsConfig', JSON.stringify(config, null, 2), vscode.ConfigurationTarget.Workspace);
       this.languageModelProvider.updateCompositeModels(config);
       await this.languageModelProvider.fetchModels();
       await this.sendToWebview({ type: 'configSaved' });
@@ -810,7 +810,7 @@ export class RouterConfigProvider {
   // ─── Settings I/O ────────────────────────────────────────────────
 
   private loadCompositeModelsFromSettings(): WebviewCompositeModel[] {
-    const wsConfig = vscode.workspace.getConfiguration('shofer.router');
+    const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
     const filePath = wsConfig.get<string>('compositeModelsFile');
     if (filePath) {
       try {

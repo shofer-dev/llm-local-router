@@ -3,18 +3,18 @@ import React from 'react';
 export default function HelpPanel() {
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>🧭 Using Shofer Router</h2>
+      <h2 style={styles.title}>🧭 Using LLM Local Router</h2>
 
       <Section title="Getting Started">
         <p>
-          Shofer Router is a VS Code extension that connects you to multiple LLM providers
+          LLM Local Router is a VS Code extension that connects you to multiple LLM providers
           through a single interface. It implements the VS Code Language Model API, making
           it compatible with any extension or tool that uses <code>vscode.lm</code>.
         </p>
         <ol style={styles.list}>
           <li>Open the <strong>Config → Primary Providers</strong> tab and enter your API keys.</li>
           <li>Your models appear in VS Code's model picker and in the <strong>Status</strong> tab.</li>
-          <li>Start chatting — Shofer Router handles provider routing automatically.</li>
+          <li>Start chatting — LLM Local Router handles provider routing automatically.</li>
         </ol>
       </Section>
 
@@ -113,15 +113,15 @@ export default function HelpPanel() {
       <Section title="Commands">
         <p>Available commands in the VS Code Command Palette:</p>
         <ul style={styles.list}>
-          <li><strong>Shofer Router: Configure</strong> — Open the full configuration dashboard</li>
-          <li><strong>Shofer Router: Show Models</strong> — View status and available models</li>
-          <li><strong>Shofer Router: Refresh Models</strong> — Reload model list</li>
-          <li><strong>Shofer Router: Test Connection</strong> — Test API key configuration</li>
-          <li><strong>Shofer Router: Show Metrics</strong> — Open the metrics dashboard</li>
-          <li><strong>Shofer Router: Show Model Stats</strong> — Detailed stats for a specific model</li>
-          <li><strong>Shofer Router: Export Metrics (Prometheus)</strong> — Export current metrics in Prometheus text format</li>
-          <li><strong>Shofer Router: Show Composite Distribution</strong> — Load-balancing distribution for composite models</li>
-          <li><strong>Shofer Router: Show Cost History</strong> — Cost breakdown by model across a selected time range</li>
+          <li><strong>LLM Local Router: Configure</strong> — Open the full configuration dashboard</li>
+          <li><strong>LLM Local Router: Show Models</strong> — View status and available models</li>
+          <li><strong>LLM Local Router: Refresh Models</strong> — Reload model list</li>
+          <li><strong>LLM Local Router: Test Connection</strong> — Test API key configuration</li>
+          <li><strong>LLM Local Router: Show Metrics</strong> — Open the metrics dashboard</li>
+          <li><strong>LLM Local Router: Show Model Stats</strong> — Detailed stats for a specific model</li>
+          <li><strong>LLM Local Router: Export Metrics (Prometheus)</strong> — Export current metrics in Prometheus text format</li>
+          <li><strong>LLM Local Router: Show Composite Distribution</strong> — Load-balancing distribution for composite models</li>
+          <li><strong>LLM Local Router: Show Cost History</strong> — Cost breakdown by model across a selected time range</li>
         </ul>
       </Section>
     </div>

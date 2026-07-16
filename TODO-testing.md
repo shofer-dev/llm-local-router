@@ -1,4 +1,4 @@
-# Shofer Router — Integration Test Plan
+# LLM Local Router — Integration Test Plan
 
 Manual / live tests that can't be covered by the unit suite (`./run-tests.sh`) because
 they need real provider API keys, a running VS Code + extension, or the webview. Each item
@@ -8,14 +8,14 @@ these and check off / annotate results.
 ## Setup
 
 ```bash
-cd extensions/shofer-router
+cd extensions/llm-local-router
 npm run compile                 # or: npm run package  → install the .vsix
 cd webview-ui && npm install && npm run build && cd ..
 ```
 
-Install the extension in VS Code (or `code --install-extension shofer-router-*.vsix`),
-then add at least one provider API key via **Command Palette → "Shofer Router: Configure"
-→ Config → Primary Providers**. Open the output channel "Shofer Router" to watch logs.
+Install the extension in VS Code (or `code --install-extension llm-local-router-*.vsix`),
+then add at least one provider API key via **Command Palette → "LLM Local Router: Configure"
+→ Config → Primary Providers**. Open the output channel "LLM Local Router" to watch logs.
 
 ---
 
@@ -50,7 +50,7 @@ turn, and (if supported) an image input. Record Y/N/NA.
 ## 3. Cost & metrics (validates #P1, #P2, #M5, #M6)
 
 - [ ] **Cost is non-zero for Anthropic & Google** (#P1/#P2): after a few requests, run
-  **"Shofer Router: Show Cost History"** / check the Metrics dashboard — Anthropic and Gemini
+  **"LLM Local Router: Show Cost History"** / check the Metrics dashboard — Anthropic and Gemini
   rows must show real USD cost (previously $0). Gemini cached-token requests should reflect
   the cache discount.
 - [ ] **Metrics dashboard** populates: open **Metrics** tab; all charts render; time-range
@@ -62,7 +62,7 @@ turn, and (if supported) an image input. Record Y/N/NA.
 
 ## 4. Composite models (validates #C1, #C2, #C3, #C4, #C16, #C18)
 
-Define composites in `shofer.router.compositeModelsConfig` or the **Composite Models** tab.
+Define composites in `llmLocalRouter.compositeModelsConfig` or the **Composite Models** tab.
 
 - [ ] **Failover across strategies** (#C1/#C2): make a `round_robin` and a `lowest_latency`
   composite where the **first/preferred** model has a bad key (forces a pre-first-byte
@@ -107,13 +107,13 @@ Define composites in `shofer.router.compositeModelsConfig` or the **Composite Mo
 
 ## 7. Config, lifecycle, endpoint (validates #E1, #E5, #E8)
 
-- [ ] **Onboarding popup** (#E1): first install shows "Shofer Router is ready! 👋 …" with a
+- [ ] **Onboarding popup** (#E1): first install shows "LLM Local Router is ready! 👋 …" with a
   real wave emoji (not `\u{1F44B}`).
 - [ ] **Activation** (#E8): extension activates on startup; opening a `.json`/`.md` file no
   longer eagerly activates it before startup.
-- [ ] **Prometheus endpoint** (#E5): set `shofer.router.experimental.prometheusEndpoint: true`,
+- [ ] **Prometheus endpoint** (#E5): set `llmLocalRouter.experimental.prometheusEndpoint: true`,
   reload, then `curl -s 127.0.0.1:30098/metrics` — returns Prometheus text including
-  `shofer_router_*` series (and `shofer_router_composite_midstream_failure_total`). Confirm it
+  `llm_local_router_*` series (and `llm_local_router_composite_midstream_failure_total`). Confirm it
   is **not** reachable from another host. Toggle off → endpoint closes; toggle on again →
   it restarts (no `EADDRINUSE`).
 - [ ] **Clean teardown**: disable the extension / reload repeatedly — no lingering port, no
@@ -219,7 +219,7 @@ provider server** is the deterministic stand-in for real keys, exactly as
 
 ### Prometheus endpoint (automates the §7 #E5 curl)
 - [ ] **I-P1** With the endpoint enabled, an HTTP GET `/metrics` returns Prometheus
-  text incl. `shofer_router_*` and `…_composite_midstream_failure_total`; it is
+  text incl. `llm_local_router_*` and `…_composite_midstream_failure_total`; it is
   **loopback-only** (a non-loopback bind/host is refused); toggle off closes it;
   toggle on rebinds (no `EADDRINUSE`).
 
@@ -241,7 +241,7 @@ end-to-end wiring.
   icon buttons/inputs (#W20).
 - [ ] **W-C5** (build) Bare-Vite `npm run dev` doesn't throw on first `postMessage`
   (no-op stub outside VS Code) (#W6).
-- [ ] **W-E1** (Playwright, code-server) Full round-trip: open the Shofer Router
+- [ ] **W-E1** (Playwright, code-server) Full round-trip: open the LLM Local Router
   webview, add a provider + key, save → persisted to secret storage → used by a
   mock-provider-backed request; the status-bar item reflects state. (Automates the
   live parts of §6 end-to-end.)

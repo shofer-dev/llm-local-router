@@ -2,7 +2,7 @@
  * Model registry — single source of truth for all model metadata.
  *
  * Prices are stored as USD per 1K tokens (matching the Go source);
- * the llm-client converts to per-1M-token form for Shofer compatibility.
+ * the llm-client converts to per-1M-token form for VS Code LM API compatibility.
  */
 
 import { ModelRegistryEntry, ModelPricing, ProviderType } from './types';

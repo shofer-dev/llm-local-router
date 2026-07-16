@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run all shofer-router unit tests.
+# Run all llm-local-router unit tests.
 # Used by the pre-push git hook to gate pushes on all tests passing.
 set -euo pipefail
 

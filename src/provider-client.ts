@@ -202,7 +202,7 @@ export class ProviderRouter {
             preparer: prepareBedrockRequest,
             customSend: async () => {
                 throw new Error(
-                    'AWS Bedrock is not yet supported by Shofer Router (it needs the ' +
+                    'AWS Bedrock is not yet supported by LLM Local Router (it needs the ' +
                     'Converse API with SigV4 signing, not an OpenAI-compatible endpoint). ' +
                     'Use a custom provider pointing at an OpenAI-compatible Bedrock proxy instead.'
                 );

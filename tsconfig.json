@@ -18,8 +18,8 @@
   },
   "include": [
     "src/**/*",
-    "../../code-server/lib/vscode/src/vscode-dts/vscode.proposed.languageModelThinkingPart.d.ts",
-    "../../code-server/lib/vscode/src/vscode-dts/vscode.proposed.chatProvider.d.ts"
+    "vendor/vscode-dts/vscode.proposed.languageModelThinkingPart.d.ts",
+    "vendor/vscode-dts/vscode.proposed.chatProvider.d.ts"
   ],
   "exclude": [
     "node_modules",

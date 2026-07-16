@@ -1,16 +1,17 @@
-# Agent working agreements — shofer-router
+# Agent working agreements — llm-local-router
 
-Shofer-router-specific rules. When built in-tree the monorepo-wide
-`AGENTS.md`/`CLAUDE.md` also applies (commit-per-feature, no back-compat
-scaffolding, global/international provider hosts, docs describe current state
-only). See `DESIGN.md` for the full design; this file is only the non-obvious
-operational rules.
+Non-obvious operational rules for this extension. Baseline conventions:
+commit-per-feature, no back-compat scaffolding, global/international provider
+hosts (never China/regional endpoints), docs describe current state only. See
+`DESIGN.md` for the full design.
 
 ## What it is
 
-Self-contained VS Code extension: direct multi-provider LLM access + `shofer/*`
-composite models with in-process failover. No external router service. Ships as
-part of the arkware.ai monorepo (Bazel + top-level `deploy.sh`).
+Self-contained VS Code extension: direct multi-provider LLM access + composite
+models (`shofer/*` namespace) with in-process failover. No external router
+service. The VS Code Language Model vendor id is `shofer` and composite models
+are referenced under the `shofer/*` prefix — these are fixed identifiers, not
+branding.
 
 ## Two separate builds — do not conflate
 
@@ -31,22 +32,26 @@ part of the arkware.ai monorepo (Bazel + top-level `deploy.sh`).
   (`.husky/pre-push`); `.husky/pre-commit` runs `tsc --skipLibCheck --noEmit`.
 - No ESLint / Prettier config exists — strict `tsc` is the only static gate.
 
-## Bazel
+## Bazel (optional, for monorepo builds)
 
-- Targets: `//extensions/shofer-router:build_extension` (→ `main.js`) and
+- The primary build is plain npm (`npm run compile`). A `BUILD.bazel` is also
+  provided for building inside a Bazel monorepo.
+- Targets: `//extensions/llm-local-router:build_extension` (→ `main.js`) and
   `:package` (→ `.vsix`, tagged `requires-network`). Both `genrule`s run
   `npm ci --ignore-scripts && npm run compile`.
-- Unlike the Go services, `BUILD.bazel` srcs use **`glob(["src/**/*.ts"])`**, so a
-  new `src/*.ts` file is picked up automatically — no hand-listing needed. The
-  glob covers `src/` only, not `webview-ui/`.
+- `BUILD.bazel` srcs use **`glob(["src/**/*.ts"])`**, so a new `src/*.ts` file is
+  picked up automatically — no hand-listing needed. The glob covers `src/` (plus
+  `vendor/vscode-dts/*.d.ts`), not `webview-ui/`.
 
-## Cross-repo typing dependency
+## Proposed-API typings (vendored)
 
-`tsconfig.json` pulls two proposed-API `.d.ts` files from the sibling
-`code-server` checkout
-(`../../code-server/lib/vscode/src/vscode-dts/vscode.proposed.{chatProvider,languageModelThinkingPart}.d.ts`);
-these back `enabledApiProposals` in `package.json`. Compilation needs that sibling
-present.
+`tsconfig.json` compiles against two proposed-API `.d.ts` files vendored under
+`vendor/vscode-dts/`
+(`vscode.proposed.{chatProvider,languageModelThinkingPart}.d.ts`); these back
+`enabledApiProposals` in `package.json`. They are vendored so the extension
+builds standalone with no external checkout. They are compile-time only and are
+excluded from the packaged `.vsix` (`.vscodeignore`). Refresh them from the
+matching VS Code release when bumping the `engines.vscode` floor.
 
 ## Architecture (files)
 
@@ -70,9 +75,9 @@ failover/round_robin/lowest_latency/highest_reliability + health + throttling;
   but never re-routed.
 - **Per-model tool prefs (`includedTools`/`excludedTools`) are integrator-owned,
   never user settings.** They can't ride the VS Code `capabilities` type, so they
-  travel via the `shofer.router.getModelCapabilities` side-channel command.
-- API keys live in VS Code `SecretStorage` (`shofer-router.provider.{name}`);
+  travel via the `llmLocalRouter.getModelCapabilities` side-channel command.
+- API keys live in VS Code `SecretStorage` (`llm-local-router.provider.{name}`);
   custom-provider metadata lives in `settings.json`
-  (`shofer.router.customProviders`) — keep the split.
+  (`llmLocalRouter.customProviders`) — keep the split.
 - The Prometheus endpoint (`experimental.prometheusEndpoint`) is loopback-only,
   no-auth, default-off **by design** — don't "harden" it into an auth server.

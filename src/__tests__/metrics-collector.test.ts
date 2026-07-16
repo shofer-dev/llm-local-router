@@ -260,10 +260,10 @@ function testPrometheusExport(): void {
     const c = new MetricsCollector();
     c.recordRequest(makeEntry({ modelId: 'test-model', provider: 'test' }));
     const text = c.toPrometheusText();
-    if (!text.includes('shofer_router_requests_window')) throw new Error('Expected requests_window in export');
+    if (!text.includes('llm_local_router_requests_window')) throw new Error('Expected requests_window in export');
     if (!text.includes('test-model')) throw new Error('Expected model name in export');
-    if (!text.includes('shofer_router_cost_usd_window')) throw new Error('Expected cost in export');
-    if (!text.includes('shofer_router_latency_seconds')) throw new Error('Expected latency in export');
+    if (!text.includes('llm_local_router_cost_usd_window')) throw new Error('Expected cost in export');
+    if (!text.includes('llm_local_router_latency_seconds')) throw new Error('Expected latency in export');
 }
 
 function testMidstreamFailure(): void {

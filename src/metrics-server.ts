@@ -1,9 +1,9 @@
 /**
- * Prometheus metrics HTTP server for the Shofer Router extension.
+ * Prometheus metrics HTTP server for the LLM Local Router extension.
  *
  * Exposes the in-memory metrics collector's `toPrometheusText()` output
- * via a minimal HTTP server on `127.0.0.1:<SHOFER_ROUTER_METRICS_PORT>`
- * (default 30098). Gated behind the `shofer.router.experimental.prometheusEndpoint`
+ * via a minimal HTTP server on `127.0.0.1:<LLM_LOCAL_ROUTER_METRICS_PORT>`
+ * (default 30098). Gated behind the `llmLocalRouter.experimental.prometheusEndpoint`
  * configuration flag (default: false).
  *
  * Design mirrors `extensions/shofer/src/metrics/server.ts` but uses the
@@ -25,7 +25,7 @@ import { getMetricsCollector } from './metrics-collector';
 import { getLogger } from './logger';
 
 /** Port the metrics server listens on. Configurable via env var. */
-const METRICS_PORT = parseInt(process.env.SHOFER_ROUTER_METRICS_PORT ?? '30098', 10);
+const METRICS_PORT = parseInt(process.env.LLM_LOCAL_ROUTER_METRICS_PORT ?? '30098', 10);
 
 let _server: http.Server | undefined;
 let _serverPort: number | undefined;

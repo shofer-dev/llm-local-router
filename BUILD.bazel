@@ -1,4 +1,4 @@
-"""Bazel build rules for Shofer Router VSCode extension."""
+"""Bazel build rules for LLM Local Router VSCode extension."""
 
 load("@aspect_rules_js//js:defs.bzl", "js_run_devserver")
 
@@ -6,14 +6,15 @@ genrule(
     name = "build_extension",
     srcs = glob([
         "src/**/*.ts",
+        "vendor/vscode-dts/*.d.ts",
         "package.json",
         "package-lock.json",
         "tsconfig.json",
     ]),
     outs = ["main.js"],
-    cmd = "$(location //extensions/shofer-router:build_script) > $@",
+    cmd = "$(location //extensions/llm-local-router:build_script) > $@",
     local = True,
-    tools = ["//extensions/shofer-router:build_script"],
+    tools = ["//extensions/llm-local-router:build_script"],
     visibility = ["//visibility:public"],
 )
 
@@ -23,7 +24,7 @@ genrule(
     cmd = """cat > $@ << 'EOF'
 #!/bin/bash
 set -e
-cd extensions/shofer-router
+cd extensions/llm-local-router
 npm ci --ignore-scripts
 npm run compile
 cat out/main.js
@@ -38,13 +39,13 @@ genrule(
     cmd = """cat > $@ << 'EOF'
 #!/bin/bash
 set -e
-cd extensions/shofer-router
+cd extensions/llm-local-router
 npm ci --ignore-scripts >&2
 npm run compile >&2
 npx @vscode/vsce package --no-update-package-json >&2
 VERSION=$$(node -p "require('./package.json').version")
-mv "shofer-router-$${VERSION}.vsix" shofer-router.vsix
-cat shofer-router.vsix
+mv "llm-local-router-$${VERSION}.vsix" llm-local-router.vsix
+cat llm-local-router.vsix
 EOF
 chmod +x $@
 """,
@@ -54,16 +55,17 @@ genrule(
     name = "package",
     srcs = glob([
         "src/**/*.ts",
+        "vendor/vscode-dts/*.d.ts",
         "package.json",
         "package-lock.json",
         "tsconfig.json",
         "README.md",
     ]),
-    outs = ["shofer-router.vsix"],
-    cmd = "$(location //extensions/shofer-router:package_script) > $@",
+    outs = ["llm-local-router.vsix"],
+    cmd = "$(location //extensions/llm-local-router:package_script) > $@",
     local = True,
     tags = ["requires-network"],
-    tools = ["//extensions/shofer-router:package_script"],
+    tools = ["//extensions/llm-local-router:package_script"],
     visibility = ["//visibility:public"],
 )
 

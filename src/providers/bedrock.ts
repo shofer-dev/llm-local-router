@@ -6,7 +6,7 @@
  * routes through a custom send path.
  *
  * Note: Full Bedrock support requires the @aws-sdk/client-bedrock-runtime
- * package. Since shofer-router is designed to be zero-dependency (no external
+ * package. Since llm-local-router is designed to be zero-dependency (no external
  * SDKs), this provider currently serves as a registration point. The actual
  * AWS SDK integration would need to be vendored or the extension would need
  * the SDK as a dependency.

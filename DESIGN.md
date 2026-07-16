@@ -1,8 +1,8 @@
-# Shofer Router — Design Document
+# LLM Local Router — Design Document
 
 ## Overview
 
-Shofer Router is a self-contained VS Code extension that embeds all LLM routing logic directly in the extension host, talking to each provider's API via HTTP — no external services required.
+LLM Local Router is a self-contained VS Code extension that embeds all LLM routing logic directly in the extension host, talking to each provider's API via HTTP — no external services required.
 
 ## Architecture
 
@@ -121,17 +121,17 @@ Users can register their own LLM providers through the webview UI or `settings.j
 - **Label** — human-readable display name
 - **Protocol** — one of `openai-compatible`, `anthropic-compatible`, or `google-compatible`
 - **Endpoint URL** — base URL for the provider's API
-- **API Key** — stored in SecretStorage under `shofer-router.provider.custom.{id}`
+- **API Key** — stored in SecretStorage under `llm-local-router.provider.custom.{id}`
 - **Models** — array of model definitions (id, name, contextLength, maxOutputTokens, imageInput, toolCalling, thinking)
 - **Default Pricing** — per 1M tokens (prompt, completion, cache read)
 
 **Source of Truth:**
 | What | Storage |
 |------|---------|
-| Custom provider metadata | `settings.json` (`shofer.router.customProviders`) |
-| Custom provider API keys | `SecretStorage` (`shofer-router.provider.custom.{id}`) |
-| Built-in provider API keys | `SecretStorage` (`shofer-router.provider.{name}`) |
-| Composite models | `settings.json` (`shofer.router.compositeModelsConfig`) |
+| Custom provider metadata | `settings.json` (`llmLocalRouter.customProviders`) |
+| Custom provider API keys | `SecretStorage` (`llm-local-router.provider.custom.{id}`) |
+| Built-in provider API keys | `SecretStorage` (`llm-local-router.provider.{name}`) |
+| Composite models | `settings.json` (`llmLocalRouter.compositeModelsConfig`) |
 
 **Protocol handling** — `buildCustomHandler()` creates the appropriate `ProviderHandler`:
 - `openai-compatible` → pure passthrough (standard `/v1/chat/completions`)
@@ -268,7 +268,7 @@ cost = (uncached_prompt_tokens / 1000) × prompt_price
      × (1 - batch_discount)
 ```
 
-Pricing is converted from per-1K-token form (registry) to per-1M-token form (Shofer convention) via `toPerMillionPricing()`.
+Pricing is converted from per-1K-token form (registry) to per-1M-token form (the form the VS Code LM API expects) via `toPerMillionPricing()`.
 
 `computeCost()` is applied uniformly across all providers — including the custom-send
 adapters (Anthropic, Google/Gemini), which build their `UsageInfo` by hand and call
@@ -281,10 +281,10 @@ the canonical `cachedTokens`/`cacheCreationTokens` fields that `computeCost` rea
 API keys are stored using VS Code's `SecretStorage` API under namespaced keys:
 
 ```
-shofer-router.provider.openai        → sk-...
-shofer-router.provider.anthropic     → sk-ant-...
-shofer-router.provider.deepseek      → sk-...
-shofer-router.provider.custom.{id}   → custom provider API key
+llm-local-router.provider.openai        → sk-...
+llm-local-router.provider.anthropic     → sk-ant-...
+llm-local-router.provider.deepseek      → sk-...
+llm-local-router.provider.custom.{id}   → custom provider API key
 ```
 
 The `onApiKeysChanged` listener detects external changes and triggers reload. Custom provider API keys are loaded by scanning `settings.json` for registered custom provider IDs and looking up each key in SecretStorage.
@@ -363,9 +363,9 @@ In-process, in-memory metrics aggregation with 5-minute aligned time windows, su
 
 **Design rationale**: metrics are aggregated in-memory and exposed via:
 - Webview dashboard with all 10 metric charts on a single scrollable page
-- Side-channel commands (`shofer.router.getMetrics`, `shofer.router.exportMetrics`, etc.)
+- Side-channel commands (`llmLocalRouter.getMetrics`, `llmLocalRouter.exportMetrics`, etc.)
 - SQLite persistence
-- An **optional** Prometheus scrape endpoint (`metrics-server.ts`) on `127.0.0.1`, gated behind the `shofer.router.experimental.prometheusEndpoint` setting (default off; loopback-only, no auth). Port via `SHOFER_ROUTER_METRICS_PORT` (default 30098).
+- An **optional** Prometheus scrape endpoint (`metrics-server.ts`) on `127.0.0.1`, gated behind the `llmLocalRouter.experimental.prometheusEndpoint` setting (default off; loopback-only, no auth). Port via `LLM_LOCAL_ROUTER_METRICS_PORT` (default 30098).
 
 **Window structure**: Each 5-minute window aggregates per-model statistics:
 - Request counts by status (success/error/timeout/cancelled)
@@ -407,7 +407,7 @@ SQLite persistence layer using `sql.js` (SQLite compiled to WebAssembly) for sto
 
 ### API Key Storage
 - API keys stored in VS Code's `SecretStorage` (backed by OS keychain on macOS, libsecret on Linux, Credential Vault on Windows)
-- Custom provider API keys stored under `shofer-router.provider.custom.{id}`
+- Custom provider API keys stored under `llm-local-router.provider.custom.{id}`
 - Custom provider metadata (non-sensitive) stored in `settings.json`
 - Keys are never written to disk in plaintext
 - Extension logs never include API key values
@@ -492,28 +492,28 @@ Both primary models (e.g., `deepseek-v4-pro`) and composite models (e.g., `shofe
 
 | Command | Description |
 |---------|-------------|
-| `Shofer Router: Configure` | Open the full configuration dashboard |
-| `Shofer Router: Show Models` | View status and available models |
-| `Shofer Router: Show Metrics` | Open the metrics dashboard |
-| `Shofer Router: Show Model Stats` | Detailed stats for a specific model |
-| `Shofer Router: Export Metrics (Prometheus)` | Prometheus text format export |
-| `Shofer Router: Show Composite Distribution` | Load-balancing distribution for composite models |
-| `Shofer Router: Show Cost History` | Cost breakdown by model across a selected time range |
+| `LLM Local Router: Configure` | Open the full configuration dashboard |
+| `LLM Local Router: Show Models` | View status and available models |
+| `LLM Local Router: Show Metrics` | Open the metrics dashboard |
+| `LLM Local Router: Show Model Stats` | Detailed stats for a specific model |
+| `LLM Local Router: Export Metrics (Prometheus)` | Prometheus text format export |
+| `LLM Local Router: Show Composite Distribution` | Load-balancing distribution for composite models |
+| `LLM Local Router: Show Cost History` | Cost breakdown by model across a selected time range |
 
 ### Export Format
 
 The Prometheus export produces gauges for the current window:
 ```
-shofer_router_requests_window{model, provider, status}
-shofer_router_cost_usd_window{model, provider}
-shofer_router_tokens_window{model, provider, type}
-shofer_router_latency_seconds{model, provider, quantile, phase}
-shofer_router_availability{model, provider}
-shofer_router_cache_hit_ratio{model, provider}
-shofer_router_composite_requests{composite, underlying}
-shofer_router_composite_failover_total{composite}
-shofer_router_throttle_skips_total{model}
-shofer_router_errors_window{model, error_type}
+llm_local_router_requests_window{model, provider, status}
+llm_local_router_cost_usd_window{model, provider}
+llm_local_router_tokens_window{model, provider, type}
+llm_local_router_latency_seconds{model, provider, quantile, phase}
+llm_local_router_availability{model, provider}
+llm_local_router_cache_hit_ratio{model, provider}
+llm_local_router_composite_requests{composite, underlying}
+llm_local_router_composite_failover_total{composite}
+llm_local_router_throttle_skips_total{model}
+llm_local_router_errors_window{model, error_type}
 ```
 
 ## Future Enhancements

@@ -1,10 +1,10 @@
-# Shofer Router — TODO
+# LLM Local Router — TODO
 
 ## Provider verification
 
 Provider verification is exercised through the integration harness
 (`extensions/integration`). The three paths — (a) llm-router, (b) direct egress,
-(c) shofer-router — are tracked in
+(c) llm-local-router — are tracked in
 [`extensions/integration/TODO.md`](../integration/TODO.md). This doc owns none of
 them and should not duplicate.
 

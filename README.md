@@ -1,4 +1,4 @@
-# Shofer Router
+# LLM Local Router
 
 A VS Code extension that provides **direct access to multiple LLM providers** with **composite model failover** — self-contained, no external router service required.
 
@@ -9,9 +9,9 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 - **Full protocol translation**: Anthropic Messages API ↔ OpenAI Chat Completions, MiniMax `<think>` tag handling, DeepSeek/Moonshot reasoning_content round-trip, Xiaomi max_completion_tokens remapping, Zhipu thinking toggle
 - **Streaming**: SSE streaming for all providers with real-time tool call accumulation
 - **Cost tracking**: Per-token pricing from the built-in model registry, per-conversation cost ledger
-- **VS Code LM API**: Implements `LanguageModelChatProvider` for Copilot and Shofer integration
+- **VS Code LM API**: Implements `LanguageModelChatProvider` (vendor `shofer`) so GitHub Copilot Chat and any extension using `vscode.lm` can consume the models
 - **Metrics dashboard**: All 10 metric charts on a single page with ToC navigation, categorized Primary/Composite model picker
-- **Side-channel commands**: `shofer.router.getModelPricing`, `shofer.router.getModelCapabilities`, `shofer.router.getRequestCost`
+- **Side-channel commands**: `llmLocalRouter.getModelPricing`, `llmLocalRouter.getModelCapabilities`, `llmLocalRouter.getRequestCost`
 - **Secure API keys**: Stored via VS Code's `SecretStorage` API
 
 ## Requirements
@@ -41,10 +41,10 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 API keys are stored securely using VS Code's `SecretStorage`. Use the VS Code command palette to set them:
 
 1. Open Command Palette (`Ctrl+Shift+P`)
-2. Run `Shofer Router: Configure`
+2. Run `LLM Local Router: Configure`
 3. Go to **Config → Primary Providers** and enter your API keys
 
-The extension reads keys from SecretStorage under the keys `shofer-router.provider.{name}` (e.g., `shofer-router.provider.openai`).
+The extension reads keys from SecretStorage under the keys `llm-local-router.provider.{name}` (e.g., `llm-local-router.provider.openai`).
 
 ### Custom Primary Providers
 
@@ -56,22 +56,22 @@ Register your own LLM providers via the **Config → Primary Providers** tab →
 - One or more **Model definitions** as JSON (id, name, contextLength, maxOutputTokens, imageInput, toolCalling, thinking)
 - Optional default **Pricing** per 1M tokens
 
-Custom provider metadata is stored in `settings.json` (`shofer.router.customProviders`). API keys are stored in VS Code SecretStorage.
+Custom provider metadata is stored in `settings.json` (`llmLocalRouter.customProviders`). API keys are stored in VS Code SecretStorage.
 
 ### Extension Settings
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `shofer.router.enabled` | boolean | `true` | Enable/disable |
-| `shofer.router.debug` | boolean | `false` | Debug logging |
-| `shofer.router.compositeModelsFile` | string | `""` | Path to composite-models.json |
-| `shofer.router.compositeModelsConfig` | string | `""` | Inline JSON for composite models |
-| `shofer.router.customProviders` | string | `""` | Inline JSON for custom providers |
-| `shofer.router.experimental.prometheusEndpoint` | boolean | `false` | Expose a Prometheus scrape endpoint on `127.0.0.1` (loopback-only, no auth; port via `SHOFER_ROUTER_METRICS_PORT`, default 30098) |
+| `llmLocalRouter.enabled` | boolean | `true` | Enable/disable |
+| `llmLocalRouter.debug` | boolean | `false` | Debug logging |
+| `llmLocalRouter.compositeModelsFile` | string | `""` | Path to composite-models.json |
+| `llmLocalRouter.compositeModelsConfig` | string | `""` | Inline JSON for composite models |
+| `llmLocalRouter.customProviders` | string | `""` | Inline JSON for custom providers |
+| `llmLocalRouter.experimental.prometheusEndpoint` | boolean | `false` | Expose a Prometheus scrape endpoint on `127.0.0.1` (loopback-only, no auth; port via `LLM_LOCAL_ROUTER_METRICS_PORT`, default 30098) |
 
 ### Composite Models
 
-Define `shofer/*` composite models via the **Config → Composite Models** tab, or in `shofer.router.compositeModelsConfig`:
+Define `shofer/*` composite models via the **Config → Composite Models** tab, or in `llmLocalRouter.compositeModelsConfig`:
 
 ```json
 {
@@ -131,27 +131,30 @@ Define `shofer/*` composite models via the **Config → Composite Models** tab, 
 
 **Capability intersection**: Composite models advertised via VS Code LM API report the minimum `maxInputTokens`/`maxOutputTokens` and the intersection of `imageInput`/`toolCalling`/`promptCache` across all underlying models — safe lower bounds that guarantee failover never hits a capability mismatch.
 
-### Shofer Integration
+### Consuming from another extension
 
-Shofer's `vscode-lm` provider consumes this extension. Enable it in Shofer:
+Any VS Code extension can consume these models through the standard LM API:
 
-```json
-{
-    "shofer.enableLlmProviderIntegration": true
-}
+```ts
+const models = await vscode.lm.selectChatModels({ vendor: "shofer" })
 ```
+
+Consumers that want richer metadata than the LM API surfaces can call the
+side-channel commands `llmLocalRouter.getModelPricing`,
+`llmLocalRouter.getModelCapabilities`, and `llmLocalRouter.getRequestCost`
+(see the [Architecture](#architecture) section below).
 
 ## Commands
 
-- `Shofer Router: Configure` — Open full configuration dashboard
-- `Shofer Router: Show Models` — View status and available models
-- `Shofer Router: Refresh Models` — Refresh the model list
-- `Shofer Router: Test Connection` — Test API key configuration
-- `Shofer Router: Show Metrics` — Multi-chart metrics dashboard
-- `Shofer Router: Show Model Stats` — Detailed statistics for a specific model
-- `Shofer Router: Export Metrics (Prometheus)` — Export in Prometheus text format
-- `Shofer Router: Show Composite Distribution` — Load-balancing distribution for composite models
-- `Shofer Router: Show Cost History` — Cost breakdown by model across a selected time range
+- `LLM Local Router: Configure` — Open full configuration dashboard
+- `LLM Local Router: Show Models` — View status and available models
+- `LLM Local Router: Refresh Models` — Refresh the model list
+- `LLM Local Router: Test Connection` — Test API key configuration
+- `LLM Local Router: Show Metrics` — Multi-chart metrics dashboard
+- `LLM Local Router: Show Model Stats` — Detailed statistics for a specific model
+- `LLM Local Router: Export Metrics (Prometheus)` — Export in Prometheus text format
+- `LLM Local Router: Show Composite Distribution` — Load-balancing distribution for composite models
+- `LLM Local Router: Show Cost History` — Cost breakdown by model across a selected time range
 
 ## Metrics & Observability
 
@@ -168,7 +171,7 @@ The webview **Metrics** tab shows all charts on a single page with anchor-link n
 ## Project Structure
 
 ```
-extensions/shofer-router/
+extensions/llm-local-router/
 ├── src/
 │   ├── main.ts                      # Extension entry point
 │   ├── language-model-provider.ts   # VS Code LanguageModelChatProvider + cost ledger
@@ -224,7 +227,7 @@ extensions/shofer-router/
 ## Architecture
 
 ```
-Shofer (vscode-lm handler)
+VS Code LM consumer (e.g. Copilot Chat)
     │
     ├─ vscode.lm.selectChatModels({vendor:"shofer"})
     │    → LanguageModelProvider registers all models from registry + custom providers
@@ -242,9 +245,9 @@ Shofer (vscode-lm handler)
     │    → In-process health tracking + throttling
     │
     └─ Side-channel commands:
-         shofer.router.getModelPricing(modelId)    → Registry + custom provider pricing
-         shofer.router.getModelCapabilities(modelId) → Capabilities (incl. tool prefs)
-         shofer.router.getRequestCost(conversationId) → Per-conversation cost ledger
+         llmLocalRouter.getModelPricing(modelId)    → Registry + custom provider pricing
+         llmLocalRouter.getModelCapabilities(modelId) → Capabilities (incl. tool prefs)
+         llmLocalRouter.getRequestCost(conversationId) → Per-conversation cost ledger
 ```
 
 ### Per-model tool preferences
@@ -254,10 +257,9 @@ Registry entries (`src/model-registry.ts`, `ModelRegistryEntry`) may declare
 and dialect/naming for that model (or inherit provider-family defaults via
 `resolveModelToolPrefs` in `src/llm-client.ts`, e.g. OpenAI → `apply_patch`). The
 VS Code `LanguageModelChatInformation.capabilities` type cannot carry arbitrary
-arrays, so these ride the `shofer.router.getModelCapabilities` side-channel (in
-the `ModelCapabilities` payload). Shofer's `vscode-lm` provider reads them and
-maps them onto `ModelInfo.includedTools` / `excludedTools`. See
-`extensions/shofer/docs/tool_preferences.md` for the full cross-path picture.
+arrays, so these ride the `llmLocalRouter.getModelCapabilities` side-channel (in
+the `ModelCapabilities` payload). A consuming extension reads them and maps them
+onto its own per-model tool metadata.
 
 ## License
 

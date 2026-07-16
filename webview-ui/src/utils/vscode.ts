@@ -2,7 +2,7 @@
  * VS Code API wrapper for the webview.
  *
  * Provides a type-safe postMessage bridge that mirrors the pattern
- * used by the shofer extension's webview.
+ * used by the extension's webview.
  */
 
 import type { HostMessage, WebviewMessage } from '../types';

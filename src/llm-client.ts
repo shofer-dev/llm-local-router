@@ -113,7 +113,7 @@ export function computeCost(
 
 /**
  * Convert registry pricing (per-1K-token) to per-1M-token form
- * for Shofer compatibility.
+ * for VS Code LM API compatibility.
  */
 export function toPerMillionPricing(modelId: string): ModelPricingPerMillion | undefined {
     const p = getEffectivePricing(modelId);

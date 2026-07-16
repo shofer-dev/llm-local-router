@@ -64,7 +64,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div style={styles.root}>
-        <div style={styles.tabBar} role="tablist" aria-label="Shofer Router sections">
+        <div style={styles.tabBar} role="tablist" aria-label="LLM Local Router sections">
           {([
             ['status', '🔌 Status'],
             ['config', '⚙️ Config'],

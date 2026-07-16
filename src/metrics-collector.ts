@@ -395,70 +395,70 @@ export class MetricsCollector {
         for (const [modelId, stats] of Object.entries(now.models)) {
             const labels = `model="${modelId}",provider="${stats.provider}"`;
 
-            lines.push(`# HELP shofer_router_requests_window Requests in current 5m window`);
-            lines.push(`# TYPE shofer_router_requests_window gauge`);
-            lines.push(`shofer_router_requests_window{${labels},status="success"} ${stats.successCount}`);
-            lines.push(`shofer_router_requests_window{${labels},status="error"} ${stats.errorCount}`);
-            lines.push(`shofer_router_requests_window{${labels},status="timeout"} ${stats.timeoutCount}`);
-            lines.push(`shofer_router_requests_window{${labels},status="cancelled"} ${stats.cancelledCount}`);
+            lines.push(`# HELP llm_local_router_requests_window Requests in current 5m window`);
+            lines.push(`# TYPE llm_local_router_requests_window gauge`);
+            lines.push(`llm_local_router_requests_window{${labels},status="success"} ${stats.successCount}`);
+            lines.push(`llm_local_router_requests_window{${labels},status="error"} ${stats.errorCount}`);
+            lines.push(`llm_local_router_requests_window{${labels},status="timeout"} ${stats.timeoutCount}`);
+            lines.push(`llm_local_router_requests_window{${labels},status="cancelled"} ${stats.cancelledCount}`);
 
-            lines.push(`# HELP shofer_router_cost_usd_window Total cost in current 5m window`);
-            lines.push(`# TYPE shofer_router_cost_usd_window gauge`);
-            lines.push(`shofer_router_cost_usd_window{${labels}} ${stats.totalCostUsd.toFixed(8)}`);
+            lines.push(`# HELP llm_local_router_cost_usd_window Total cost in current 5m window`);
+            lines.push(`# TYPE llm_local_router_cost_usd_window gauge`);
+            lines.push(`llm_local_router_cost_usd_window{${labels}} ${stats.totalCostUsd.toFixed(8)}`);
 
-            lines.push(`# HELP shofer_router_tokens_window Token usage in current 5m window`);
-            lines.push(`# TYPE shofer_router_tokens_window gauge`);
-            lines.push(`shofer_router_tokens_window{${labels},type="prompt"} ${stats.totalPromptTokens}`);
-            lines.push(`shofer_router_tokens_window{${labels},type="completion"} ${stats.totalCompletionTokens}`);
-            lines.push(`shofer_router_tokens_window{${labels},type="cached"} ${stats.totalCachedTokens}`);
+            lines.push(`# HELP llm_local_router_tokens_window Token usage in current 5m window`);
+            lines.push(`# TYPE llm_local_router_tokens_window gauge`);
+            lines.push(`llm_local_router_tokens_window{${labels},type="prompt"} ${stats.totalPromptTokens}`);
+            lines.push(`llm_local_router_tokens_window{${labels},type="completion"} ${stats.totalCompletionTokens}`);
+            lines.push(`llm_local_router_tokens_window{${labels},type="cached"} ${stats.totalCachedTokens}`);
 
-            lines.push(`# HELP shofer_router_latency_seconds Latency percentiles in current window`);
-            lines.push(`# TYPE shofer_router_latency_seconds gauge`);
-            lines.push(`shofer_router_latency_seconds{${labels},quantile="0.5",phase="ttfb"} ${(stats.ttfbP50 / 1000).toFixed(3)}`);
-            lines.push(`shofer_router_latency_seconds{${labels},quantile="0.9",phase="ttfb"} ${(stats.ttfbP90 / 1000).toFixed(3)}`);
-            lines.push(`shofer_router_latency_seconds{${labels},quantile="0.99",phase="ttfb"} ${(stats.ttfbP99 / 1000).toFixed(3)}`);
-            lines.push(`shofer_router_latency_seconds{${labels},quantile="0.5",phase="ttlb"} ${(stats.ttlbP50 / 1000).toFixed(3)}`);
-            lines.push(`shofer_router_latency_seconds{${labels},quantile="0.9",phase="ttlb"} ${(stats.ttlbP90 / 1000).toFixed(3)}`);
-            lines.push(`shofer_router_latency_seconds{${labels},quantile="0.99",phase="ttlb"} ${(stats.ttlbP99 / 1000).toFixed(3)}`);
+            lines.push(`# HELP llm_local_router_latency_seconds Latency percentiles in current window`);
+            lines.push(`# TYPE llm_local_router_latency_seconds gauge`);
+            lines.push(`llm_local_router_latency_seconds{${labels},quantile="0.5",phase="ttfb"} ${(stats.ttfbP50 / 1000).toFixed(3)}`);
+            lines.push(`llm_local_router_latency_seconds{${labels},quantile="0.9",phase="ttfb"} ${(stats.ttfbP90 / 1000).toFixed(3)}`);
+            lines.push(`llm_local_router_latency_seconds{${labels},quantile="0.99",phase="ttfb"} ${(stats.ttfbP99 / 1000).toFixed(3)}`);
+            lines.push(`llm_local_router_latency_seconds{${labels},quantile="0.5",phase="ttlb"} ${(stats.ttlbP50 / 1000).toFixed(3)}`);
+            lines.push(`llm_local_router_latency_seconds{${labels},quantile="0.9",phase="ttlb"} ${(stats.ttlbP90 / 1000).toFixed(3)}`);
+            lines.push(`llm_local_router_latency_seconds{${labels},quantile="0.99",phase="ttlb"} ${(stats.ttlbP99 / 1000).toFixed(3)}`);
 
-            lines.push(`# HELP shofer_router_availability Availability ratio in current window`);
-            lines.push(`# TYPE shofer_router_availability gauge`);
-            lines.push(`shofer_router_availability{${labels}} ${stats.availability.toFixed(6)}`);
+            lines.push(`# HELP llm_local_router_availability Availability ratio in current window`);
+            lines.push(`# TYPE llm_local_router_availability gauge`);
+            lines.push(`llm_local_router_availability{${labels}} ${stats.availability.toFixed(6)}`);
 
-            lines.push(`# HELP shofer_router_cache_hit_ratio Cache hit ratio in current window`);
-            lines.push(`# TYPE shofer_router_cache_hit_ratio gauge`);
-            lines.push(`shofer_router_cache_hit_ratio{${labels}} ${stats.cacheHitRatio.toFixed(6)}`);
+            lines.push(`# HELP llm_local_router_cache_hit_ratio Cache hit ratio in current window`);
+            lines.push(`# TYPE llm_local_router_cache_hit_ratio gauge`);
+            lines.push(`llm_local_router_cache_hit_ratio{${labels}} ${stats.cacheHitRatio.toFixed(6)}`);
         }
 
         // Composite distribution
         for (const [compositeId, dist] of Object.entries(now.compositeRouting)) {
             for (const [underlyingId, count] of Object.entries(dist.modelCounts)) {
-                lines.push(`# HELP shofer_router_composite_requests Requests routed by composite to underlying model`);
-                lines.push(`# TYPE shofer_router_composite_requests gauge`);
-                lines.push(`shofer_router_composite_requests{composite="${compositeId}",underlying="${underlyingId}"} ${count}`);
+                lines.push(`# HELP llm_local_router_composite_requests Requests routed by composite to underlying model`);
+                lines.push(`# TYPE llm_local_router_composite_requests gauge`);
+                lines.push(`llm_local_router_composite_requests{composite="${compositeId}",underlying="${underlyingId}"} ${count}`);
             }
-            lines.push(`# HELP shofer_router_composite_failover_total Failover events per composite model`);
-            lines.push(`# TYPE shofer_router_composite_failover_total gauge`);
-            lines.push(`shofer_router_composite_failover_total{composite="${compositeId}"} ${dist.failoverCount}`);
-            lines.push(`# HELP shofer_router_composite_midstream_failure_total Mid-stream (post-first-byte) failures per composite model`);
-            lines.push(`# TYPE shofer_router_composite_midstream_failure_total gauge`);
-            lines.push(`shofer_router_composite_midstream_failure_total{composite="${compositeId}"} ${dist.midstreamFailureCount}`);
+            lines.push(`# HELP llm_local_router_composite_failover_total Failover events per composite model`);
+            lines.push(`# TYPE llm_local_router_composite_failover_total gauge`);
+            lines.push(`llm_local_router_composite_failover_total{composite="${compositeId}"} ${dist.failoverCount}`);
+            lines.push(`# HELP llm_local_router_composite_midstream_failure_total Mid-stream (post-first-byte) failures per composite model`);
+            lines.push(`# TYPE llm_local_router_composite_midstream_failure_total gauge`);
+            lines.push(`llm_local_router_composite_midstream_failure_total{composite="${compositeId}"} ${dist.midstreamFailureCount}`);
         }
 
         // Throttle skips
         for (const [modelId, count] of this.throttleSkipCounts) {
-            lines.push(`# HELP shofer_router_throttle_skips_total Requests skipped due to throttling`);
-            lines.push(`# TYPE shofer_router_throttle_skips_total gauge`);
-            lines.push(`shofer_router_throttle_skips_total{model="${modelId}"} ${count}`);
+            lines.push(`# HELP llm_local_router_throttle_skips_total Requests skipped due to throttling`);
+            lines.push(`# TYPE llm_local_router_throttle_skips_total gauge`);
+            lines.push(`llm_local_router_throttle_skips_total{model="${modelId}"} ${count}`);
         }
 
         // Error breakdown
         for (const [modelId, stats] of Object.entries(now.models)) {
             for (const [errorType, count] of Object.entries(stats.errorTypes)) {
                 if (count > 0) {
-                    lines.push(`# HELP shofer_router_errors_window Errors by type in current window`);
-                    lines.push(`# TYPE shofer_router_errors_window gauge`);
-                    lines.push(`shofer_router_errors_window{model="${modelId}",error_type="${errorType}"} ${count}`);
+                    lines.push(`# HELP llm_local_router_errors_window Errors by type in current window`);
+                    lines.push(`# TYPE llm_local_router_errors_window gauge`);
+                    lines.push(`llm_local_router_errors_window{model="${modelId}",error_type="${errorType}"} ${count}`);
                 }
             }
         }

@@ -11,7 +11,7 @@ import { initMetricsCollector, getMetricsCollector } from '../metrics-collector'
 import { MetricsRequestEntry } from '../types';
 
 // Set ephemeral port before importing the server module
-process.env.SHOFER_ROUTER_METRICS_PORT = '0';
+process.env.LLM_LOCAL_ROUTER_METRICS_PORT = '0';
 
 // Dynamic import to pick up the env var
 const metricsServer = require('../metrics-server');
@@ -89,7 +89,7 @@ async function testMetricsEndpoint(): Promise<void> {
 
     const res = await httpGet('/metrics', port);
     if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
-    if (!res.body.includes('shofer_router_requests_window')) {
+    if (!res.body.includes('llm_local_router_requests_window')) {
         throw new Error('Expected prometheus metrics in response body');
     }
     if (!res.body.includes('test-model')) {

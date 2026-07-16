@@ -1,5 +1,5 @@
 /**
- * Shared types for the Shofer Router extension.
+ * Shared types for the LLM Local Router extension.
  *
  * for direct use within the VSCode extension host.
  */
@@ -322,7 +322,7 @@ export interface ModelCapabilities {
     promptCache: boolean;
     /**
      * Per-model native-tool preferences, surfaced via the `getModelCapabilities`
-     * side-channel command so Shofer's vscode-lm provider can map them onto
+     * side-channel command so a VS Code LM consumer can map them onto
      * ModelInfo.includedTools / excludedTools. The standard VS Code
      * LanguageModelChatInformation.capabilities cannot carry arbitrary arrays, so
      * this side-channel is the only path for them.
@@ -331,7 +331,7 @@ export interface ModelCapabilities {
     excludedTools?: string[];
 }
 
-/** Pricing in USD per 1M tokens (the form Shofer expects). */
+/** Pricing in USD per 1M tokens (the form the VS Code LM API expects). */
 export interface ModelPricingPerMillion {
     inputPrice: number;
     outputPrice: number;

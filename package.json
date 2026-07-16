@@ -1,10 +1,10 @@
 {
-  "name": "shofer-router",
-  "displayName": "Shofer Router",
+  "name": "llm-local-router",
+  "displayName": "LLM Local Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "license": "AGPL-3.0-only",
-  "publisher": "Shoferdev",
+  "publisher": "llm-local-router",
   "icon": "assets/icon.png",
   "galleryBanner": {
     "color": "#1e293b",
@@ -12,18 +12,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/shofer-dev/shofer-router"
+    "url": "https://github.com/shofer-dev/llm-local-router"
   },
-  "homepage": "https://shofer.dev",
+  "homepage": "https://github.com/shofer-dev/llm-local-router",
   "bugs": {
-    "url": "https://github.com/shofer-dev/shofer-router/issues"
+    "url": "https://github.com/shofer-dev/llm-local-router/issues"
   },
   "pricing": "Free",
   "author": {
-    "name": "Shofer"
+    "name": "LLM Local Router contributors"
   },
   "keywords": [
-    "shofer",
+    "local",
     "router",
     "llm",
     "composite",
@@ -55,7 +55,7 @@
     "languageModelChatProviders": [
       {
         "vendor": "shofer",
-        "displayName": "Shofer Router",
+        "displayName": "LLM Local Router",
         "configurationSchema": {
           "type": "object",
           "properties": {
@@ -71,103 +71,103 @@
     ],
     "commands": [
       {
-        "command": "shofer.router.configure",
-        "title": "Shofer Router: Configure",
-        "description": "Configure the Shofer Router settings"
+        "command": "llmLocalRouter.configure",
+        "title": "LLM Local Router: Configure",
+        "description": "Configure the LLM Local Router settings"
       },
       {
-        "command": "shofer.router.showModels",
-        "title": "Shofer Router: Show Models",
+        "command": "llmLocalRouter.showModels",
+        "title": "LLM Local Router: Show Models",
         "description": "Show available models"
       },
       {
-        "command": "shofer.router.refreshModels",
-        "title": "Shofer Router: Refresh Models",
+        "command": "llmLocalRouter.refreshModels",
+        "title": "LLM Local Router: Refresh Models",
         "description": "Refresh the list of available models"
       },
       {
-        "command": "shofer.router.testConnection",
-        "title": "Shofer Router: Test Connection",
+        "command": "llmLocalRouter.testConnection",
+        "title": "LLM Local Router: Test Connection",
         "description": "Test connectivity to LLM providers"
       },
       {
-        "command": "shofer.router.importConfig",
-        "title": "Shofer Router: Import Config",
+        "command": "llmLocalRouter.importConfig",
+        "title": "LLM Local Router: Import Config",
         "description": "Import provider API keys and settings from a config object or JSON file"
       },
       {
-        "command": "shofer.router.exportConfig",
-        "title": "Shofer Router: Export Config",
+        "command": "llmLocalRouter.exportConfig",
+        "title": "LLM Local Router: Export Config",
         "description": "Export the current router config (which providers are keyed + non-secret settings)"
       },
       {
-        "command": "shofer.router.getMetrics",
-        "title": "Shofer Router: Show Metrics",
+        "command": "llmLocalRouter.getMetrics",
+        "title": "LLM Local Router: Show Metrics",
         "description": "Show per-model cost, latency, and reliability metrics"
       },
       {
-        "command": "shofer.router.getModelStats",
-        "title": "Shofer Router: Show Model Stats",
+        "command": "llmLocalRouter.getModelStats",
+        "title": "LLM Local Router: Show Model Stats",
         "description": "Show detailed statistics for a specific model"
       },
       {
-        "command": "shofer.router.exportMetrics",
-        "title": "Shofer Router: Export Metrics (Prometheus)",
+        "command": "llmLocalRouter.exportMetrics",
+        "title": "LLM Local Router: Export Metrics (Prometheus)",
         "description": "Export current metrics in Prometheus text format"
       },
       {
-        "command": "shofer.router.getCompositeDistribution",
-        "title": "Shofer Router: Show Composite Distribution",
+        "command": "llmLocalRouter.getCompositeDistribution",
+        "title": "LLM Local Router: Show Composite Distribution",
         "description": "Show load-balancing distribution for a composite model"
       },
       {
-        "command": "shofer.router.getCostHistory",
-        "title": "Shofer Router: Show Cost History",
+        "command": "llmLocalRouter.getCostHistory",
+        "title": "LLM Local Router: Show Cost History",
         "description": "Show cost breakdown by model across a selected time range"
       },
       {
-        "command": "shofer.router.configureWebview",
-        "title": "Shofer Router: Configure Composite Models",
+        "command": "llmLocalRouter.configureWebview",
+        "title": "LLM Local Router: Configure Composite Models",
         "description": "Configure composite (shofer/*) models with a visual editor"
       }
     ],
     "configuration": {
-      "title": "Shofer Router",
+      "title": "LLM Local Router",
       "properties": {
-        "shofer.router.enabled": {
+        "llmLocalRouter.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable or disable the Shofer Router extension"
+          "description": "Enable or disable the LLM Local Router extension"
         },
-        "shofer.router.debug": {
+        "llmLocalRouter.debug": {
           "type": "boolean",
           "default": false,
           "description": "Enable debug logging"
         },
-        "shofer.router.compositeModelsFile": {
+        "llmLocalRouter.compositeModelsFile": {
           "type": "string",
           "default": "",
           "description": "Path to a JSON file defining composite (shofer/*) models"
         },
-        "shofer.router.compositeModelsConfig": {
+        "llmLocalRouter.compositeModelsConfig": {
           "type": "string",
           "default": "",
           "description": "Inline JSON defining composite (shofer/*) models"
         },
-        "shofer.router.webviewDevServer": {
+        "llmLocalRouter.webviewDevServer": {
           "type": "string",
           "default": "",
           "description": "Vite dev server URL for webview development (e.g. http://localhost:5173)"
         },
-        "shofer.router.customProviders": {
+        "llmLocalRouter.customProviders": {
           "type": "string",
           "default": "",
           "description": "Inline JSON defining custom primary providers"
         },
-        "shofer.router.experimental.prometheusEndpoint": {
+        "llmLocalRouter.experimental.prometheusEndpoint": {
           "type": "boolean",
           "default": false,
-          "description": "Experimental: expose a Prometheus metrics scrape endpoint on 127.0.0.1 (port via SHOFER_ROUTER_METRICS_PORT, default 30098). Loopback-only, no auth."
+          "description": "Experimental: expose a Prometheus metrics scrape endpoint on 127.0.0.1 (port via LLM_LOCAL_ROUTER_METRICS_PORT, default 30098). Loopback-only, no auth."
         }
       }
     }

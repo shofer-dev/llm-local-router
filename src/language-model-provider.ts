@@ -4,7 +4,7 @@
  * Bridges VS Code's LanguageModelChatProvider API to the internal provider
  * router, which talks directly to LLM provider APIs. This is the main
  * integration point that makes models available to VS Code Copilot and
- * Shofer's vscode-lm handler.
+ * the VS Code LM API (e.g. GitHub Copilot Chat).
  *
  * internal ProviderRouter + CompositeService.
  */
@@ -51,7 +51,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
 
     /**
      * Per-conversation USD cost ledger. Accumulates cost from each completion
-     * response. Exposed via the shofer.llm.getRequestCost command.
+     * response. Exposed via the llmLocalRouter.getRequestCost command.
      */
     private requestCostLedger: Map<string, { totalUsd: number; lastUpdatedMs: number }> = new Map();
     private static readonly MAX_COST_LEDGER_SIZE = 1024;
@@ -247,7 +247,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             name: model.name,
             family: model.family,
             version: model.version,
-            tooltip: `${model.name} via Shofer Router`,
+            tooltip: `${model.name} via LLM Local Router`,
             detail: `${model.family}`,
             maxInputTokens: model.maxInputTokens,
             maxOutputTokens: model.maxOutputTokens,
@@ -268,7 +268,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         token: vscode.CancellationToken,
     ): Promise<void> {
         if (!this.config.enabled) {
-            throw new Error('Shofer Router is disabled');
+            throw new Error('LLM Local Router is disabled');
         }
 
         const modelId = model.id;
@@ -351,7 +351,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         const buildPreparingMarker = (name: string, byteCount: number): string =>
             `\x00tool_preparing\x00${name}\x00${byteCount}\x00`;
 
-        // Response metadata marker for the caller (e.g. Shofer's vscode-lm).
+        // Response metadata marker for the caller (e.g. a VS Code LM consumer).
         // Uses \x00-delimited format so the caller can parse it consistently.
         // Emitted as a LanguageModelThinkingPart at stream end.
         const buildMetadataMarker = (meta: Record<string, unknown>): string =>

@@ -1,5 +1,5 @@
 {
-  "name": "shofer-router-webview",
+  "name": "llm-local-router-webview",
   "private": true,
   "version": "0.1.0",
   "type": "module",
