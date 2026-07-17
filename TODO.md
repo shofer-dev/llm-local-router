@@ -2,11 +2,11 @@
 
 ## Provider verification
 
-Provider verification is exercised through the integration harness
-(`extensions/integration`). The three paths — (a) llm-router, (b) direct egress,
-(c) llm-local-router — are tracked in
-[`extensions/integration/TODO.md`](../integration/TODO.md). This doc owns none of
-them and should not duplicate.
+Provider verification is exercised through the integration harness, which lives
+outside this repository (`extensions/integration` in the arkware.ai monorepo, where
+this repo is vendored as a submodule). The three paths — (a) llm-router, (b) direct
+egress, (c) llm-local-router — are tracked in that harness's `TODO.md`. This doc
+owns none of them and should not duplicate.
 
 ## P2
 

@@ -140,7 +140,8 @@ provider server** is the deterministic stand-in for real keys, exactly as
 - **L1 — Integration** (the router driven against **mock provider servers** that
   return scripted SSE / errors / latency / usage): routing, failover, streaming,
   cost, metrics, health — **deterministic, no real keys**. Plus **Playwright** for
-  the webview-ui (in code-server via the [`extensions/integration`](../integration/DESIGN.md) harness).
+  the webview-ui (in code-server via the `extensions/integration` harness, which
+  lives outside this repository in the arkware.ai monorepo).
 - **L2 — Live** (real provider keys / real Copilot Chat / real Prometheus curl):
   the residue that mocks can't cover. Non-gating.
 

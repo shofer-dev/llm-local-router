@@ -83,6 +83,24 @@ Implements `vscode.LanguageModelChatProvider<vscode.LanguageModelChatInformation
   (`includedTools`/`excludedTools`) since the VS Code LM API's `capabilities`
   cannot — see "Per-model tool preferences" in the README.
 
+**Thinking parts are optional by design.** Three things ride
+`LanguageModelThinkingPart`: visible reasoning, the `tool_preparing` progress
+marker, and the `response_metadata` marker (token counts + cost). That class
+belongs to the `languageModelThinkingPart` API proposal, which VS Code does not
+grant to this extension — it resolves today only because VS Code assigns the class
+onto the extension-host API surface without a `checkProposedApiEnabled` guard.
+Rather than depend on that, every use goes through `makeThinkingPart()` /
+`isThinkingPart()`; if the class is ever absent the provider omits those parts and
+the rest of the response is unaffected, with consumers falling back to their own
+token/cost estimates. The markers are `\x00`-delimited control strings, so they
+must never degrade to a `LanguageModelTextPart` — that would splice protocol noise
+into the user-visible answer.
+
+The provider API itself (`registerLanguageModelChatProvider`) needs no proposal:
+it was finalized in VS Code 1.104, which is why `engines.vscode` is `^1.104.0` and
+why `package.json` declares no `enabledApiProposals` (declaring any would make the
+extension unpublishable to the Marketplace).
+
 ### 2. ProviderRouter (`provider-client.ts`)
 
 Routes requests to the correct provider based on model ID. Supports both built-in providers (via `ProviderType` enum) and user-registered custom providers.
@@ -316,13 +334,15 @@ The `onApiKeysChanged` listener detects external changes and triggers reload. Cu
 10. Parse SSE stream (data: {...}\n\n)
 11. Apply chunk transformers (MiniMax reasoning_details → reasoning_content, DeepSeek prompt_cache_hit_tokens mapping)
 12. For each chunk:
-     - Report reasoning_content as LanguageModelThinkingPart
+     - Report reasoning_content as LanguageModelThinkingPart (omitted if the
+       class is unavailable — see "Thinking parts are optional by design")
      - Report text content as LanguageModelTextPart
      - Accumulate tool call deltas
-     - Emit tool_preparing markers
+     - Emit tool_preparing markers (thinking part; same omission rule)
 13. On stream completion:
      - Report accumulated tool calls as LanguageModelToolCallPart
      - Compute and record cost in ledger
+     - Emit the response_metadata marker (thinking part; same omission rule)
 ```
 
 ### Model Discovery Flow
