@@ -16,17 +16,17 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 
 ## Requirements
 
-- VS Code 1.100.0 or later
+- VS Code 1.100.0 or later (stock VS Code — no special build or flags)
 - API keys for at least one supported provider
-- A VS Code instance that allows **proposed APIs** — see [Installation](#installation)
 
 ## Installation
 
-This extension is **not published on the VS Code Marketplace**. It registers models
-through VS Code's Language Model provider API, which is still a *proposed* API
-(`chatProvider`, `languageModelThinkingPart`), and the Marketplace rejects any
-extension that declares `enabledApiProposals`. Install it from a locally built
-`.vsix` instead.
+This extension is **not published on the VS Code Marketplace**: its `package.json`
+declares `enabledApiProposals`, and `vsce` refuses to publish any extension that
+does. That is purely a *publishing* restriction — it installs and runs normally on
+stock VS Code from a locally built `.vsix`, with **no flags and no special build**.
+The API it registers models through
+(`vscode.lm.registerLanguageModelChatProvider`) is a finalized, stable API.
 
 ### 1. Build the `.vsix`
 
@@ -50,34 +50,14 @@ code --install-extension llm-local-router-<version>.vsix
 
 …or in VS Code: **Extensions** → **⋯** → **Install from VSIX…**
 
-### 3. Enable the proposed APIs
+On code-server, use the same flow with `code-server --install-extension`.
 
-VS Code only grants proposed APIs to extensions you name explicitly, so it must be
-started with:
+### 3. Verify
 
-```bash
-code --enable-proposed-api Shoferdev.llm-local-router
-```
-
-Without this, VS Code withholds the proposed API and the extension cannot register
-its models — `vscode.lm.selectChatModels({ vendor: "local" })` finds nothing. The
-flag applies to the session it launches, so start VS Code this way each time (or
-add it to your launcher/shortcut).
-
-### Using code-server
-
-No flag is required: code-server enables proposed APIs for **all** extensions (its
-`patches/proposed-api.diff` makes `isProposedApiEnabled()` unconditionally true).
-Just install the `.vsix`:
-
-```bash
-code-server --install-extension llm-local-router-<version>.vsix
-```
-
-### 4. Verify
-
-Run **LLM Local Router: Show Models** from the Command Palette — it lists the models
-the router is exposing. Then add a provider key via **LLM Local Router: Configure**.
+Restart VS Code, then run **LLM Local Router: Show Models** from the Command Palette
+— it lists the models the router is exposing. Add a provider key via **LLM Local
+Router: Configure**, and the models become selectable to any LM consumer via
+`vscode.lm.selectChatModels({ vendor: "local" })`.
 
 ## Supported Providers
 
