@@ -60,7 +60,7 @@ code --install-extension Shoferdev.llm-local-router
 |---|-------|------|--------|----------------|--------|
 | 1 | VS Code Marketplace listing | Canonical | — | The install surface. README **is** the landing page. | ✅ published |
 | 2 | Open VSX | Canonical | — | VSCodium / Cursor / Windsurf / Gitpod users. | ✅ published |
-| 3 | LinkedIn | Social | Low | Highest-signal channel for this author. Post first. | ⬜ |
+| 3 | LinkedIn | Social | Low | Highest-signal channel for this author. Post first. | ✅ posted 2026-07-17 |
 | 4 | Show HN | Launch | Med | The "no middleman" thesis is HN-shaped. | ⬜ |
 | 5 | X / Twitter thread | Social | Low | Screenshots carry it. | ⬜ |
 | 6 | r/vscode | Reddit | Low | Directly the audience. Read the rules — no pure self-promo. | ⬜ |
@@ -97,9 +97,10 @@ whole pitch in one loop. GIF, not video (autoplays inline everywhere).
 
 ## 4. Phase 2 — The core launch
 
-### Step 4: LinkedIn — ⬜ READY TO POST
+### Step 4: LinkedIn — ✅ POSTED (2026-07-17)
 
-Lead with the problem, not the feature list. Copy-paste:
+Lead with the problem, not the feature list. The copy below is kept as the reference draft for
+the remaining venues:
 
 ---
 
@@ -278,6 +279,18 @@ What travels in this ecosystem (distinct from the Claude Code / MCP playbook):
   extension.
 - **"No middleman" is the thesis.** Every competitor in this space is a service. Being *not a
   service* is the differentiator — say it in the first two sentences, everywhere.
+- **Don't open by attacking OpenRouter.** It is **one of the 24 built-in providers**, so
+  "why pay for OpenRouter" invites the correction that we ship it — and "it does the same job"
+  is not true: OpenRouter sells one key, no per-provider accounts, and one bill, which this
+  deliberately does not do (you bring your own keys). The winning reply to that framing writes
+  itself: *"OpenRouter gives me 300 models with one key and zero signups."* Frame it as
+  **complement, not replacement** — and keep it for the comments, where the nuance earns
+  engagement instead of a correction:
+  > If you already use OpenRouter, keep it — it's one of the 24 built-in providers. The point
+  > isn't that it's bad, it's that it shouldn't be the *only* way in.
+  Same care with the word **"locally"**: it reads as "runs models on my machine". It doesn't —
+  the routing is local, the models are still whichever provider you keyed (Ollama/LM Studio
+  aside).
 - **Cost is the sleeper feature.** People arrive for multi-provider access and stay for the cost
   dashboard. Watch which one the comments latch onto, and re-order the pitch accordingly.
 - **Numbers must be true.** 24 providers / 72 models / 4 strategies / 9 charts — re-verify before
@@ -288,5 +301,7 @@ What travels in this ecosystem (distinct from the Claude Code / MCP playbook):
 
 ---
 
-> **Status:** published to Marketplace + Open VSX; listing has screenshots and a roadmap. Next
-> concrete action: Step 3 (the failover GIF) → Step 4 (LinkedIn) → Step 5 (Show HN).
+> **Status:** published to Marketplace + Open VSX (v1.8.1); listing has screenshots and a roadmap.
+> LinkedIn posted 2026-07-17. Next concrete action: Step 5 (Show HN) — watch whether the comments
+> latch onto multi-provider access or the cost dashboard, and re-order the pitch accordingly — with
+> Step 3 (the failover GIF) as the asset that makes Reddit/X land.
