@@ -93,6 +93,22 @@ failover/round_robin/lowest_latency/highest_reliability + health + throttling;
   bare `new`/`instanceof` would throw on every request. **Never fall back to
   `LanguageModelTextPart`** — the `tool_preparing` / `response_metadata` payloads
   are `\x00`-delimited control strings and would become visible garbage.
+- **Two unrelated import/export pairs share confusingly similar names.** The
+  webview messages `importConfig`/`exportConfig` move **composite-model
+  definitions** only; `importRouterConfig`/`exportRouterConfig` move the **whole
+  router config** (provider keys, endpoints, `llmLocalRouter.*` settings) and are
+  what the Config panel's Import/Export buttons send. Don't merge them.
+- **`llmLocalRouter.importConfig` is dual-contract:** called with an argument
+  (config object or file path) it imports silently and returns the result — the
+  integration harness depends on that. Called with **no** argument it prompts for a
+  file and reports the outcome, which is what the palette and the Config panel's
+  button use. Keep both paths. `exportConfig` has no such split (a caller passing
+  nothing is indistinguishable from the palette), so it stays a pure programmatic
+  API and is hidden from the palette via `menus.commandPalette` `when: false`;
+  the human-facing export is the webview button.
+- **`exportRouterConfig` must never emit API key values** — only which providers
+  are keyed. Exports are expected to be shareable; adding key values would silently
+  turn every exported file into a live secret.
 - **Per-model tool prefs (`includedTools`/`excludedTools`) are integrator-owned,
   never user settings.** They can't ride the VS Code `capabilities` type, so they
   travel via the `llmLocalRouter.getModelCapabilities` side-channel command.

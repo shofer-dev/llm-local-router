@@ -287,6 +287,41 @@ export interface CustomProviderModel {
 }
 
 /** Full configuration for a user-registered custom primary provider. */
+// ─── Config import/export ─────────────────────────────────────────
+
+/** Shape accepted by `llmLocalRouter.importConfig`. All fields optional. */
+export interface RouterImportConfig {
+    /** provider id (ProviderType) → API key. Written to SecretStorage. */
+    apiKeys?: Record<string, string>;
+    /** provider id → custom base URL. Written to SecretStorage. */
+    endpoints?: Record<string, string>;
+    /** `llmLocalRouter.*` workspace settings to apply (e.g. { enabled: true }). */
+    settings?: Record<string, unknown>;
+}
+
+export interface RouterImportResult {
+    importedKeys: string[];
+    importedEndpoints: string[];
+    appliedSettings: string[];
+    skipped: string[];
+}
+
+export interface RouterExportResult {
+    providersWithKeys: string[];
+    providersWithEndpoints: string[];
+    settings: Record<string, unknown>;
+    /** Live runtime state — what the vscode.lm provider currently exposes. */
+    runtime: {
+        enabled: boolean;
+        ready: boolean;
+        configuredProviderCount: number;
+        /** Models the provider exposes to vscode.lm (id + family + owning provider),
+         * so a caller can pick a valid `vsCodeLmModelSelector`. Only models whose
+         * provider is keyed are exposed — i.e. actually selectable right now. */
+        availableModels: Array<{ id: string; family: string; provider: string | undefined }>;
+    };
+}
+
 export interface CustomProviderConfig {
     /** Unique provider ID (e.g., "my-openrouter"). Must not collide with built-in ProviderType values. */
     id: string;

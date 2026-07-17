@@ -95,6 +95,32 @@ Register your own LLM providers via the **Config → Primary Providers** tab →
 
 Custom provider metadata is stored in `settings.json` (`llmLocalRouter.customProviders`). API keys are stored in VS Code SecretStorage.
 
+### Import / Export config
+
+**Config → Import Config / Export Config** (top-right of the Config tab) moves the
+whole router config as a single JSON file:
+
+```json
+{
+  "apiKeys":   { "deepseek": "sk-...", "anthropic": "sk-ant-..." },
+  "endpoints": { "deepseek": "https://api.deepseek.com" },
+  "settings":  { "enabled": true }
+}
+```
+
+Import writes keys/endpoints to `SecretStorage` and applies `llmLocalRouter.*`
+settings, then refreshes the models — no reload needed. Unknown provider ids are
+skipped and reported.
+
+**Export never includes API key values**, only *which* providers are keyed (plus
+endpoints, non-secret settings and live runtime state), so an exported file is safe
+to share or commit. Re-enter keys after importing your own export.
+
+`LLM Local Router: Import Config` in the Command Palette does the same thing (it
+prompts for the file). Both are also callable programmatically —
+`executeCommand('llmLocalRouter.importConfig', configOrPath)` imports silently,
+and `executeCommand('llmLocalRouter.exportConfig')` returns the config object.
+
 ### Extension Settings
 
 | Setting | Type | Default | Description |

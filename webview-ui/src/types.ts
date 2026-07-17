@@ -234,6 +234,10 @@ export type WebviewMessage =
   | { type: 'validateConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'exportConfig'; compositeModels: CompositeModelConfig[] }
   | { type: 'importConfig' }
+  // Whole-router config (provider keys, endpoints, llmLocalRouter.* settings) —
+  // distinct from the two above, which only move composite-model definitions.
+  | { type: 'exportRouterConfig' }
+  | { type: 'importRouterConfig' }
   | { type: 'testModel'; modelId: string }
   | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: ProviderPricing; modelPricing?: Record<string, ProviderPricing>; advancedValues?: Record<string, string> }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }

@@ -26,7 +26,14 @@ import { MetricsStorage } from './metrics-storage';
 import { storeApiKey, deleteApiKey, storeCustomProviderApiKey, deleteCustomProviderApiKey } from './secret-storage';
 import { CustomProviderConfig, CustomProvidersMap } from './types';
 import { ProviderType } from './types';
-import type { ModelRegistryEntry, ModelWindowStats, CompositeDistribution, ProviderModelInfo } from './types';
+import type {
+  ModelRegistryEntry,
+  ModelWindowStats,
+  CompositeDistribution,
+  ProviderModelInfo,
+  RouterExportResult,
+  RouterImportResult,
+} from './types';
 import {
   convertToHostConfig,
   convertFromHostConfigs,
@@ -231,6 +238,8 @@ type WebviewMessage =
   | { type: 'validateConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'exportConfig'; compositeModels: WebviewCompositeModel[] }
   | { type: 'importConfig' }
+  | { type: 'exportRouterConfig' }
+  | { type: 'importRouterConfig' }
   | { type: 'saveProvider'; provider: string; apiKey: string; endpointUrl: string; pricing?: { prompt?: number; completion?: number; cacheRead?: number }; modelPricing?: Record<string, { prompt?: number; completion?: number; cacheRead?: number }>; advancedValues?: Record<string, string> }
   | { type: 'saveCustomProvider'; provider: CustomProviderConfig; apiKey: string }
   | { type: 'deleteCustomProvider'; providerId: string }
@@ -339,6 +348,12 @@ export class RouterConfigProvider {
         break;
       case 'importConfig':
         await this.handleImport();
+        break;
+      case 'exportRouterConfig':
+        await this.handleExportRouterConfig();
+        break;
+      case 'importRouterConfig':
+        await this.handleImportRouterConfig();
         break;
       case 'requestCustomProviders':
         await this.sendCustomProviders();
@@ -802,6 +817,51 @@ export class RouterConfigProvider {
       const webviewModels = convertFromHostConfigs(parsed);
       await this.sendToWebview({ type: 'configImported', compositeModels: webviewModels });
       vscode.window.showInformationMessage(`Imported ${webviewModels.length} composite model(s) from ${uris[0].fsPath}`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // ─── Whole-router config I/O ─────────────────────────────────────
+  //
+  // These cover the *router* config (provider keys, endpoints, `llmLocalRouter.*`
+  // settings) — distinct from handleExport/handleImport above, which only move
+  // composite-model definitions. Both delegate to the `llmLocalRouter.*Config`
+  // commands rather than importing main.ts, which would be a require cycle.
+
+  /**
+   * Save the router config to a JSON file. The export deliberately carries no key
+   * *values* (only which providers are keyed), so the file is safe to share; an
+   * import of it re-applies endpoints/settings and the keys are re-entered.
+   */
+  private async handleExportRouterConfig(): Promise<void> {
+    try {
+      const config = await vscode.commands.executeCommand<RouterExportResult>('llmLocalRouter.exportConfig');
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file('llm-local-router-config.json'),
+        filters: { 'JSON Files': ['json'] },
+        title: 'Export LLM Local Router config',
+      });
+      if (!uri) return;
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+      vscode.window.showInformationMessage(
+        `Exported router config to ${uri.fsPath} (API key values are not included).`,
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Import a router config. The command prompts for the file and reports the
+   * outcome; refresh the panel afterwards so newly-keyed providers show up.
+   */
+  private async handleImportRouterConfig(): Promise<void> {
+    try {
+      const result = await vscode.commands.executeCommand<RouterImportResult | undefined>('llmLocalRouter.importConfig');
+      if (!result) return; // cancelled
+      await this.sendProviderConfig();
+      await this.sendCustomProviders();
     } catch (error) {
       vscode.window.showErrorMessage(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
     }

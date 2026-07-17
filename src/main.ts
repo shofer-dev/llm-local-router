@@ -14,7 +14,13 @@ import { RouterConfigProvider } from './router-config-provider';
 import { initLogger, getLogger, setDebugMode } from './logger';
 import { loadApiKeys, loadEndpointUrls, loadCustomProviderApiKeys, loadModelPricingOverrides, onApiKeysChanged, storeApiKey } from './secret-storage';
 import { setModelPricingOverrides } from './llm-client';
-import { CustomProviderConfig, ProviderType } from './types';
+import {
+    CustomProviderConfig,
+    ProviderType,
+    RouterImportConfig,
+    RouterImportResult,
+    RouterExportResult,
+} from './types';
 import { getProviderForModel } from './model-registry';
 import { initMetricsCollector, getMetricsCollector, shutdownMetricsCollector } from './metrics-collector';
 import { MetricsStorage } from './metrics-storage';
@@ -266,23 +272,6 @@ function getDefaultEndpoint(provider: string): string {
 
 // ─── Config import/export ─────────────────────────────────────────
 
-/** Shape accepted by `llmLocalRouter.importConfig`. All fields optional. */
-interface RouterImportConfig {
-    /** provider id (ProviderType) → API key. Written to SecretStorage. */
-    apiKeys?: Record<string, string>;
-    /** provider id → custom base URL. Written to SecretStorage. */
-    endpoints?: Record<string, string>;
-    /** `llmLocalRouter.*` workspace settings to apply (e.g. { enabled: true }). */
-    settings?: Record<string, unknown>;
-}
-
-interface RouterImportResult {
-    importedKeys: string[];
-    importedEndpoints: string[];
-    appliedSettings: string[];
-    skipped: string[];
-}
-
 /**
  * Bring the router to a known state from a single config object (or a path to a
  * JSON file holding one). Keys/endpoints go to SecretStorage — that fires
@@ -332,20 +321,44 @@ async function importRouterConfig(
     return result;
 }
 
-interface RouterExportResult {
-    providersWithKeys: string[];
-    providersWithEndpoints: string[];
-    settings: Record<string, unknown>;
-    /** Live runtime state — what the vscode.lm provider currently exposes. */
-    runtime: {
-        enabled: boolean;
-        ready: boolean;
-        configuredProviderCount: number;
-        /** Models the provider exposes to vscode.lm (id + family + owning provider),
-         * so a caller can pick a valid `vsCodeLmModelSelector`. Only models whose
-         * provider is keyed are exposed — i.e. actually selectable right now. */
-        availableModels: Array<{ id: string; family: string; provider: string | undefined }>;
-    };
+/**
+ * Ask for a config file and import it, surfacing the outcome. Returns `undefined`
+ * when the user cancels the picker.
+ *
+ * This is the human-facing half of `llmLocalRouter.importConfig`: the command is
+ * otherwise a silent programmatic API, so invoking it from the Command Palette (or
+ * the Config panel) with no argument would import an empty config and appear to do
+ * nothing.
+ */
+async function promptAndImportRouterConfig(
+    context: vscode.ExtensionContext,
+): Promise<RouterImportResult | undefined> {
+    const uris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectMany: false,
+        openLabel: 'Import',
+        title: 'Import LLM Local Router config',
+        filters: { 'JSON Files': ['json'] },
+    });
+    if (!uris || uris.length === 0) {
+        return undefined;
+    }
+    try {
+        const result = await importRouterConfig(context, uris[0].fsPath);
+        const parts: string[] = [];
+        if (result.importedKeys.length) { parts.push(`keys: ${result.importedKeys.join(', ')}`); }
+        if (result.importedEndpoints.length) { parts.push(`endpoints: ${result.importedEndpoints.join(', ')}`); }
+        if (result.appliedSettings.length) { parts.push(`settings: ${result.appliedSettings.join(', ')}`); }
+        if (result.skipped.length) { parts.push(`skipped (unknown provider): ${result.skipped.join(', ')}`); }
+        vscode.window.showInformationMessage(
+            parts.length ? `Imported — ${parts.join('; ')}` : 'Nothing to import: the file set no keys, endpoints, or settings.',
+        );
+        return result;
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Import failed: ${msg}`);
+        return undefined;
+    }
 }
 
 /** Return the router's current state WITHOUT secret values — which providers are
@@ -803,9 +816,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // (mirrors a settings-import command). Secret values are written to SecretStorage
     // (which fires onApiKeysChanged → the provider reloads keys automatically); export
     // returns only WHICH providers are keyed, never the key values.
+    // Invoked with no argument (Command Palette, or the Config panel's Import button)
+    // there is nothing to import, so prompt for a file and report the outcome. A caller
+    // that passes an argument (the integration harness) keeps the silent, programmatic
+    // contract and never sees UI.
     const importConfigCommand = vscode.commands.registerCommand(
         'llmLocalRouter.importConfig',
-        async (input: RouterImportConfig | string) => importRouterConfig(context, input),
+        async (input?: RouterImportConfig | string) => {
+            if (input !== undefined) {
+                return importRouterConfig(context, input);
+            }
+            return promptAndImportRouterConfig(context);
+        },
     );
     const exportConfigCommand = vscode.commands.registerCommand(
         'llmLocalRouter.exportConfig',

@@ -2,7 +2,7 @@ import React from 'react';
 import ConfigEditor from './ConfigEditor';
 import ProvidersPanel from './ProvidersPanel';
 import type { CompositeModelConfig, ModelRegistrySummary, ProviderConfigEntry } from '../types';
-import { onMessage } from '../utils/vscode';
+import { onMessage, postMessage } from '../utils/vscode';
 
 interface Props {
   initialModels: CompositeModelConfig[];
@@ -46,6 +46,25 @@ export default function ConfigPanel({ initialModels, modelRegistry, providers }:
         >
           Composite Models
         </button>
+
+        {/* Whole-router config I/O — applies to both sub-tabs, so it lives here
+            rather than inside either one. The host owns the file dialogs. */}
+        <div style={styles.configIo}>
+          <button
+            style={styles.ioButton}
+            onClick={() => postMessage({ type: 'importRouterConfig' })}
+            title="Import provider API keys, endpoints and settings from a JSON file"
+          >
+            Import Config
+          </button>
+          <button
+            style={styles.ioButton}
+            onClick={() => postMessage({ type: 'exportRouterConfig' })}
+            title="Export the current config to a JSON file (API key values are not included)"
+          >
+            Export Config
+          </button>
+        </div>
       </div>
 
       {/* Sub-tab content */}
@@ -69,6 +88,22 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0',
     backgroundColor: 'var(--vscode-editor-background)',
     flexShrink: 0,
+  },
+  configIo: {
+    marginLeft: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  ioButton: {
+    padding: '2px 8px',
+    cursor: 'pointer',
+    border: '1px solid var(--vscode-button-secondaryBackground, var(--vscode-panel-border))',
+    borderRadius: '2px',
+    background: 'var(--vscode-button-secondaryBackground, transparent)',
+    color: 'var(--vscode-button-secondaryForeground, var(--vscode-descriptionForeground))',
+    fontSize: '11px',
+    fontFamily: 'var(--vscode-font-family)',
   },
   subTab: {
     padding: '4px 12px',
