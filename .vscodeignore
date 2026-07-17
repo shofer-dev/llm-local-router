@@ -5,6 +5,7 @@ vendor/vscode-dts/
 # github.com/.../raw/HEAD/... URLs, so the Marketplace renders them from the repo
 # and the packaged copies would never be read.
 assets/screenshot-*.png
+launch_and_promotion.md
 src/
 webview-ui/src/
 webview-ui/node_modules/

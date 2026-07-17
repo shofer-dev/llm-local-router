@@ -2,6 +2,12 @@
 
 A VS Code extension that provides **direct access to multiple LLM providers** with **composite model failover** — self-contained, no external router service required.
 
+It registers as a **standard VS Code Language Model provider**, so the models show up in
+**GitHub Copilot Chat** and in **any** extension that calls `vscode.lm` — you bring your own
+API keys, and requests go **straight from your editor to the provider**. No proxy, no gateway
+service, no account with anyone in the middle. It is not tied to any particular chat UI or
+agent.
+
 ![Router status: connection, configured providers, and every model the router exposes with capabilities and per-1M pricing](assets/screenshot-status.png)
 
 *Status — live connection state, how many providers are keyed, and every model exposed to `vscode.lm` with its capabilities and pricing.*
@@ -10,15 +16,33 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 
 *Config — key each provider, override per-model pricing, and import/export the whole config. Keys are held in VS Code SecretStorage.*
 
+![Metrics: cumulative cost, request counts, errors, token totals, TTFB/TTLB latency and cache hit ratio, charted per model](assets/screenshot-metrics.png)
+
+*Metrics — cost, requests, errors, tokens, TTFB/TTLB latency and cache-hit ratio per model, over 1h→30d.*
+
+## Works with
+
+The models are published through VS Code's Language Model API under the vendor `local`, so
+anything that speaks that API can use them:
+
+| Consumer | How |
+|----------|-----|
+| **GitHub Copilot Chat** | Pick the models from Copilot Chat's model picker |
+| **Any VS Code extension** | `vscode.lm.selectChatModels({ vendor: "local" })` |
+| **Your own code** | Same API — plus optional [side-channel commands](#consuming-from-another-extension) for pricing, capabilities and per-conversation cost |
+
+This is a **provider, not a chat UI**. It adds models to the tools you already use rather than
+asking you to switch to a new one, and it is **not specific to any single extension or agent**.
+
 ## Features
 
-- **9 built-in LLM providers + custom providers**: OpenAI, Anthropic, Google Gemini, DeepSeek, MiniMax, Moonshot/Kimi, Xiaomi MiMo, Zhipu GLM, OpenRouter — plus **user-registered custom providers** via the webview UI
+- **24 built-in providers, 72 models, + your own**: OpenAI, Anthropic, Google Gemini, DeepSeek, MiniMax, Moonshot/Kimi, Xiaomi MiMo, Zhipu GLM, DashScope/Qwen, Z.ai, Mistral, xAI/Grok, OpenRouter, Fireworks, SambaNova, Baseten, Requesty, Unbound, Vercel AI Gateway, AWS Bedrock, Google Vertex AI, Anthropic-on-Vertex — plus **local models** via Ollama and LM Studio, and **user-registered custom providers** (OpenAI-, Anthropic- or Google-compatible) through the UI
 - **Composite models** (`local/*`): **Failover**, **weighted round-robin**, **lowest-latency**, and **highest-reliability** strategies across multiple underlying models with in-process health monitoring and throttling
 - **Full protocol translation**: Anthropic Messages API ↔ OpenAI Chat Completions, MiniMax `<think>` tag handling, DeepSeek/Moonshot reasoning_content round-trip, Xiaomi max_completion_tokens remapping, Zhipu thinking toggle
 - **Streaming**: SSE streaming for all providers with real-time tool call accumulation
 - **Cost tracking**: Per-token pricing from the built-in model registry, per-conversation cost ledger
 - **VS Code LM API**: Implements `LanguageModelChatProvider` (vendor `local`) so GitHub Copilot Chat and any extension using `vscode.lm` can consume the models
-- **Metrics dashboard**: All 10 metric charts on a single page with ToC navigation, categorized Primary/Composite model picker
+- **Metrics dashboard**: 9 charts on a single page — cost, requests, errors, tokens (total/prompt/completion), TTFB, TTLB, cache-hit ratio — over 1h→30d, with a categorized Primary/Composite model picker
 - **Side-channel commands**: `llmLocalRouter.getModelPricing`, `llmLocalRouter.getModelCapabilities`, `llmLocalRouter.getRequestCost`
 - **Secure API keys**: Stored via VS Code's `SecretStorage` API
 
@@ -66,18 +90,37 @@ panel ships as a "Webview not built" placeholder. On code-server, install with
 
 ## Supported Providers
 
-| Provider | Models | API Key |
-|----------|--------|---------|
-| OpenAI | gpt-5.5, gpt-5.5-pro, gpt-5.4, gpt-5.4-mini, gpt-5.4-nano | `openai` |
-| Anthropic | claude-opus-4-8, claude-sonnet-4-6, claude-haiku-4-5 | `anthropic` |
-| Google | gemini-3.1-pro-preview, gemini-3-flash-preview, gemini-3.1-flash-lite-preview | `google` |
-| DeepSeek | deepseek-v4-pro, deepseek-v4-flash | `deepseek` |
-| MiniMax | MiniMax-M2.7, MiniMax-M2.5 | `minimax` |
-| Moonshot | kimi-k2-thinking, kimi-k2.5 | `moonshot` |
-| Xiaomi | mimo-v2-pro, mimo-v2-omni, mimo-v2-tts, mimo-v2-flash | `xiaomi` |
-| Zhipu | glm-5.2, glm-5.1, glm-5, glm-4.7, glm-4.6, glm-4.5 | `zhipu` |
-| OpenRouter | auto (passthrough for unknown models) | `openrouter` |
-| **Custom** | Any provider via the webview UI | User-defined |
+24 providers ship with the extension. Each is keyed independently — configure only the ones you
+use. The exact model list per provider is visible in **Config → Primary Providers**, and the
+**Status** tab shows every model currently exposed.
+
+| Provider | Key | Notes |
+|----------|-----|-------|
+| OpenAI | `openai` | gpt-5.x family |
+| Anthropic | `anthropic` | claude-opus / sonnet / haiku |
+| Google Gemini | `google` | native Gemini API path |
+| DeepSeek | `deepseek` | reasoning_content round-trip |
+| MiniMax | `minimax` | `<think>` tag extraction |
+| Moonshot / Kimi | `moonshot` | reasoning_content round-trip |
+| Xiaomi MiMo | `xiaomi` | max_completion_tokens remap |
+| Zhipu GLM | `zhipu` | thinking toggle |
+| Z.ai | `zai` | international / china coding lines |
+| DashScope (Qwen) | `dashscope` | international endpoint |
+| Mistral AI | `mistral` | |
+| xAI (Grok) | `xai` | |
+| OpenRouter | `openrouter` | catch-all for unknown model ids |
+| Fireworks | `fireworks` | |
+| SambaNova | `sambanova` | |
+| Baseten | `baseten` | |
+| Requesty | `requesty` | |
+| Unbound | `unbound` | |
+| Vercel AI Gateway | `vercel-ai-gateway` | |
+| AWS Bedrock | `bedrock` | region + IAM keys |
+| Google Vertex AI | `vertex` | project + region, or ADC |
+| Anthropic (Vertex) | `anthropic-vertex` | project + region |
+| **Ollama** | `ollama` | **local** — `http://localhost:11434/v1` |
+| **LM Studio** | `lmstudio` | **local** — `http://localhost:1234/v1` |
+| **Custom** | user-defined | any OpenAI-, Anthropic- or Google-compatible endpoint |
 
 ## Configuration
 
@@ -215,6 +258,22 @@ side-channel commands `llmLocalRouter.getModelPricing`,
 `llmLocalRouter.getModelCapabilities`, and `llmLocalRouter.getRequestCost`
 (see the [Architecture](#architecture) section below).
 
+### Example: wiring it up in Shofer
+
+[Shofer](https://shofer.dev) is one such consumer — the steps are the same for any extension that
+speaks `vscode.lm`. In Shofer's **Settings → Providers**:
+
+1. **API Provider** → **VS Code LM API**.
+   *Not* "Shofer Router" — that is a different provider that points at a standalone HTTP router
+   service over a Base URL. This extension has no HTTP endpoint; it publishes models through the
+   VS Code LM API, so "VS Code LM API" is the one that sees it.
+2. **Model** → pick any entry starting with `local/`. Shofer lists LM-API models as
+   `vendor/family`, so everything this router publishes appears under the `local/` prefix
+   (e.g. `local/gpt-5.5`). Hit **Refresh Models** if the list looks stale.
+3. *Optional:* turn on Shofer's `enableLlmProviderIntegration` setting so it reads real pricing,
+   capabilities and per-request cost from the router's side-channel commands instead of estimating
+   them.
+
 ## Commands
 
 - `LLM Local Router: Configure` — Open full configuration dashboard
@@ -331,6 +390,11 @@ VS Code `LanguageModelChatInformation.capabilities` type cannot carry arbitrary
 arrays, so these ride the `llmLocalRouter.getModelCapabilities` side-channel (in
 the `ModelCapabilities` payload). A consuming extension reads them and maps them
 onto its own per-model tool metadata.
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for where this is going — and what it deliberately
+won't become (no chat UI, no hosted gateway, no telemetry).
 
 ## License
 
