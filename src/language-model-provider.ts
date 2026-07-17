@@ -305,9 +305,9 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         }
 
         const modelId = model.id;
-        let conversationId = options.modelOptions?.conversationId as string | undefined;
-        const parentConversationId = options.modelOptions?.parentConversationId as string | undefined;
-        const rootConversationId = options.modelOptions?.rootConversationId as string | undefined;
+        let taskId = options.modelOptions?.taskId as string | undefined;
+        const parentTaskId = options.modelOptions?.parentTaskId as string | undefined;
+        const rootTaskId = options.modelOptions?.rootTaskId as string | undefined;
 
         // Structured request log at INFO level
         const msgCount = messages.length;
@@ -315,18 +315,18 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             ? String(messages[messages.length - 1].role)
             : 'none';
         this.logger.info(
-            `REQ → model=${modelId} conv=${conversationId || '?'} ` +
-            `root=${rootConversationId || '?'} msgs=${msgCount} last=${lastMsgRole}`
+            `REQ → model=${modelId} conv=${taskId || '?'} ` +
+            `root=${rootTaskId || '?'} msgs=${msgCount} last=${lastMsgRole}`
         );
 
-        // conversationId is optional — generate a fallback if not provided.
+        // taskId is optional — generate a fallback if not provided.
         // This allows the extension to work with upstream callers (e.g. Copilot)
         // that don't supply conversation IDs.
-        if (!conversationId) {
-            conversationId = `anon-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        if (!taskId) {
+            taskId = `anon-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         }
 
-        // parentConversationId and rootConversationId already extracted above
+        // parentTaskId and rootTaskId already extracted above
 
         // Extract systemPrompt from modelOptions (VS Code API lacks System role)
         const systemPrompt = options.modelOptions?.systemPrompt as string | undefined;
@@ -349,16 +349,16 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         }
 
         // Diagnostic tool call sequence validation
-        this.validateOpenAIToolCallSequence(chatMessages, conversationId);
+        this.validateOpenAIToolCallSequence(chatMessages, taskId);
 
         // Convert VS Code tools
         const tools = this.convertVSCodeTools(options.tools);
 
         // Build the request
         const request: ChatCompletionRequest = {
-            conversationId,
-            parentConversationId,
-            rootConversationId,
+            taskId,
+            parentTaskId,
+            rootTaskId,
             model: modelId,
             messages: chatMessages,
             temperature,
@@ -510,7 +510,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             this.logger.info(
                 `RES ← model=${modelId}` +
                 (result.servedByModel !== modelId ? ` served=${result.servedByModel}` : '') +
-                ` conv=${conversationId}` +
+                ` conv=${taskId}` +
                 ` ttfb=${ttfbMs}ms ttlb=${ttlbMs}ms` +
                 (usage ? ` prompt=${usage.promptTokens} compl=${usage.completionTokens}` : '') +
                 (result.failoverOccurred ? ` failover=${result.attempts}` : '') +
@@ -518,7 +518,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             );
 
             if (usage?.costUsd !== undefined && usage.costUsd >= 0) {
-                this.recordRequestCost(conversationId, usage.costUsd);
+                this.recordRequestCost(taskId, usage.costUsd);
             }
 
             // Record success metrics
@@ -742,7 +742,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         }
     }
 
-    private validateOpenAIToolCallSequence(msgs: ChatMessage[], conversationId: string): void {
+    private validateOpenAIToolCallSequence(msgs: ChatMessage[], taskId: string): void {
         const roleSeq = msgs.map(m => {
             if (m.role === MessageRole.Assistant) return m.toolCalls && m.toolCalls.length > 0 ? 'a*' : 'a';
             if (m.role === MessageRole.Tool) return 't';
@@ -765,7 +765,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             if (indices.length > 1) {
                 this.logger.warning(
                     `[TOOL_SEQ_INVALID] duplicate tool_call.id across assistant turns ` +
-                    `conversationId=${conversationId} tool_call_id=${id} ` +
+                    `taskId=${taskId} tool_call_id=${id} ` +
                     `assistant_indices=[${indices.join(',')}] role_seq=${roleSeq}`
                 );
             }
@@ -794,12 +794,12 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
 
     // ─── Cost ledger ──────────────────────────────────────────────
 
-    private recordRequestCost(conversationId: string, costUsd: number): void {
-        if (!conversationId || !Number.isFinite(costUsd) || costUsd < 0) return;
-        const existing = this.requestCostLedger.get(conversationId);
+    private recordRequestCost(taskId: string, costUsd: number): void {
+        if (!taskId || !Number.isFinite(costUsd) || costUsd < 0) return;
+        const existing = this.requestCostLedger.get(taskId);
         const total = (existing?.totalUsd ?? 0) + costUsd;
-        this.requestCostLedger.delete(conversationId);
-        this.requestCostLedger.set(conversationId, { totalUsd: total, lastUpdatedMs: Date.now() });
+        this.requestCostLedger.delete(taskId);
+        this.requestCostLedger.set(taskId, { totalUsd: total, lastUpdatedMs: Date.now() });
         while (this.requestCostLedger.size > LanguageModelProvider.MAX_COST_LEDGER_SIZE) {
             const oldestKey = this.requestCostLedger.keys().next().value;
             if (oldestKey === undefined) break;
@@ -807,9 +807,9 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
         }
     }
 
-    public getRequestCost(conversationId: string): number | undefined {
-        if (!conversationId) return undefined;
-        return this.requestCostLedger.get(conversationId)?.totalUsd;
+    public getRequestCost(taskId: string): number | undefined {
+        if (!taskId) return undefined;
+        return this.requestCostLedger.get(taskId)?.totalUsd;
     }
 
     /** Exact match on model id or family. */

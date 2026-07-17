@@ -120,9 +120,9 @@ export interface ToolDefinition {
 }
 
 export interface ChatCompletionRequest {
-    conversationId: string;
-    parentConversationId?: string;
-    rootConversationId?: string;
+    taskId: string;
+    parentTaskId?: string;
+    rootTaskId?: string;
     model: string;
     messages: ChatMessage[];
     temperature?: number;

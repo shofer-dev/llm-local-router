@@ -41,7 +41,7 @@ const okResponse: ChatCompletionResponse = {
     usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150, costUsd: 0.001 },
 };
 
-const reqStub: ChatCompletionRequest = { conversationId: 'c', model: 'local/t', messages: [], stream: true };
+const reqStub: ChatCompletionRequest = { taskId: 'c', model: 'local/t', messages: [], stream: true };
 
 describe('CompositeService', () => {
     describe('failover', () => {

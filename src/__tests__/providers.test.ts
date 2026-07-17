@@ -17,7 +17,7 @@ describe('providers/openai', () => {
     describe('prepareOpenAIRequest', () => {
         it('remaps max_tokens → max_completion_tokens for GPT-5.5 and clears maxTokens', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'gpt-5.5',
                 messages: [],
                 maxTokens: 4096,
@@ -32,7 +32,7 @@ describe('providers/openai', () => {
 
         it('remaps max_tokens for GPT-5.4-mini and clears maxTokens', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'gpt-5.4-mini',
                 messages: [],
                 maxTokens: 2048,
@@ -45,7 +45,7 @@ describe('providers/openai', () => {
 
         it('does not remap for non-GPT-5 models', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'deepseek-v4-pro',
                 messages: [],
                 maxTokens: 4096,
@@ -58,7 +58,7 @@ describe('providers/openai', () => {
 
         it('forwards reasoning_effort', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'gpt-5.5',
                 messages: [],
                 reasoningEffort: 'high',
@@ -78,7 +78,7 @@ describe('providers/deepseek', () => {
     describe('prepareDeepSeekRequest', () => {
         it('injects placeholder for assistant message without reasoning_content', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'deepseek-v4-pro',
                 messages: [
                     { role: MessageRole.User, content: 'hello' },
@@ -91,7 +91,7 @@ describe('providers/deepseek', () => {
 
         it('preserves existing reasoning_content', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'deepseek-v4-pro',
                 messages: [
                     { role: MessageRole.Assistant, content: 'hi', reasoningContent: 'Let me think...' },
@@ -103,7 +103,7 @@ describe('providers/deepseek', () => {
 
         it('does not inject placeholder for user/system messages', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'deepseek-v4-pro',
                 messages: [
                     { role: MessageRole.User, content: 'hello' },
@@ -117,7 +117,7 @@ describe('providers/deepseek', () => {
 
         it('forwards reasoning_effort', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'deepseek-v4-pro',
                 messages: [],
                 reasoningEffort: 'max',
@@ -137,7 +137,7 @@ describe('providers/minimax', () => {
     describe('prepareMiniMaxRequest', () => {
         it('enables reasoning_split', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'MiniMax-M2.7',
                 messages: [],
             };
@@ -148,7 +148,7 @@ describe('providers/minimax', () => {
 
         it('converts reasoning_content → reasoning_details on assistant messages', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'MiniMax-M2.7',
                 messages: [
                     { role: MessageRole.User, content: 'hello' },
@@ -170,7 +170,7 @@ describe('providers/minimax', () => {
         it('preserves existing reasoning_details', () => {
             const existing = [{ type: 'reasoning.text', text: 'preserved' }];
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'MiniMax-M2.7',
                 messages: [
                     {
@@ -189,7 +189,7 @@ describe('providers/minimax', () => {
 
         it('does not modify user/system messages', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'MiniMax-M2.7',
                 messages: [
                     { role: MessageRole.User, content: 'user text' },
@@ -253,7 +253,7 @@ describe('providers/xiaomi', () => {
     describe('prepareXiaomiRequest', () => {
         it('enables thinking for mimo-v2-pro', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'mimo-v2-pro',
                 messages: [],
             };
@@ -264,7 +264,7 @@ describe('providers/xiaomi', () => {
 
         it('does not enable thinking for mimo-v2-tts', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'mimo-v2-tts',
                 messages: [],
             };
@@ -274,7 +274,7 @@ describe('providers/xiaomi', () => {
 
         it('remaps max_tokens to max_completion_tokens and clears maxTokens', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'mimo-v2-pro',
                 messages: [],
                 maxTokens: 8192,
@@ -288,7 +288,7 @@ describe('providers/xiaomi', () => {
 
         it('converts reasoning_details → reasoning_content', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'mimo-v2-pro',
                 messages: [{
                     role: MessageRole.Assistant,
@@ -313,7 +313,7 @@ describe('providers/moonshot', () => {
     describe('prepareMoonshotRequest', () => {
         it('injects placeholder for assistant without reasoning_content', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'kimi-k2-thinking',
                 messages: [
                     { role: MessageRole.User, content: 'hello' },
@@ -333,7 +333,7 @@ import { prepareZhipuRequest } from '../providers/zhipu';
 describe('providers/zhipu', () => {
     it('enables thinking for glm-5.1', () => {
         const req: ChatCompletionRequest = {
-            conversationId: 'test',
+            taskId: 'test',
             model: 'glm-5.1',
             messages: [],
         };
@@ -344,7 +344,7 @@ describe('providers/zhipu', () => {
 
     it('enables thinking for glm-5.2', () => {
         const req: ChatCompletionRequest = {
-            conversationId: 'test',
+            taskId: 'test',
             model: 'glm-5.2',
             messages: [],
         };
@@ -361,7 +361,7 @@ import { prepareBedrockRequest } from '../providers/bedrock';
 describe('providers/bedrock', () => {
     it('injects anthropic_version into extraBody', () => {
         const req: ChatCompletionRequest = {
-            conversationId: 'test',
+            taskId: 'test',
             model: 'anthropic.claude-sonnet-4-20250514-v1:0',
             messages: [],
         };
@@ -378,7 +378,7 @@ import { prepareZAiRequest } from '../providers/zai';
 describe('providers/zai', () => {
     it('enables thinking for GLM-4.7 models', () => {
         const req: ChatCompletionRequest = {
-            conversationId: 'test',
+            taskId: 'test',
             model: 'glm-4.7-zai',
             messages: [],
         };
@@ -389,7 +389,7 @@ describe('providers/zai', () => {
 
     it('enables thinking for GLM-5 models', () => {
         const req: ChatCompletionRequest = {
-            conversationId: 'test',
+            taskId: 'test',
             model: 'glm-5-zai',
             messages: [],
         };
@@ -400,7 +400,7 @@ describe('providers/zai', () => {
 
     it('does not enable thinking for non-GLM models', () => {
         const req: ChatCompletionRequest = {
-            conversationId: 'test',
+            taskId: 'test',
             model: 'some-other-model',
             messages: [],
         };
@@ -410,7 +410,7 @@ describe('providers/zai', () => {
 
     it('preserves existing extraBody fields when enabling thinking', () => {
         const req: ChatCompletionRequest = {
-            conversationId: 'test',
+            taskId: 'test',
             model: 'glm-5-zai',
             messages: [],
             extraBody: { custom_param: 'value' },
@@ -634,7 +634,7 @@ describe('providers/anthropic', () => {
     describe('prepareAnthropicRequest', () => {
         it('extracts system message into _anthropicSystem', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [
                     { role: MessageRole.System, content: 'You are a helpful assistant.' },
@@ -650,7 +650,7 @@ describe('providers/anthropic', () => {
 
         it('joins multiple system messages with newlines', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [
                     { role: MessageRole.System, content: 'Be helpful.' },
@@ -665,7 +665,7 @@ describe('providers/anthropic', () => {
 
         it('converts user text message to string content', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [
                     { role: MessageRole.User, content: 'Hello' },
@@ -680,7 +680,7 @@ describe('providers/anthropic', () => {
 
         it('converts assistant message to assistant role', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [
                     { role: MessageRole.Assistant, content: 'Hi there!' },
@@ -694,7 +694,7 @@ describe('providers/anthropic', () => {
 
         it('converts assistant message with tool calls to content blocks', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [
                     {
@@ -727,7 +727,7 @@ describe('providers/anthropic', () => {
 
         it('converts tool result message to tool_result block', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [
                     {
@@ -748,7 +748,7 @@ describe('providers/anthropic', () => {
 
         it('converts multimodal content with image parts', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [
                     {
@@ -774,7 +774,7 @@ describe('providers/anthropic', () => {
 
         it('converts OpenAI tools to Anthropic tool format', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [{ role: MessageRole.User, content: 'Hello' }],
                 tools: [
@@ -805,7 +805,7 @@ describe('providers/anthropic', () => {
 
         it('defaults max_tokens to 4096 when not specified', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [{ role: MessageRole.User, content: 'Hello' }],
             };
@@ -816,7 +816,7 @@ describe('providers/anthropic', () => {
 
         it('uses specified maxTokens when provided', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [{ role: MessageRole.User, content: 'Hello' }],
                 maxTokens: 8192,
@@ -828,7 +828,7 @@ describe('providers/anthropic', () => {
 
         it('applies tool_choice auto', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [{ role: MessageRole.User, content: 'Hello' }],
                 toolChoice: 'auto',
@@ -840,7 +840,7 @@ describe('providers/anthropic', () => {
 
         it('applies tool_choice with specific function name', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [{ role: MessageRole.User, content: 'Hello' }],
                 toolChoice: { type: 'function', function: { name: 'get_weather' } } as any,
@@ -852,7 +852,7 @@ describe('providers/anthropic', () => {
 
         it('sets stream to true by default', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [{ role: MessageRole.User, content: 'Hello' }],
             };
@@ -863,7 +863,7 @@ describe('providers/anthropic', () => {
 
         it('no system when no system messages present', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'claude-sonnet-4-20250514',
                 messages: [{ role: MessageRole.User, content: 'Hello' }],
             };
@@ -1015,7 +1015,7 @@ describe('providers/vertex', () => {
     describe('prepareVertexRequest', () => {
         it('is a no-op (delegates to prepareGeminiRequest at runtime)', () => {
             const req: ChatCompletionRequest = {
-                conversationId: 'test',
+                taskId: 'test',
                 model: 'gemini-3.1-pro-preview',
                 messages: [{ role: MessageRole.User, content: 'hello' }],
                 extraBody: { vertexProjectId: 'my-project', vertexRegion: 'us-east1' },

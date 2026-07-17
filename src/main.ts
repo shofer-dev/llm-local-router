@@ -850,7 +850,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     const getRequestCostCommand = vscode.commands.registerCommand(
         'llmLocalRouter.getRequestCost',
-        (conversationId: string) => languageModelProvider?.getRequestCost(conversationId),
+        (taskId: string) => languageModelProvider?.getRequestCost(taskId),
     );
 
     const getMetricsCommand = vscode.commands.registerCommand('llmLocalRouter.getMetrics', handleGetMetrics);

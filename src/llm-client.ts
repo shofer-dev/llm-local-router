@@ -277,7 +277,7 @@ function buildHeaders(apiKey: string, url?: string): Record<string, string> {
 }
 
 /** Router-internal fields that must NOT be forwarded to upstream providers. */
-const INTERNAL_FIELDS = ['conversation_id', 'parent_conversation_id', 'root_conversation_id'];
+const INTERNAL_FIELDS = ['task_id', 'parent_task_id', 'root_task_id'];
 
 function buildRequestBody(request: ChatCompletionRequest): Record<string, unknown> {
     const messages = request.messages.map(msg => {
