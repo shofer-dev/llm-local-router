@@ -36,6 +36,39 @@ import { getMetricsCollector, classifyError } from './metrics-collector';
 
 export { ProviderModelInfo, ModelCapabilities, ModelPricingPerMillion, ConnectionStatus, RouterConfig };
 
+/**
+ * `LanguageModelThinkingPart` belongs to the `languageModelThinkingPart` API
+ * proposal, which VS Code does not grant to ordinary (Marketplace- or
+ * VSIX-installed) extensions. It is reachable today only because VS Code assigns
+ * the class onto the extension-host API surface unconditionally, with no
+ * `checkProposedApiEnabled` guard. That is an implementation detail we must not
+ * depend on: if VS Code ever enforces the proposal the class becomes `undefined`
+ * and every construction site would throw.
+ *
+ * So resolve it once and treat absence as a supported state. When it is missing
+ * the router degrades by omitting thinking parts entirely — visible reasoning,
+ * the `tool_preparing` progress marker, and the `response_metadata` marker are
+ * simply not emitted, and consumers fall back to their own token/cost estimates.
+ *
+ * Do NOT fall back to `LanguageModelTextPart`: the markers are \x00-delimited
+ * control strings, so emitting them as text would splice protocol noise into the
+ * user-visible answer.
+ */
+type ThinkingPartCtor = new (value: string) => vscode.LanguageModelThinkingPart;
+const thinkingPartCtor: ThinkingPartCtor | undefined = (vscode as unknown as {
+    LanguageModelThinkingPart?: ThinkingPartCtor;
+}).LanguageModelThinkingPart;
+
+/** A thinking part, or `undefined` when the API is unavailable (see above). */
+function makeThinkingPart(value: string): vscode.LanguageModelThinkingPart | undefined {
+    return thinkingPartCtor ? new thinkingPartCtor(value) : undefined;
+}
+
+/** `instanceof` for thinking parts that is safe when the class is unavailable. */
+function isThinkingPart(part: unknown): part is vscode.LanguageModelThinkingPart {
+    return thinkingPartCtor !== undefined && part instanceof thinkingPartCtor;
+}
+
 export class LanguageModelProvider implements vscode.LanguageModelChatProvider<vscode.LanguageModelChatInformation> {
     private router: ProviderRouter;
     private composite: CompositeService;
@@ -372,9 +405,11 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
                 for (const choice of chunk.choices) {
                     // Report reasoning content
                     if (choice.delta?.reasoningContent?.trim()) {
-                        const thinkingPart = new vscode.LanguageModelThinkingPart(choice.delta.reasoningContent);
-                        progress.report(thinkingPart);
-                        lastVisibleEmitMs = Date.now();
+                        const thinkingPart = makeThinkingPart(choice.delta.reasoningContent);
+                        if (thinkingPart) {
+                            progress.report(thinkingPart);
+                            lastVisibleEmitMs = Date.now();
+                        }
                     }
 
                     // Report text content
@@ -400,10 +435,13 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
                             // Emit tool_preparing marker
                             if (existing.name) {
                                 const byteCount = Buffer.byteLength(existing.arguments || '', 'utf8');
-                                progress.report(new vscode.LanguageModelThinkingPart(
+                                const preparingPart = makeThinkingPart(
                                     buildPreparingMarker(existing.name, byteCount)
-                                ));
-                                lastVisibleEmitMs = Date.now();
+                                );
+                                if (preparingPart) {
+                                    progress.report(preparingPart);
+                                    lastVisibleEmitMs = Date.now();
+                                }
                             }
                         }
                     }
@@ -488,7 +526,10 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
 
             // Emit response metadata as a thinking part at the end of the stream
             if (metadataMarker) {
-                progress.report(new vscode.LanguageModelThinkingPart(metadataMarker));
+                const metadataPart = makeThinkingPart(metadataMarker);
+                if (metadataPart) {
+                    progress.report(metadataPart);
+                }
             }
         } catch (error) {
             const ttlbMs = Date.now() - requestStartMs;
@@ -501,7 +542,10 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
             // Emit error metadata
             metadataMarker = buildMetadataMarker({ model: modelId, error: err.message, ttlbMs });
             if (metadataMarker) {
-                progress.report(new vscode.LanguageModelThinkingPart(metadataMarker));
+                const errorMetadataPart = makeThinkingPart(metadataMarker);
+                if (errorMetadataPart) {
+                    progress.report(errorMetadataPart);
+                }
             }
             throw error;
         }
@@ -550,7 +594,7 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
                     toolCallParts.push(part);
                 } else if (part instanceof vscode.LanguageModelTextPart) {
                     textParts.push(part.value);
-                } else if (part instanceof vscode.LanguageModelThinkingPart) {
+                } else if (isThinkingPart(part)) {
                     const value = part.value;
                     if (typeof value === 'string') {
                         thinkingParts.push(value);

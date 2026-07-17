@@ -2,7 +2,7 @@
   "name": "llm-local-router",
   "displayName": "LLM Local Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "license": "AGPL-3.0-only",
   "publisher": "Shoferdev",
   "icon": "assets/icon.png",
@@ -35,12 +35,8 @@
     "openai"
   ],
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.104.0"
   },
-  "enabledApiProposals": [
-    "chatProvider",
-    "languageModelThinkingPart"
-  ],
   "categories": [
     "AI",
     "Chat",
