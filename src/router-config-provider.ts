@@ -519,6 +519,11 @@ export class RouterConfigProvider {
       return;
     }
     try {
+      // The charts read only from storage, but a window reaches storage only when a
+      // later request rolls it over — so without this, requests made in the current
+      // window (or the last ones before the user stopped) are invisible here. No-ops
+      // when nothing new was recorded.
+      collector.forceFlush();
       // cost_cumulative is computed client-side from per-window cost data
       const storageMetric = metric === 'cost_cumulative' ? 'cost' : metric;
       const data = storage.getTimeSeries(since, modelIds, storageMetric);

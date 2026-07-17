@@ -104,6 +104,13 @@ export class MetricsCollector {
     /** Optional SQLite persistence backend. */
     private _storage: MetricsStorage | undefined;
 
+    /**
+     * True when a request has been recorded since the last flush. Lets
+     * `forceFlush()` be a no-op when storage is already current, so the dashboard
+     * can flush before every chart query without writing on each one.
+     */
+    private dirty = false;
+
     /** Raw request entries for the current window (flushed on close). */
     private currentRawEntries: MetricsRequestEntry[] = [];
 
@@ -174,13 +181,22 @@ export class MetricsCollector {
                 // Pruning is best-effort
             }
         }
+
+        this.dirty = false;
     }
 
     /**
-     * Force flush current window to storage (for shutdown).
+     * Flush the current window to storage now.
+     *
+     * Windows otherwise only reach storage when a *later* request rolls the window
+     * over, so anything recorded since then is invisible to readers that query
+     * storage (the dashboard charts). Call this before such a read — and on
+     * shutdown. Cheap when nothing changed (see `dirty`), and safe to repeat:
+     * `flushWindow` upserts on (window_start, model_id) and raw entries are
+     * cleared once inserted.
      */
     forceFlush(): void {
-        if (!this._storage) return;
+        if (!this._storage || !this.dirty) return;
         this.ensureCurrentWindow();
         this.flushCurrentWindow();
     }
@@ -200,6 +216,7 @@ export class MetricsCollector {
     recordRequest(entry: MetricsRequestEntry): void {
         this.ensureCurrentWindow();
         const win = this.currentWindow();
+        this.dirty = true;
 
         // Track raw entry for later batch insert
         this.currentRawEntries.push(entry);

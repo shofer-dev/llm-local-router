@@ -360,6 +360,83 @@ function testGlobalSingleton(): void {
 
 // ─── Run ───────────────────────────────────────────────────────────
 
+// ─── forceFlush / storage visibility ───────────────────────────────
+//
+// Regression: the dashboard charts read only from storage, but a window reaches
+// storage only when a LATER request rolls it over. A couple of requests followed
+// by a pause therefore left nothing for the charts to find — metrics looked empty
+// until more traffic happened to flush them. `forceFlush()` is what the read path
+// calls to close that gap: it must persist on demand, and stay cheap when there is
+// nothing new (the dashboard calls it once per chart).
+
+/** Minimal MetricsStorage stand-in that records what the collector writes. */
+function makeFakeStorage(): {
+    storage: unknown;
+    flushed: MetricsWindow[];
+    inserted: MetricsRequestEntry[][];
+} {
+    const flushed: MetricsWindow[] = [];
+    const inserted: MetricsRequestEntry[][] = [];
+    const storage = {
+        flushWindow: (w: MetricsWindow) => { flushed.push(JSON.parse(JSON.stringify(w)) as MetricsWindow); },
+        insertRequests: (entries: MetricsRequestEntry[]) => { inserted.push([...entries]); },
+        loadWindows: () => [],
+        prune: () => { /* no-op */ },
+        close: () => { /* no-op */ },
+    };
+    return { storage, flushed, inserted };
+}
+
+function testForceFlushPersistsWithoutRollover(): void {
+    const { storage, flushed, inserted } = makeFakeStorage();
+    const c = new MetricsCollector();
+    c.setStorage(storage as never);
+
+    c.recordRequest(makeEntry());
+    // Read counts into locals: comparing `flushed.length` directly on both sides of
+    // the flush makes tsc narrow it to 0 and reject the second check as impossible —
+    // it cannot see that forceFlush() mutates the array.
+    const beforeFlush = flushed.length;
+    if (beforeFlush !== 0) throw new Error('Nothing should reach storage before a flush');
+
+    c.forceFlush();
+
+    const afterFlush = flushed.length;
+    if (afterFlush !== 1) throw new Error(`Expected 1 flush, got ${afterFlush}`);
+    if (!flushed[0].models['deepseek-v4-pro']) throw new Error('Flushed window is missing the recorded model');
+    const ids = inserted.flat().map((e) => e.modelId);
+    if (ids.length !== 1 || ids[0] !== 'deepseek-v4-pro') {
+        throw new Error(`Expected the raw entry to be persisted, got ${JSON.stringify(ids)}`);
+    }
+}
+
+function testForceFlushIsNoOpWhenClean(): void {
+    const { storage, flushed } = makeFakeStorage();
+    const c = new MetricsCollector();
+    c.setStorage(storage as never);
+
+    c.recordRequest(makeEntry());
+    c.forceFlush();
+    c.forceFlush();
+    c.forceFlush();
+
+    if (flushed.length !== 1) throw new Error(`Repeat flushes must not rewrite storage, got ${flushed.length}`);
+}
+
+function testForceFlushAfterNewTraffic(): void {
+    const { storage, flushed } = makeFakeStorage();
+    const c = new MetricsCollector();
+    c.setStorage(storage as never);
+
+    c.recordRequest(makeEntry());
+    c.forceFlush();
+    c.recordRequest(makeEntry({ modelId: 'gpt-5.5', provider: 'openai' }));
+    c.forceFlush();
+
+    if (flushed.length !== 2) throw new Error(`Expected 2 flushes, got ${flushed.length}`);
+    if (!flushed[1].models['gpt-5.5']) throw new Error('New traffic did not reach storage');
+}
+
 const tests: Array<{ name: string; fn: () => void }> = [
     { name: 'classifyAbortError', fn: testClassifyAbortError },
     { name: 'classifyTimeout', fn: testClassifyTimeout },
@@ -385,6 +462,9 @@ const tests: Array<{ name: string; fn: () => void }> = [
     { name: 'cacheHitRatio', fn: testCacheHitRatio },
     { name: 'getAllModelSummaries', fn: testGetAllModelSummaries },
     { name: 'globalSingleton', fn: testGlobalSingleton },
+    { name: 'forceFlushPersistsWithoutRollover', fn: testForceFlushPersistsWithoutRollover },
+    { name: 'forceFlushIsNoOpWhenClean', fn: testForceFlushIsNoOpWhenClean },
+    { name: 'forceFlushAfterNewTraffic', fn: testForceFlushAfterNewTraffic },
 ];
 
 let passed = 0;

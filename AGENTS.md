@@ -109,6 +109,13 @@ failover/round_robin/lowest_latency/highest_reliability + health + throttling;
 - **`exportRouterConfig` must never emit API key values** — only which providers
   are keyed. Exports are expected to be shareable; adding key values would silently
   turn every exported file into a live secret.
+- **Anything reading metrics from storage must `forceFlush()` first.** A window is
+  written to SQLite only when a *later* request rolls it over (`ensureCurrentWindow`)
+  — there is no timer. The dashboard charts read storage exclusively, so without a
+  flush a burst of requests followed by a pause is invisible: the metrics look empty
+  until unrelated traffic happens to flush them. `forceFlush()` is cheap when clean
+  (`dirty` flag) and idempotent (`flushWindow` upserts on `(window_start, model_id)`,
+  raw entries are cleared once inserted).
 - **Per-model tool prefs (`includedTools`/`excludedTools`) are integrator-owned,
   never user settings.** They can't ride the VS Code `capabilities` type, so they
   travel via the `llmLocalRouter.getModelCapabilities` side-channel command.

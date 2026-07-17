@@ -296,6 +296,9 @@ function MetricChart({
  */
 export default function MetricsPanel() {
   const [timeRange, setTimeRange] = React.useState(24);
+  // Bumped by Refresh to re-run the query effect. Metrics are a live feed, so an
+  // open dashboard otherwise shows whatever was true when the range last changed.
+  const [refreshNonce, setRefreshNonce] = React.useState(0);
   const [allData, setAllData] = React.useState<Record<string, TimeSeriesPoint[]>>({});
   const [loading, setLoading] = React.useState(false);
   const [visibleModels, setVisibleModels] = React.useState<string[]>([]);
@@ -340,7 +343,7 @@ export default function MetricsPanel() {
     }, 20);
 
     return () => { unsub(); clearTimeout(id); };
-  }, [timeRange]);
+  }, [timeRange, refreshNonce]);
 
   const allPoints = React.useMemo(() => Object.values(allData).flat(), [allData]);
   const modelsInData = React.useMemo(() => [...new Set(allPoints.map(d => d.modelId))].sort(), [allPoints]);
@@ -399,6 +402,16 @@ export default function MetricsPanel() {
                 onClick={() => setTimeRange(t.hours)}>{t.label}</button>
             ))}
           </div>
+        </div>
+        <div style={styles.ctrlGrp}>
+          <button
+            style={styles.refreshBtn}
+            onClick={() => setRefreshNonce(n => n + 1)}
+            disabled={loading}
+            title="Re-query metrics for the selected time range"
+          >
+            {loading ? '↻ Refreshing…' : '↻ Refresh'}
+          </button>
         </div>
         <div style={styles.ctrlGrp}>
           <span style={styles.ctrlLabel}>Lines</span>
@@ -529,6 +542,7 @@ const styles: Record<string, React.CSSProperties> = {
   timeBtn: { padding: '2px 8px', fontSize: '11px', border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))', borderRadius: '3px', background: 'none', color: 'var(--vscode-descriptionForeground, #999)', cursor: 'pointer', fontFamily: 'var(--vscode-font-family)' },
   timeActive: { padding: '2px 8px', fontSize: '11px', border: '1px solid var(--vscode-focusBorder, #007acc)', borderRadius: '3px', background: 'var(--vscode-list-activeSelectionBackground)', color: 'var(--vscode-foreground)', cursor: 'pointer', fontWeight: 600, fontFamily: 'var(--vscode-font-family)' },
   pickerBtn: { padding: '2px 8px', fontSize: '11px', border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))', borderRadius: '3px', background: 'none', color: 'var(--vscode-foreground)', cursor: 'pointer', fontFamily: 'var(--vscode-font-family)' },
+  refreshBtn: { padding: '2px 8px', fontSize: '11px', border: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.3))', borderRadius: '3px', background: 'none', color: 'var(--vscode-foreground)', cursor: 'pointer', fontFamily: 'var(--vscode-font-family)' },
   dropdown: { position: 'absolute', top: '100%', left: 0, marginTop: '4px', minWidth: '260px', maxHeight: '400px', overflowY: 'auto', background: 'var(--vscode-dropdown-background)', border: '1px solid var(--vscode-dropdown-border)', borderRadius: '3px', zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' },
   catHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.15))', background: 'var(--vscode-sideBar-background)' },
   catLabel: { fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--vscode-descriptionForeground, #999)' },
