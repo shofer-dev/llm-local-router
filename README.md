@@ -16,19 +16,31 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 
 ## Requirements
 
-- VS Code 1.100.0 or later (stock VS Code — no special build or flags)
+- VS Code 1.104.0 or later (stock VS Code — no special build or flags)
 - API keys for at least one supported provider
 
 ## Installation
 
-This extension is **not published on the VS Code Marketplace**: its `package.json`
-declares `enabledApiProposals`, and `vsce` refuses to publish any extension that
-does. That is purely a *publishing* restriction — it installs and runs normally on
-stock VS Code from a locally built `.vsix`, with **no flags and no special build**.
-The API it registers models through
-(`vscode.lm.registerLanguageModelChatProvider`) is a finalized, stable API.
+Install **LLM Local Router** from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Shoferdev.llm-local-router)
+or the [Open VSX Registry](https://open-vsx.org/extension/Shoferdev/llm-local-router)
+(VSCodium, Cursor, Windsurf, Gitpod), or from the command line:
 
-### 1. Build the `.vsix`
+```bash
+code --install-extension Shoferdev.llm-local-router
+```
+
+It runs on stock VS Code with **no flags and no special build**. VS Code 1.104 is
+the floor because that is where `vscode.lm.registerLanguageModelChatProvider` — the
+API it registers models through — was finalized.
+
+Then run **LLM Local Router: Configure** from the Command Palette to add a provider
+API key, and **LLM Local Router: Show Models** to confirm the models are exposed.
+They become selectable to any LM consumer via
+`vscode.lm.selectChatModels({ vendor: "local" })`.
+
+### Building from source
+
+To build and install the `.vsix` yourself:
 
 ```bash
 git clone https://github.com/shofer-dev/llm-local-router.git
@@ -37,27 +49,12 @@ npm ci                                     # extension-host dependencies
 npm run compile                            # -> out/main.js
 (cd webview-ui && npm ci && npm run build) # -> webview-ui/build (config + metrics UI)
 npx @vscode/vsce package                   # -> llm-local-router-<version>.vsix
-```
-
-The webview build is **not optional** — package without it and the configuration
-panel ships as a "Webview not built" placeholder.
-
-### 2. Install it
-
-```bash
 code --install-extension llm-local-router-<version>.vsix
 ```
 
-…or in VS Code: **Extensions** → **⋯** → **Install from VSIX…**
-
-On code-server, use the same flow with `code-server --install-extension`.
-
-### 3. Verify
-
-Restart VS Code, then run **LLM Local Router: Show Models** from the Command Palette
-— it lists the models the router is exposing. Add a provider key via **LLM Local
-Router: Configure**, and the models become selectable to any LM consumer via
-`vscode.lm.selectChatModels({ vendor: "local" })`.
+The webview build is **not optional** — package without it and the configuration
+panel ships as a "Webview not built" placeholder. On code-server, install with
+`code-server --install-extension`.
 
 ## Supported Providers
 

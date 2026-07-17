@@ -43,15 +43,26 @@ branding.
   picked up automatically — no hand-listing needed. The glob covers `src/` (plus
   `vendor/vscode-dts/*.d.ts`), not `webview-ui/`.
 
-## Proposed-API typings (vendored)
+## Proposed-API typings (vendored) — and why `enabledApiProposals` is absent
 
-`tsconfig.json` compiles against two proposed-API `.d.ts` files vendored under
-`vendor/vscode-dts/`
-(`vscode.proposed.{chatProvider,languageModelThinkingPart}.d.ts`); these back
-`enabledApiProposals` in `package.json`. They are vendored so the extension
-builds standalone with no external checkout. They are compile-time only and are
-excluded from the packaged `.vsix` (`.vscodeignore`). Refresh them from the
-matching VS Code release when bumping the `engines.vscode` floor.
+`package.json` deliberately declares **no `enabledApiProposals`**: `vsce` refuses
+to publish any extension that declares one, and this extension is published to the
+Marketplace + Open VSX. Do not re-add it.
+
+Nothing is lost by that. `chatProvider` was **finalized in VS Code 1.104** (hence
+the `engines.vscode: ^1.104.0` floor — a lower floor is a bug: the stable API does
+not exist before 1.104). `languageModelThinkingPart` is still a proposal, but VS
+Code never granted it here anyway (not in `product.json`'s allowlist, no
+`--enable-proposed-api`), so declaring it bought nothing at runtime.
+
+`tsconfig.json` still compiles against two `.d.ts` files vendored under
+`vendor/vscode-dts/` because a few **types** remain proposal-only:
+`LanguageModelThinkingPart`, `LanguageModelResponsePart2` (the type
+`progress.report` accepts) and `LanguageModelConfigurationSchema`. They are
+compile-time only, are excluded from the packaged `.vsix` (`.vscodeignore`), and
+keep the build standalone with no external checkout. Refresh them from the matching
+VS Code release when bumping the `engines.vscode` floor; drop a d.ts once
+everything it declares appears in stable `@types/vscode`.
 
 ## Architecture (files)
 
@@ -73,6 +84,15 @@ failover/round_robin/lowest_latency/highest_reliability + health + throttling;
   safe lower bound so failover never hits a capability mismatch).
 - Failover is **pre-first-byte only** — a mid-stream failure is recorded to health
   but never re-routed.
+- **Never write `new vscode.LanguageModelThinkingPart(...)` or `x instanceof
+  vscode.LanguageModelThinkingPart`.** Go through `makeThinkingPart()` /
+  `isThinkingPart()` in `language-model-provider.ts`. The class belongs to a
+  proposal this extension is not granted; it resolves today only because VS Code
+  assigns it onto the API surface with no `checkProposedApiEnabled` guard. If that
+  ever changes, the guarded helpers degrade (thinking parts are omitted) while a
+  bare `new`/`instanceof` would throw on every request. **Never fall back to
+  `LanguageModelTextPart`** — the `tool_preparing` / `response_metadata` payloads
+  are `\x00`-delimited control strings and would become visible garbage.
 - **Per-model tool prefs (`includedTools`/`excludedTools`) are integrator-owned,
   never user settings.** They can't ride the VS Code `capabilities` type, so they
   travel via the `llmLocalRouter.getModelCapabilities` side-channel command.

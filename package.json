@@ -2,7 +2,7 @@
   "name": "llm-local-router",
   "displayName": "LLM Local Router",
   "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "license": "AGPL-3.0-only",
   "publisher": "Shoferdev",
   "icon": "assets/icon.png",
