@@ -377,7 +377,7 @@ VS Code LM consumer (e.g. Copilot Chat)
     └─ Side-channel commands:
          llmLocalRouter.getModelPricing(modelId)    → Registry + custom provider pricing
          llmLocalRouter.getModelCapabilities(modelId) → Capabilities (incl. tool prefs)
-         llmLocalRouter.getRequestCost(conversationId) → Per-conversation cost ledger
+         llmLocalRouter.getRequestCost(taskId) → Per-conversation cost ledger
 ```
 
 ### Per-model tool preferences
