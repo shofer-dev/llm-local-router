@@ -1,6 +1,10 @@
 .vscodeignore
 node_modules/
 vendor/vscode-dts/
+# README screenshots: vsce rewrites the relative links to absolute
+# github.com/.../raw/HEAD/... URLs, so the Marketplace renders them from the repo
+# and the packaged copies would never be read.
+assets/screenshot-*.png
 src/
 webview-ui/src/
 webview-ui/node_modules/

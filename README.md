@@ -2,6 +2,14 @@
 
 A VS Code extension that provides **direct access to multiple LLM providers** with **composite model failover** — self-contained, no external router service required.
 
+![Router status: connection, configured providers, and every model the router exposes with capabilities and per-1M pricing](assets/screenshot-status.png)
+
+*Status — live connection state, how many providers are keyed, and every model exposed to `vscode.lm` with its capabilities and pricing.*
+
+![Config: primary providers with per-model pricing overrides, plus whole-config Import/Export](assets/screenshot-config.png)
+
+*Config — key each provider, override per-model pricing, and import/export the whole config. Keys are held in VS Code SecretStorage.*
+
 ## Features
 
 - **9 built-in LLM providers + custom providers**: OpenAI, Anthropic, Google Gemini, DeepSeek, MiniMax, Moonshot/Kimi, Xiaomi MiMo, Zhipu GLM, OpenRouter — plus **user-registered custom providers** via the webview UI
