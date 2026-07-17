@@ -18,6 +18,66 @@ A VS Code extension that provides **direct access to multiple LLM providers** wi
 
 - VS Code 1.100.0 or later
 - API keys for at least one supported provider
+- A VS Code instance that allows **proposed APIs** — see [Installation](#installation)
+
+## Installation
+
+This extension is **not published on the VS Code Marketplace**. It registers models
+through VS Code's Language Model provider API, which is still a *proposed* API
+(`chatProvider`, `languageModelThinkingPart`), and the Marketplace rejects any
+extension that declares `enabledApiProposals`. Install it from a locally built
+`.vsix` instead.
+
+### 1. Build the `.vsix`
+
+```bash
+git clone https://github.com/shofer-dev/llm-local-router.git
+cd llm-local-router
+npm ci                                     # extension-host dependencies
+npm run compile                            # -> out/main.js
+(cd webview-ui && npm ci && npm run build) # -> webview-ui/build (config + metrics UI)
+npx @vscode/vsce package                   # -> llm-local-router-<version>.vsix
+```
+
+The webview build is **not optional** — package without it and the configuration
+panel ships as a "Webview not built" placeholder.
+
+### 2. Install it
+
+```bash
+code --install-extension llm-local-router-<version>.vsix
+```
+
+…or in VS Code: **Extensions** → **⋯** → **Install from VSIX…**
+
+### 3. Enable the proposed APIs
+
+VS Code only grants proposed APIs to extensions you name explicitly, so it must be
+started with:
+
+```bash
+code --enable-proposed-api Shoferdev.llm-local-router
+```
+
+Without this, VS Code withholds the proposed API and the extension cannot register
+its models — `vscode.lm.selectChatModels({ vendor: "local" })` finds nothing. The
+flag applies to the session it launches, so start VS Code this way each time (or
+add it to your launcher/shortcut).
+
+### Using code-server
+
+No flag is required: code-server enables proposed APIs for **all** extensions (its
+`patches/proposed-api.diff` makes `isProposedApiEnabled()` unconditionally true).
+Just install the `.vsix`:
+
+```bash
+code-server --install-extension llm-local-router-<version>.vsix
+```
+
+### 4. Verify
+
+Run **LLM Local Router: Show Models** from the Command Palette — it lists the models
+the router is exposing. Then add a provider key via **LLM Local Router: Configure**.
 
 ## Supported Providers
 
