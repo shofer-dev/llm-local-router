@@ -81,10 +81,39 @@ describe('llm-client', () => {
         it('converts deepseek-v4-flash pricing', () => {
             const pricing = toPerMillionPricing('deepseek-v4-flash');
             assert.ok(pricing);
-            assert.ok(Math.abs(pricing.inputPrice - 0.14) < 0.001, `expected ~0.14, got ${pricing.inputPrice}`);
-            assert.ok(Math.abs(pricing.outputPrice - 0.28) < 0.001, `expected ~0.28, got ${pricing.outputPrice}`);
+            // Exact, not approximate: a tolerance check here passed for a long time
+            // while the real value was 0.13999999999999999 — see the artifact test below.
+            assert.equal(pricing.inputPrice, 0.14);
+            assert.equal(pricing.outputPrice, 0.28);
             // cache read $0.0000028/1K → $0.0028/1M
-            assert.ok(Math.abs((pricing.cacheReadsPrice ?? 0) - 0.0028) < 0.0001, `expected ~0.0028, got ${pricing.cacheReadsPrice}`);
+            assert.equal(pricing.cacheReadsPrice, 0.0028);
+        });
+
+        it('emits clean decimals, not binary-fraction artifacts', () => {
+            // Regression: per-1M prices are produced by multiplying the per-1K price by
+            // 1000, which lands on binary fractions for common prices —
+            // 0.00014 * 1000 === 0.13999999999999999. These are rendered verbatim in the
+            // Status table and handed to every getModelPricing side-channel consumer, so
+            // the values must be exact. Cost accounting is unaffected either way: it is
+            // computed from the per-1K prices in computeCost().
+            assert.equal(toPerMillionPricing('deepseek-v4-flash')?.outputPrice, 0.28);
+            assert.equal(toPerMillionPricing('kimi-k2.6')?.outputPrice, 3.41);
+            assert.equal(toPerMillionPricing('MiniMax-M2.7')?.cacheReadsPrice, 0.06);
+            assert.equal(toPerMillionPricing('mimo-v2-omni')?.inputPrice, 0.14);
+
+            // Nothing anywhere in the registry should stringify to a float artifact.
+            const { ALL_MODELS } = require('../model-registry');
+            for (const m of ALL_MODELS as Array<{ id: string }>) {
+                const p = toPerMillionPricing(m.id);
+                if (!p) continue;
+                for (const [field, value] of Object.entries(p)) {
+                    if (typeof value !== 'number') continue;
+                    assert.ok(
+                        String(value).length <= 10,
+                        `${m.id}.${field} looks like a float artifact: ${value}`,
+                    );
+                }
+            }
         });
 
         it('returns undefined for unknown model', () => {

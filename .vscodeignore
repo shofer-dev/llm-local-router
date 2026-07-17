@@ -5,7 +5,19 @@ vendor/vscode-dts/
 # github.com/.../raw/HEAD/... URLs, so the Marketplace renders them from the repo
 # and the packaged copies would never be read.
 assets/screenshot-*.png
+# Repo-only docs and dev tooling. README.md and LICENSE.txt must stay (the
+# Marketplace renders the former; the AGPL requires the latter). vsce rewrites the
+# README's relative links to absolute repo URLs, so ROADMAP.md is still reachable
+# from the listing without shipping it.
 launch_and_promotion.md
+ROADMAP.md
+AGENTS.md
+CLAUDE.md
+DESIGN.md
+TODO.md
+TODO-testing.md
+run-tests.sh
+.husky/
 src/
 webview-ui/src/
 webview-ui/node_modules/

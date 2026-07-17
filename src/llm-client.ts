@@ -118,8 +118,14 @@ export function computeCost(
 export function toPerMillionPricing(modelId: string): ModelPricingPerMillion | undefined {
     const p = getEffectivePricing(modelId);
     if (!p) return undefined;
+    // Per-1K → per-1M. Round to 6dp: the bare multiply yields binary-fraction
+    // artifacts (0.00014 * 1000 === 0.13999999999999999, 0.00341 * 1000 ===
+    // 3.4099999999999997) which surface raw in the Status table and to every
+    // consumer of the getModelPricing side-channel. 6dp is far finer than any real
+    // per-1M price, so this is lossless in practice — and cost is computed from the
+    // per-1K values in computeCost(), never from these, so accounting is unaffected.
     const toPerM = (v: number | undefined): number | undefined =>
-        v !== undefined && v > 0 ? v * 1000 : undefined;
+        v !== undefined && v > 0 ? Math.round(v * 1000 * 1e6) / 1e6 : undefined;
 
     const inputPrice = toPerM(p.prompt ?? 0);
     const outputPrice = toPerM(p.completion ?? 0);
