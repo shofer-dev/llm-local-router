@@ -390,6 +390,25 @@ export class RouterConfigProvider {
     await this.sendCustomProviders();
   }
 
+  /**
+   * Re-push ONLY the Status tab payload (connection state, per-provider
+   * `configured` flags, exposed models). No-op when the panel is closed, so it is
+   * cheap to call from every router state transition.
+   *
+   * Without this the Status tab keeps the snapshot built when the panel was first
+   * opened. That snapshot goes stale the moment an import or a provider save
+   * stores keys: those trigger an *async* (re)connect that completes ~hundreds of
+   * ms later, so the panel would keep showing "Disconnected / 0 models /
+   * 0 configured" even though the router is connected. `main.ts` calls this from
+   * `updateStatusBar()` — the existing chokepoint hit on connect/disconnect, key
+   * change, enable toggle and health-loss.
+   */
+  async refreshStatus(): Promise<void> {
+    if (!this.panel) return;
+    const status = await this.buildStatusPayload();
+    this.sendToWebview({ type: 'statusUpdate', status });
+  }
+
   private async buildStatusPayload(): Promise<StatusPayload> {
     const wsConfig = vscode.workspace.getConfiguration('llmLocalRouter');
     const enabled = wsConfig.get('enabled', true);
@@ -626,6 +645,9 @@ export class RouterConfigProvider {
       this.languageModelProvider.updateApiKeys(keys as Record<string, string | undefined>);
       this.languageModelProvider.updateEndpointUrls(eps);
       this.sendToWebview({ type: 'providerConfigSaved', provider });
+      // Reflect the new key in the Status tab immediately (configured count /
+      // exposed models) — don't wait for the next 30s health tick.
+      await this.refreshStatus();
       logger.info(`Provider config saved for ${provider}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -862,6 +884,9 @@ export class RouterConfigProvider {
       if (!result) return; // cancelled
       await this.sendProviderConfig();
       await this.sendCustomProviders();
+      // Refresh the Status tab now so newly-imported keys show as configured
+      // immediately; the async (re)connect they trigger will refresh it again.
+      await this.refreshStatus();
     } catch (error) {
       vscode.window.showErrorMessage(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
     }

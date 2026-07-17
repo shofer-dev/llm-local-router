@@ -113,6 +113,12 @@ function updateStatusBar(): void {
 
     statusBarItem.text = statusText;
     statusBarItem.show();
+
+    // Keep an open Status webview in sync with this transition. No-op when the
+    // panel is closed; otherwise re-pushes the live connection/model/configured
+    // state so it never lags behind an async (re)connect triggered by an import
+    // or a provider save. Fire-and-forget — the status bar must not await secrets.
+    void routerConfigProvider?.refreshStatus();
 }
 
 // ─── Health check ─────────────────────────────────────────────────
