@@ -205,6 +205,18 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         pricing: $(0.00095, 0.004, 0.00019),
         imageInput: true, toolCalling: true,
     },
+    {
+        // K3 is served only by the Kimi-for-Coding subscription plane (model id
+        // `k3`, base https://api.kimi.com/coding/v1). Point the Moonshot provider
+        // endpoint at that URL and use a Kimi subscription key (sk-kimi-…). Billing
+        // is the flat membership quota, so pricing is 0.
+        id: 'k3', name: 'Kimi K3',
+        description: 'Moonshot Kimi K3 — agentic coding model (1M context), always-on thinking, vision-capable. Requires the Kimi-for-Coding endpoint (api.kimi.com/coding/v1).',
+        contextLength: 1_048_576, maxOutputTokens: 32_768,
+        provider: ProviderType.Moonshot,
+        pricing: $(0, 0, 0),
+        imageInput: true, toolCalling: true,
+    },
 
     // ═══ Xiaomi MiMo ═══
     {

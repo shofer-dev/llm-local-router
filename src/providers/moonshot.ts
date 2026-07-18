@@ -21,7 +21,3 @@ export function prepareMoonshotRequest(req: ChatCompletionRequest): void {
         }
     }
 }
-
-export function getMoonshotBaseUrl(): string {
-    return 'https://api.moonshot.cn/v1';
-}

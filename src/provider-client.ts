@@ -57,7 +57,10 @@ const PROVIDER_BASE_URLS: Record<ProviderType, string> = {
     [ProviderType.Google]: 'https://generativelanguage.googleapis.com/v1beta',
     [ProviderType.DeepSeek]: 'https://api.deepseek.com/v1',
     [ProviderType.MiniMax]: 'https://api.minimax.io/v1',
-    [ProviderType.Moonshot]: 'https://api.moonshot.cn/v1',
+    // Global/international host (never the .cn regional endpoint). Override
+    // per-instance via the Config panel's endpoint field to reach the
+    // Kimi-for-Coding subscription plane (https://api.kimi.com/coding/v1, K3).
+    [ProviderType.Moonshot]: 'https://api.moonshot.ai/v1',
     [ProviderType.Xiaomi]: 'https://api.xiaomimimo.com/v1',
     // GLM models routed via the Z.ai international Coding Plan endpoint
     // (not bigmodel.cn) so a Z.ai coding-plan key serves the bare glm-* models.

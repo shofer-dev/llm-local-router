@@ -49,7 +49,7 @@ const PROVIDER_DEFAULTS: Record<string, { label: string; defaultEndpoint: string
   google: { label: 'Google Gemini', defaultEndpoint: 'https://generativelanguage.googleapis.com/v1beta' },
   deepseek: { label: 'DeepSeek', defaultEndpoint: 'https://api.deepseek.com/v1' },
   minimax: { label: 'MiniMax', defaultEndpoint: 'https://api.minimax.io/v1' },
-  moonshot: { label: 'Moonshot / Kimi', defaultEndpoint: 'https://api.moonshot.cn/v1' },
+  moonshot: { label: 'Moonshot / Kimi', defaultEndpoint: 'https://api.moonshot.ai/v1' },
   xiaomi: { label: 'Xiaomi MiMo', defaultEndpoint: 'https://api.xiaomimimo.com/v1' },
   zhipu: { label: 'Zhipu GLM', defaultEndpoint: 'https://api.z.ai/api/coding/paas/v4' },
   dashscope: { label: 'DashScope (Qwen)', defaultEndpoint: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },

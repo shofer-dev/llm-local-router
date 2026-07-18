@@ -267,7 +267,7 @@ function getDefaultEndpoint(provider: string): string {
         google: 'https://generativelanguage.googleapis.com',
         deepseek: 'https://api.deepseek.com',
         minimax: 'https://api.minimax.io',
-        moonshot: 'https://api.moonshot.cn',
+        moonshot: 'https://api.moonshot.ai',
         xiaomi: 'https://api.xiaomimimo.com',
         zhipu: 'https://api.z.ai',
         dashscope: 'https://dashscope-intl.aliyuncs.com',
