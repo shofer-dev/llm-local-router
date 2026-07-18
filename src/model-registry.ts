@@ -206,12 +206,22 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         imageInput: true, toolCalling: true,
     },
     {
-        // K3 is served only by the Kimi-for-Coding subscription plane (model id
-        // `k3`, base https://api.kimi.com/coding/v1). Point the Moonshot provider
-        // endpoint at that URL and use a Kimi subscription key (sk-kimi-…). Billing
-        // is the flat membership quota, so pricing is 0.
-        id: 'k3', name: 'Kimi K3',
-        description: 'Moonshot Kimi K3 — agentic coding model (1M context), always-on thinking, vision-capable. Requires the Kimi-for-Coding endpoint (api.kimi.com/coding/v1).',
+        // K3 ships under two ids on two endpoints. `k3` is the Kimi-for-Coding
+        // subscription plane (base https://api.kimi.com/coding/v1): point the
+        // Moonshot provider endpoint there with a Kimi subscription key
+        // (sk-kimi-…). Membership-billed, so pricing is 0.
+        id: 'k3', name: 'Kimi K3 (subscription)',
+        description: 'Moonshot Kimi K3 via the Kimi-for-Coding subscription endpoint (api.kimi.com/coding/v1) — agentic coding model, 1M context, always-on thinking, vision-capable.',
+        contextLength: 1_048_576, maxOutputTokens: 32_768,
+        provider: ProviderType.Moonshot,
+        pricing: $(0, 0, 0),
+        imageInput: true, toolCalling: true,
+    },
+    {
+        // The SAME model on the pay-as-you-go platform (default api.moonshot.ai)
+        // uses a DIFFERENT id — `kimi-k3` — and a platform (not subscription) key.
+        id: 'kimi-k3', name: 'Kimi K3',
+        description: 'Moonshot Kimi K3 on the pay-as-you-go platform (api.moonshot.ai) — 1M context, always-on thinking, vision-capable.',
         contextLength: 1_048_576, maxOutputTokens: 32_768,
         provider: ProviderType.Moonshot,
         pricing: $(0, 0, 0),
