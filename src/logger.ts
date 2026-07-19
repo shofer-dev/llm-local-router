@@ -1,9 +1,13 @@
 /**
  * Structured logger for the LLM Local Router extension.
  *
- * Writes to a VSCode output channel with timestamps and log levels.
- * When running outside of VS Code (e.g., unit tests), falls back to console.
+ * When running inside VS Code, logging is backed by the shared double-output
+ * logger (`@arkware/shared-logger`), teeing lines to both the Output panel and
+ * stdout/stderr as JSON (for Loki). When running outside of VS Code (e.g.,
+ * unit tests), it falls back to console output.
  */
+
+import { wrapOutputChannel, type Logger as SharedLogger } from '@arkware/shared-logger';
 
 export enum LogLevel {
     Debug = 'DEBUG',
@@ -26,13 +30,16 @@ function getVSCode(): typeof import('vscode') | undefined {
 }
 
 export class Logger {
-    private outputChannel: { appendLine(line: string): void; show(): void; dispose(): void } | undefined;
+    private shared: SharedLogger | undefined;
     private debugEnabled: boolean = false;
 
     constructor(channelName: string, enableDebug: boolean = false) {
         const vscode = getVSCode();
         if (vscode) {
-            this.outputChannel = vscode.window.createOutputChannel(channelName);
+            this.shared = wrapOutputChannel(
+                vscode.window.createOutputChannel(channelName),
+                { debug: enableDebug }
+            );
         }
         this.debugEnabled = enableDebug;
     }
@@ -46,35 +53,54 @@ export class Logger {
         return `[${timestamp}] [${level}] ${message}`;
     }
 
+    /**
+     * Console fallback for when there is no VS Code output channel (tests).
+     * When the shared logger is active, callers route through it directly.
+     */
     private writeLog(level: LogLevel, message: string): void {
-        const formatted = this.formatMessage(level, message);
-        if (this.outputChannel) {
-            this.outputChannel.appendLine(formatted);
-        } else {
-            const stream = level === LogLevel.Error ? console.error : console.log;
-            stream(formatted);
-        }
+        const stream = level === LogLevel.Error || level === LogLevel.Warning ? console.error : console.log;
+        stream(this.formatMessage(level, message));
     }
 
     public debug(message: string): void {
         if (this.debugEnabled) {
-            this.writeLog(LogLevel.Debug, message);
+            if (this.shared) {
+                this.shared.debug(message);
+            } else {
+                this.writeLog(LogLevel.Debug, message);
+            }
         }
     }
 
     public info(message: string): void {
-        this.writeLog(LogLevel.Info, message);
+        if (this.shared) {
+            this.shared.info(message);
+        } else {
+            this.writeLog(LogLevel.Info, message);
+        }
     }
 
     public warning(message: string): void {
-        this.writeLog(LogLevel.Warning, message);
+        if (this.shared) {
+            this.shared.warning(message);
+        } else {
+            this.writeLog(LogLevel.Warning, message);
+        }
     }
 
     public error(message: string): void {
-        this.writeLog(LogLevel.Error, message);
+        if (this.shared) {
+            this.shared.error(message);
+        } else {
+            this.writeLog(LogLevel.Error, message);
+        }
     }
 
     public errorWithError(message: string, error: Error): void {
+        if (this.shared) {
+            this.shared.error(message, error);
+            return;
+        }
         const errorMessage = error.message || 'Unknown error';
         this.writeLog(LogLevel.Error, `${message}: ${errorMessage}`);
         // Include the stack trace (when present) on its own line for debuggability.
@@ -84,15 +110,11 @@ export class Logger {
     }
 
     public show(): void {
-        if (this.outputChannel) {
-            this.outputChannel.show();
-        }
+        this.shared?.show();
     }
 
     public dispose(): void {
-        if (this.outputChannel) {
-            this.outputChannel.dispose();
-        }
+        this.shared?.dispose();
     }
 }
 

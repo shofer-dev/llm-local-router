@@ -1,8 +1,8 @@
 {
   "name": "llm-local-router",
   "displayName": "LLM Local Router",
-  "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover — no external router service required",
-  "version": "1.9.2",
+  "description": "VSCode extension providing direct access to multiple LLM providers with composite model failover \u2014 no external router service required",
+  "version": "1.9.3",
   "license": "AGPL-3.0-only",
   "publisher": "Shoferdev",
   "icon": "assets/icon.png",
@@ -185,7 +185,8 @@
     "package": "npm run compile && npx @vscode/vsce package"
   },
   "dependencies": {
-    "sql.js": "^1.12.0"
+    "sql.js": "^1.12.0",
+    "@arkware/shared-logger": "file:../../libs/arkware-shared-logger"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
