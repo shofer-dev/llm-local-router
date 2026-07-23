@@ -36,21 +36,21 @@ export enum ProviderType {
 // ─── Model registry ─────────────────────────────────────────────────
 
 export interface ModelPricing {
-    /** USD per 1K prompt tokens (text/image) */
+    /** USD per 1M prompt tokens (text/image) */
     prompt?: number;
-    /** USD per 1K completion tokens */
+    /** USD per 1M completion tokens */
     completion?: number;
-    /** USD per 1K prompt tokens for context > 200K */
+    /** USD per 1M prompt tokens for context > 200K */
     promptAbove200K?: number;
-    /** USD per 1K completion tokens for context > 200K */
+    /** USD per 1M completion tokens for context > 200K */
     completionAbove200K?: number;
-    /** USD per 1K audio prompt tokens */
+    /** USD per 1M audio prompt tokens */
     audioPrompt?: number;
-    /** USD per 1K audio completion tokens */
+    /** USD per 1M audio completion tokens */
     audioCompletion?: number;
-    /** USD per 1K cached input read tokens */
+    /** USD per 1M cached input read tokens */
     contextCacheRead?: number;
-    /** USD per 1K cached input write tokens */
+    /** USD per 1M cached input write tokens */
     contextCacheWrite?: number;
     /** Batch discount factor (e.g. 0.5 = 50% off) */
     discount?: number;
@@ -334,7 +334,7 @@ export interface CustomProviderConfig {
     /** Models exposed by this provider. */
     models: CustomProviderModel[];
     /**
-     * Default pricing for all models in this provider (USD per 1K tokens).
+     * Default pricing for all models in this provider (USD per 1M tokens).
      * Can be overridden per-request via the pricing overrides mechanism.
      */
     defaultPricing?: {

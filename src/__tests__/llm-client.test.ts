@@ -14,23 +14,20 @@ describe('llm-client', () => {
         });
 
         it('computes cost for gpt-5.5 without caching', () => {
-            // GPT-5.5: prompt=$0.005/1K, completion=$0.030/1K, discount=50%
-            // 1000 prompt + 100 completion = (1 * 0.005 + 0.1 * 0.030) * 0.5
+            // GPT-5.5: prompt=$5/1M, completion=$30/1M, discount=50%
+            // 1000 prompt + 100 completion = (1000/1M * 5 + 100/1M * 30) * 0.5
             // = (0.005 + 0.003) * 0.5 = 0.004
             const cost = computeCost('gpt-5.5', 1000, 100);
             assert.ok(cost > 0, `cost should be > 0, got ${cost}`);
-            // Expected: (1000/1000 * 0.005 + 100/1000 * 0.030) * (1 - 0.5)
-            // = (0.005 + 0.003) * 0.5 = 0.004
             const expected = (1 * 0.005 + 0.1 * 0.030) * 0.5;
             assert.ok(Math.abs(cost - expected) < 0.0001, `expected ~${expected}, got ${cost}`);
         });
 
         it('computes cost for deepseek-v4-pro with caching', () => {
-            // DeepSeek V4 Pro (75% promo): prompt=$0.000435/1K, completion=$0.00087/1K,
-            // cache read=$0.000003625/1K, no discount
+            // DeepSeek V4 Pro (75% promo): prompt=$0.435/1M, completion=$0.87/1M,
+            // cache read=$0.003625/1M, no discount
             // 10000 prompt (8000 cached, 2000 uncached) + 500 completion
-            // = (2000/1000 * 0.000435 + 8000/1000 * 0.000003625 + 500/1000 * 0.00087)
-            // = (2 * 0.000435 + 8 * 0.000003625 + 0.5 * 0.00087)
+            // = (2000/1M * 0.435 + 8000/1M * 0.003625 + 500/1M * 0.87)
             // = (0.00087 + 0.000029 + 0.000435) = 0.001334
             const cost = computeCost('deepseek-v4-pro', 10000, 500, 8000, 0);
             const expected = (2 * 0.000435) + (8 * 0.000003625) + (0.5 * 0.00087);
@@ -38,11 +35,11 @@ describe('llm-client', () => {
         });
 
         it('computes cost for claude-sonnet-4-6 with cache write', () => {
-            // Claude Sonnet 4.6: prompt=$0.003/1K, completion=$0.015/1K,
-            // cache read=$0.0003/1K, cache write=$0.00375/1K, discount=50%
+            // Claude Sonnet 4.6: prompt=$3/1M, completion=$15/1M,
+            // cache read=$0.30/1M, cache write=$3.75/1M, discount=50%
             // 5000 prompt (2000 cached read, 1000 cache creation, 3000 uncached) + 200 completion
             // uncached = 5000 - 2000 = 3000
-            // = (3000/1000*0.003 + 2000/1000*0.0003 + 1000/1000*0.00375 + 200/1000*0.015) * 0.5
+            // = (3000/1M*3 + 2000/1M*0.3 + 1000/1M*3.75 + 200/1M*15) * 0.5
             const cost = computeCost('claude-sonnet-4-6', 5000, 200, 2000, 1000);
             assert.ok(cost > 0);
             const expected = (3 * 0.003 + 2 * 0.0003 + 1 * 0.00375 + 0.2 * 0.015) * 0.5;
@@ -67,35 +64,29 @@ describe('llm-client', () => {
     });
 
     describe('toPerMillionPricing', () => {
-        it('converts gpt-5.5 pricing to per-1M form', () => {
+        it('shapes gpt-5.5 pricing into the per-1M LM API form', () => {
             const pricing = toPerMillionPricing('gpt-5.5');
             assert.ok(pricing);
-            // prompt $0.005/1K → $5.00/1M
             assert.equal(pricing.inputPrice, 5.0);
-            // completion $0.030/1K → $30.00/1M
             assert.equal(pricing.outputPrice, 30.0);
-            // cache read $0.0005/1K → $0.50/1M
             assert.equal(pricing.cacheReadsPrice, 0.5);
         });
 
-        it('converts deepseek-v4-flash pricing', () => {
+        it('passes deepseek-v4-flash pricing through unchanged', () => {
             const pricing = toPerMillionPricing('deepseek-v4-flash');
             assert.ok(pricing);
             // Exact, not approximate: a tolerance check here passed for a long time
             // while the real value was 0.13999999999999999 — see the artifact test below.
             assert.equal(pricing.inputPrice, 0.14);
             assert.equal(pricing.outputPrice, 0.28);
-            // cache read $0.0000028/1K → $0.0028/1M
             assert.equal(pricing.cacheReadsPrice, 0.0028);
         });
 
         it('emits clean decimals, not binary-fraction artifacts', () => {
-            // Regression: per-1M prices are produced by multiplying the per-1K price by
-            // 1000, which lands on binary fractions for common prices —
-            // 0.00014 * 1000 === 0.13999999999999999. These are rendered verbatim in the
-            // Status table and handed to every getModelPricing side-channel consumer, so
-            // the values must be exact. Cost accounting is unaffected either way: it is
-            // computed from the per-1K prices in computeCost().
+            // Regression guard: per-1M prices used to be derived by multiplying per-1K
+            // values by 1000, which landed on binary fractions (0.00014 * 1000 ===
+            // 0.13999999999999999) that rendered verbatim in the Status table. The
+            // registry now stores clean per-1M literals; this keeps them clean.
             assert.equal(toPerMillionPricing('deepseek-v4-flash')?.outputPrice, 0.28);
             assert.equal(toPerMillionPricing('kimi-k2.6')?.outputPrice, 3.41);
             assert.equal(toPerMillionPricing('MiniMax-M2.7')?.cacheReadsPrice, 0.06);

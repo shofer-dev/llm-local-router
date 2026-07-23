@@ -265,7 +265,7 @@ Each entry includes:
 - Model ID, name, description
 - Context length and max output tokens
 - Provider type
-- Pricing (USD per 1K tokens)
+- Pricing (USD per 1M tokens)
 - Capabilities (image input, tool calling)
 
 The registry is used for:
@@ -276,7 +276,7 @@ The registry is used for:
 
 ### 7. Cost Computation (`llm-client.ts`)
 
-Costs are computed from the registry's per-1K-token pricing × actual token usage:
+Costs are computed from the registry's per-1M-token pricing × actual token usage:
 
 ```
 cost = (uncached_prompt_tokens / 1000) × prompt_price
@@ -286,7 +286,7 @@ cost = (uncached_prompt_tokens / 1000) × prompt_price
      × (1 - batch_discount)
 ```
 
-Pricing is converted from per-1K-token form (registry) to per-1M-token form (the form the VS Code LM API expects) via `toPerMillionPricing()`.
+Pricing is per-1M tokens everywhere (registry, cost engine, and the VS Code LM API); `toPerMillionPricing()` only shapes and filters the registry entry.
 
 `computeCost()` is applied uniformly across all providers — including the custom-send
 adapters (Anthropic, Google/Gemini), which build their `UsageInfo` by hand and call

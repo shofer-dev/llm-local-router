@@ -31,7 +31,7 @@ import type { ModelPricing } from './types';
 /**
  * Module-level mutable map of per-model pricing overrides loaded from
  * SecretStorage. Keys are model IDs (e.g. "gpt-5.5"), values are partial
- * ModelPricing entries in USD per 1K tokens.
+ * ModelPricing entries in USD per 1M tokens.
  *
  * Populated by {@link setModelPricingOverrides} at SecretStorage load time
  * and after every Config panel save.
@@ -41,7 +41,7 @@ const modelPricingOverrides = new Map<string, ModelPricing>();
 /**
  * Overwrite the in-memory per-model pricing overrides from a batch load.
  * Called after SecretStorage is read at startup and after Config panel save.
- * Keys are model IDs; values are pricing entries in the same per-1K-token
+ * Keys are model IDs; values are pricing entries in the same per-1M-token
  * format as ModelPricing.
  */
 export function setModelPricingOverrides(overrides: Record<string, ModelPricing>): void {
@@ -92,16 +92,16 @@ export function computeCost(
     const effectiveCached = cachedTokens ?? 0;
     const uncachedPrompt = Math.max(0, promptTokens - effectiveCached);
     let cost = 0;
-    cost += (uncachedPrompt / 1000) * (p.prompt ?? 0);
+    cost += (uncachedPrompt / 1_000_000) * (p.prompt ?? 0);
     if (effectiveCached > 0 && p.contextCacheRead) {
-        cost += (effectiveCached / 1000) * p.contextCacheRead;
+        cost += (effectiveCached / 1_000_000) * p.contextCacheRead;
     }
     // Cache write cost
     if (cacheCreationTokens && cacheCreationTokens > 0 && p.contextCacheWrite) {
-        cost += (cacheCreationTokens / 1000) * p.contextCacheWrite;
+        cost += (cacheCreationTokens / 1_000_000) * p.contextCacheWrite;
     }
     // Completion cost
-    cost += (completionTokens / 1000) * (p.completion ?? 0);
+    cost += (completionTokens / 1_000_000) * (p.completion ?? 0);
 
     // Apply batch discount if present
     if (p.discount && p.discount > 0) {
@@ -112,20 +112,13 @@ export function computeCost(
 }
 
 /**
- * Convert registry pricing (per-1K-token) to per-1M-token form
- * for VS Code LM API compatibility.
+ * Shape registry pricing (already per-1M-token) into the VS Code LM API
+ * ModelPricingPerMillion form, dropping unset/zero rates.
  */
 export function toPerMillionPricing(modelId: string): ModelPricingPerMillion | undefined {
     const p = getEffectivePricing(modelId);
     if (!p) return undefined;
-    // Per-1K → per-1M. Round to 6dp: the bare multiply yields binary-fraction
-    // artifacts (0.00014 * 1000 === 0.13999999999999999, 0.00341 * 1000 ===
-    // 3.4099999999999997) which surface raw in the Status table and to every
-    // consumer of the getModelPricing side-channel. 6dp is far finer than any real
-    // per-1M price, so this is lossless in practice — and cost is computed from the
-    // per-1K values in computeCost(), never from these, so accounting is unaffected.
-    const toPerM = (v: number | undefined): number | undefined =>
-        v !== undefined && v > 0 ? Math.round(v * 1000 * 1e6) / 1e6 : undefined;
+    const toPerM = (v: number | undefined): number | undefined => (v !== undefined && v > 0 ? v : undefined);
 
     const inputPrice = toPerM(p.prompt ?? 0);
     const outputPrice = toPerM(p.completion ?? 0);

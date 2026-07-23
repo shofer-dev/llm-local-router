@@ -539,7 +539,7 @@ export class RouterConfigProvider {
 
   /**
    * Build the per-model list for a provider from the ALL_MODELS registry.
-   * Pricing is converted from per-1K-token (registry) to per-1M-token (webview).
+   * Pricing is per-1M tokens end to end (registry and webview).
    */
   private async buildModelConfigEntries(providerId: string): Promise<ModelConfigEntry[]> {
     const registryModels = ALL_MODELS.filter(e => e.provider === providerId);
@@ -554,9 +554,9 @@ export class RouterConfigProvider {
       id: m.id,
       name: m.name,
       defaultPricing: m.pricing ? {
-        prompt: (m.pricing.prompt ?? 0) * 1000,
-        completion: (m.pricing.completion ?? 0) * 1000,
-        cacheRead: (m.pricing.contextCacheRead ?? 0) * 1000,
+        prompt: m.pricing.prompt ?? 0,
+        completion: m.pricing.completion ?? 0,
+        cacheRead: m.pricing.contextCacheRead ?? 0,
       } : undefined,
       pricingOverride: modelPricingOverrides[m.id],
     }));
@@ -588,9 +588,9 @@ export class RouterConfigProvider {
         }).length;
         const registryEntry = ALL_MODELS.find(e => e.provider === id);
         const defaultPricing = registryEntry?.pricing ? {
-          prompt: (registryEntry.pricing.prompt ?? 0) * 1000,
-          completion: (registryEntry.pricing.completion ?? 0) * 1000,
-          cacheRead: (registryEntry.pricing.contextCacheRead ?? 0) * 1000,
+          prompt: registryEntry.pricing.prompt ?? 0,
+          completion: registryEntry.pricing.completion ?? 0,
+          cacheRead: registryEntry.pricing.contextCacheRead ?? 0,
         } : undefined;
         return {
           id, label: def.label, hasApiKey: !!key,

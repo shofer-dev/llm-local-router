@@ -204,9 +204,9 @@ export class LanguageModelProvider implements vscode.LanguageModelChatProvider<v
     private customModelToProviderInfo(model: CustomProviderModel, providerId: string, providerLabel: string, pricing?: { prompt?: number; completion?: number; cacheRead?: number }): ProviderModelInfo {
         const pricingPerMillion = pricing
             ? {
-                inputPrice: (pricing.prompt ?? 0) * 1000,
-                outputPrice: (pricing.completion ?? 0) * 1000,
-                cacheReadsPrice: (pricing.cacheRead ?? 0) * 1000,
+                inputPrice: pricing.prompt ?? 0,
+                outputPrice: pricing.completion ?? 0,
+                cacheReadsPrice: pricing.cacheRead ?? 0,
               }
             : undefined;
         return {

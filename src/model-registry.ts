@@ -1,13 +1,13 @@
 /**
  * Model registry — single source of truth for all model metadata.
  *
- * Prices are stored as USD per 1K tokens (matching the Go source);
- * the llm-client converts to per-1M-token form for VS Code LM API compatibility.
+ * Prices are stored as USD per 1M tokens (matching the Go source and
+ * provider price sheets); consumers use the values as-is.
  */
 
 import { ModelRegistryEntry, ModelPricing, ProviderType } from './types';
 
-// ─── Helper: per-1K-token prices ─────────────────────────────────────
+// ─── Helper: per-1M-token prices ─────────────────────────────────────
 
 const $ = (prompt: number, completion: number, cacheRead?: number, cacheWrite?: number, discount?: number): ModelPricing => {
     const p: ModelPricing = { prompt, completion };
@@ -27,7 +27,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 1_050_000, maxOutputTokens: 128_000,
         provider: ProviderType.OpenAI,
         // Prompts over 272K input tokens are billed at 2x input / 1.5x output for the session.
-        pricing: $(0.005, 0.030, 0.0005, undefined, 0.5),
+        pricing: $(5, 30, 0.5, undefined, 0.5),
         imageInput: true, toolCalling: true,
     },
     {
@@ -35,7 +35,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "OpenAI's deepest-reasoning model in the GPT-5.5 family for the hardest professional and research workloads",
         contextLength: 1_050_000, maxOutputTokens: 128_000,
         provider: ProviderType.OpenAI,
-        pricing: $(0.030, 0.180),
+        pricing: $(30, 180),
         imageInput: true, toolCalling: true,
     },
     {
@@ -43,7 +43,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "OpenAI's affordable flagship for coding and professional work with 1M context and adjustable reasoning effort",
         contextLength: 1_050_000, maxOutputTokens: 128_000,
         provider: ProviderType.OpenAI,
-        pricing: $(0.0025, 0.015, 0.00025, undefined, 0.5),
+        pricing: $(2.5, 15, 0.25, undefined, 0.5),
         imageInput: true, toolCalling: true,
     },
     {
@@ -51,7 +51,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "OpenAI's strongest mini model for coding, computer use, and subagents with 400K context",
         contextLength: 400_000, maxOutputTokens: 128_000,
         provider: ProviderType.OpenAI,
-        pricing: $(0.00075, 0.0045, 0.000075, undefined, 0.5),
+        pricing: $(0.75, 4.5, 0.075, undefined, 0.5),
         imageInput: true, toolCalling: true,
     },
     {
@@ -59,7 +59,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "OpenAI's most cost-efficient GPT-5 model for high-volume tasks with 400K context",
         contextLength: 400_000, maxOutputTokens: 128_000,
         provider: ProviderType.OpenAI,
-        pricing: $(0.0002, 0.00125, 0.00002, undefined, 0.5),
+        pricing: $(0.2, 1.25, 0.02, undefined, 0.5),
         imageInput: true, toolCalling: true,
     },
 
@@ -69,7 +69,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Anthropic's most capable generally available model (Opus 4.8) for complex reasoning and agentic coding, with adaptive thinking and 1M context",
         contextLength: 1_000_000, maxOutputTokens: 128_000,
         provider: ProviderType.Anthropic,
-        pricing: $(0.005, 0.025, 0.0005, 0.00625, 0.5),
+        pricing: $(5, 25, 0.5, 6.25, 0.5),
         imageInput: true, toolCalling: true,
     },
     {
@@ -77,7 +77,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Anthropic's best balance of speed and intelligence with extended/adaptive thinking and 1M context",
         contextLength: 1_000_000, maxOutputTokens: 64_000,
         provider: ProviderType.Anthropic,
-        pricing: $(0.003, 0.015, 0.0003, 0.00375, 0.5),
+        pricing: $(3, 15, 0.3, 3.75, 0.5),
         imageInput: true, toolCalling: true,
     },
     {
@@ -85,7 +85,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Anthropic's fastest model with near-frontier intelligence, extended thinking, and 200K context",
         contextLength: 200_000, maxOutputTokens: 64_000,
         provider: ProviderType.Anthropic,
-        pricing: $(0.001, 0.005, 0.0001, 0.00125, 0.5),
+        pricing: $(1, 5, 0.1, 1.25, 0.5),
         imageInput: true, toolCalling: true,
     },
 
@@ -95,7 +95,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Google's latest flagship thinking model for multimodal understanding, agentic coding, and precise tool usage. 1M context.",
         contextLength: 1_048_576, maxOutputTokens: 65_536,
         provider: ProviderType.Google,
-        pricing: { prompt: 0.002, completion: 0.012, promptAbove200K: 0.004, completionAbove200K: 0.018, contextCacheRead: 0.0002, discount: 0.5 },
+        pricing: { prompt: 2, completion: 12, promptAbove200K: 4, completionAbove200K: 18, contextCacheRead: 0.2, discount: 0.5 },
         imageInput: true, toolCalling: true,
     },
     {
@@ -103,7 +103,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Google's most intelligent model built for speed, combining frontier intelligence with superior search, grounding, and computer use. 1M context.",
         contextLength: 1_048_576, maxOutputTokens: 65_536,
         provider: ProviderType.Google,
-        pricing: { prompt: 0.0005, completion: 0.003, audioPrompt: 0.001, contextCacheRead: 0.00005, discount: 0.5 },
+        pricing: { prompt: 0.5, completion: 3, audioPrompt: 1, contextCacheRead: 0.05, discount: 0.5 },
         imageInput: true, toolCalling: true,
     },
     {
@@ -111,7 +111,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Google's most cost-efficient model for high-volume agentic tasks. 1M context.",
         contextLength: 1_048_576, maxOutputTokens: 65_536,
         provider: ProviderType.Google,
-        pricing: { prompt: 0.00025, completion: 0.0015, audioPrompt: 0.0005, contextCacheRead: 0.000025, discount: 0.5 },
+        pricing: { prompt: 0.25, completion: 1.5, audioPrompt: 0.5, contextCacheRead: 0.025, discount: 0.5 },
         imageInput: true, toolCalling: true,
     },
 
@@ -122,7 +122,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 1_000_000, maxOutputTokens: 384_000,
         provider: ProviderType.DeepSeek,
         // 75% cut off the original $1.74/$3.48 list price; made permanent on 2026-05-22.
-        pricing: $(0.000435, 0.00087, 0.000003625),
+        pricing: $(0.435, 0.87, 0.003625),
         imageInput: false, toolCalling: true,
     },
     {
@@ -130,7 +130,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'DeepSeek V4 Flash: 284B total / 13B active params, fast and cost-effective.',
         contextLength: 1_000_000, maxOutputTokens: 384_000,
         provider: ProviderType.DeepSeek,
-        pricing: $(0.00014, 0.00028, 0.0000028),
+        pricing: $(0.14, 0.28, 0.0028),
         imageInput: false, toolCalling: true,
     },
 
@@ -143,7 +143,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         // rate ($0.60/$2.40 per 1M); the 50% launch discount is modeled via `discount`.
         contextLength: 1_000_000, maxOutputTokens: 65_536,
         provider: ProviderType.MiniMax,
-        pricing: $(0.0006, 0.0024, undefined, undefined, 0.5),
+        pricing: $(0.6, 2.4, undefined, undefined, 0.5),
         imageInput: true, toolCalling: true,
     },
     {
@@ -151,7 +151,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'MiniMax M2.7 model',
         contextLength: 204_800, maxOutputTokens: 65_536,
         provider: ProviderType.MiniMax,
-        pricing: $(0.0003, 0.0012, 0.00006, 0.000375),
+        pricing: $(0.3, 1.2, 0.06, 0.375),
         imageInput: false, toolCalling: true,
     },
     {
@@ -159,7 +159,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'MiniMax M2.5 model',
         contextLength: 204_800, maxOutputTokens: 65_536,
         provider: ProviderType.MiniMax,
-        pricing: $(0.0003, 0.0012, 0.00003, 0.000375),
+        pricing: $(0.3, 1.2, 0.03, 0.375),
         imageInput: false, toolCalling: true,
     },
 
@@ -169,7 +169,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Moonshot Kimi K2 Thinking model',
         contextLength: 262_144, maxOutputTokens: 32_768,
         provider: ProviderType.Moonshot,
-        pricing: $(0.0006, 0.0025, 0.00015),
+        pricing: $(0.6, 2.5, 0.15),
         imageInput: false, toolCalling: true,
     },
     {
@@ -177,7 +177,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Moonshot Kimi K2.5 model',
         contextLength: 262_144, maxOutputTokens: 32_768,
         provider: ProviderType.Moonshot,
-        pricing: $(0.0006, 0.003, 0.0001),
+        pricing: $(0.6, 3, 0.1),
         imageInput: true, toolCalling: true,
     },
     {
@@ -185,7 +185,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Moonshot Kimi K2.6 multimodal model',
         contextLength: 262_144, maxOutputTokens: 32_768,
         provider: ProviderType.Moonshot,
-        pricing: $(0.00066, 0.00341),
+        pricing: $(0.66, 3.41),
         imageInput: true, toolCalling: true,
     },
     {
@@ -193,7 +193,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Moonshot Kimi K2.7 Code — agentic coding model (256K context), vision-capable',
         contextLength: 262_144, maxOutputTokens: 32_768,
         provider: ProviderType.Moonshot,
-        pricing: $(0.00095, 0.004, 0.00019),
+        pricing: $(0.95, 4, 0.19),
         imageInput: true, toolCalling: true,
     },
     {
@@ -202,7 +202,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         // Pricing mirrors kimi-k2.7-code; a separate highspeed rate is not published.
         contextLength: 262_144, maxOutputTokens: 32_768,
         provider: ProviderType.Moonshot,
-        pricing: $(0.00095, 0.004, 0.00019),
+        pricing: $(0.95, 4, 0.19),
         imageInput: true, toolCalling: true,
     },
     {
@@ -234,7 +234,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Xiaomi MiMo v2 Pro with thinking enabled',
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.Xiaomi,
-        pricing: $(0.000435, 0.00087, 0.0000036),
+        pricing: $(0.435, 0.87, 0.0036),
         imageInput: false, toolCalling: true,
     },
     {
@@ -242,7 +242,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Xiaomi MiMo v2 Omni-modal model with thinking',
         contextLength: 256_000, maxOutputTokens: 32_768,
         provider: ProviderType.Xiaomi,
-        pricing: $(0.00014, 0.00028, 0.0000028),
+        pricing: $(0.14, 0.28, 0.0028),
         imageInput: true, toolCalling: true,
     },
     {
@@ -258,7 +258,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Xiaomi MiMo v2 Flash model',
         contextLength: 256_000, maxOutputTokens: 65_536,
         provider: ProviderType.Xiaomi,
-        pricing: $(0.00014, 0.00028, 0.0000028),
+        pricing: $(0.14, 0.28, 0.0028),
         imageInput: false, toolCalling: true,
     },
 
@@ -270,7 +270,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-5.2 next-gen flagship for agentic engineering with interleaved thinking and 1M lossless context',
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0014, 0.0044, 0.00026),
+        pricing: $(1.4, 4.4, 0.26),
         imageInput: false, toolCalling: true,
     },
     {
@@ -278,7 +278,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-5.1 flagship for agentic engineering with long-horizon optimization',
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0014, 0.0044, 0.00026),
+        pricing: $(1.4, 4.4, 0.26),
         imageInput: false, toolCalling: true,
     },
     {
@@ -286,7 +286,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-5 flagship model with interleaved thinking',
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
-        pricing: $(0.001, 0.0032, 0.0002),
+        pricing: $(1, 3.2, 0.2),
         imageInput: false, toolCalling: true,
     },
     {
@@ -294,7 +294,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-4.7 with turn-level thinking',
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0006, 0.0022, 0.00011),
+        pricing: $(0.6, 2.2, 0.11),
         imageInput: false, toolCalling: true,
     },
     {
@@ -302,7 +302,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-4.6 with hybrid thinking',
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0006, 0.0022, 0.00011),
+        pricing: $(0.6, 2.2, 0.11),
         imageInput: false, toolCalling: true,
     },
     {
@@ -310,7 +310,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-4.5 with interleaved thinking',
         contextLength: 131_072, maxOutputTokens: 98_304,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0006, 0.0022, 0.00011),
+        pricing: $(0.6, 2.2, 0.11),
         imageInput: false, toolCalling: true,
     },
     {
@@ -318,7 +318,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-4.5-Air lightweight MoE (106B total / 12B active) for fast, cost-efficient agentic tasks',
         contextLength: 131_072, maxOutputTokens: 98_304,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0002, 0.0011, 0.00003),
+        pricing: $(0.2, 1.1, 0.03),
         imageInput: false, toolCalling: true,
     },
     {
@@ -326,7 +326,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-5V-Turbo — next-gen native multimodal vision model (image + video) with multimodal tool use and GUI task execution',
         contextLength: 202_752, maxOutputTokens: 131_072,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0012, 0.004),
+        pricing: $(1.2, 4),
         imageInput: true, toolCalling: true,
     },
     {
@@ -334,7 +334,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-4.6V vision model with auto-determined thinking and multimodal image understanding',
         contextLength: 131_072, maxOutputTokens: 32_768,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0003, 0.0009, 0.00005),
+        pricing: $(0.3, 0.9, 0.05),
         imageInput: true, toolCalling: true,
     },
     {
@@ -350,7 +350,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu AI GLM-4.5V vision model with compulsory thinking and multimodal image understanding',
         contextLength: 65_536, maxOutputTokens: 16_384,
         provider: ProviderType.Zhipu,
-        pricing: $(0.0006, 0.0018, 0.00011),
+        pricing: $(0.6, 1.8, 0.11),
         imageInput: true, toolCalling: true,
     },
     // ═══ Mistral ═══
@@ -359,7 +359,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Mistral's flagship model (Large 3) for complex reasoning and agentic coding with native function calling",
         contextLength: 262_144, maxOutputTokens: 131_072,
         provider: ProviderType.Mistral,
-        pricing: $(0.0005, 0.0015),
+        pricing: $(0.5, 1.5),
         imageInput: true, toolCalling: true,
     },
     {
@@ -367,7 +367,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Mistral's specialized coding model optimized for code generation and completion",
         contextLength: 128_000, maxOutputTokens: 131_072,
         provider: ProviderType.Mistral,
-        pricing: $(0.0003, 0.0009),
+        pricing: $(0.3, 0.9),
         imageInput: false, toolCalling: true,
     },
     {
@@ -375,7 +375,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "Mistral's multimodal mid-tier model with vision (replaces the retired Pixtral Large)",
         contextLength: 262_144, maxOutputTokens: 131_072,
         provider: ProviderType.Mistral,
-        pricing: $(0.0015, 0.0075),
+        pricing: $(1.5, 7.5),
         imageInput: true, toolCalling: true,
     },
 
@@ -386,7 +386,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.XAI,
         // Requests over 200K total tokens are billed at a higher tier.
-        pricing: $(0.00125, 0.0025, 0.0002),
+        pricing: $(1.25, 2.5, 0.2),
         imageInput: true, toolCalling: true,
     },
     {
@@ -394,7 +394,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: "xAI's fast, cost-efficient model for agentic coding and web dev (the surviving small Grok; grok-4-fast* are retired)",
         contextLength: 256_000, maxOutputTokens: 131_072,
         provider: ProviderType.XAI,
-        pricing: $(0.001, 0.002, 0.0002),
+        pricing: $(1, 2, 0.2),
         imageInput: true, toolCalling: true,
     },
 
@@ -404,7 +404,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'AWS Bedrock Claude Sonnet 4 via Converse API',
         contextLength: 200_000, maxOutputTokens: 65_536,
         provider: ProviderType.Bedrock,
-        pricing: $(0.003, 0.015, 0.0003, 0.00375),
+        pricing: $(3, 15, 0.3, 3.75),
         imageInput: true, toolCalling: true,
     },
     {
@@ -412,7 +412,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'AWS Bedrock Claude Opus 4 via Converse API',
         contextLength: 200_000, maxOutputTokens: 65_536,
         provider: ProviderType.Bedrock,
-        pricing: $(0.015, 0.075, 0.0015, 0.01875),
+        pricing: $(15, 75, 1.5, 18.75),
         imageInput: true, toolCalling: true,
     },
 
@@ -426,7 +426,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Google Vertex AI Gemini 3.1 Pro model for thinking and agentic coding',
         contextLength: 1_048_576, maxOutputTokens: 65_536,
         provider: ProviderType.Vertex,
-        pricing: { prompt: 0.002, completion: 0.012, promptAbove200K: 0.004, completionAbove200K: 0.018, contextCacheRead: 0.0002, discount: 0.5 },
+        pricing: { prompt: 2, completion: 12, promptAbove200K: 4, completionAbove200K: 18, contextCacheRead: 0.2, discount: 0.5 },
         imageInput: true, toolCalling: true,
     },
     {
@@ -434,7 +434,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Google Vertex AI Gemini 3 Flash for speed with frontier intelligence',
         contextLength: 1_048_576, maxOutputTokens: 65_536,
         provider: ProviderType.Vertex,
-        pricing: { prompt: 0.0005, completion: 0.003, contextCacheRead: 0.00005, discount: 0.5 },
+        pricing: { prompt: 0.5, completion: 3, contextCacheRead: 0.05, discount: 0.5 },
         imageInput: true, toolCalling: true,
     },
 
@@ -444,7 +444,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Anthropic Claude Sonnet 4 via Google Cloud Vertex AI',
         contextLength: 200_000, maxOutputTokens: 65_536,
         provider: ProviderType.AnthropicVertex,
-        pricing: $(0.003, 0.015, 0.0003, 0.00375),
+        pricing: $(3, 15, 0.3, 3.75),
         imageInput: true, toolCalling: true,
     },
     {
@@ -452,7 +452,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Anthropic Claude Opus 4 via Google Cloud Vertex AI',
         contextLength: 200_000, maxOutputTokens: 65_536,
         provider: ProviderType.AnthropicVertex,
-        pricing: $(0.015, 0.075, 0.0015, 0.01875),
+        pricing: $(15, 75, 1.5, 18.75),
         imageInput: true, toolCalling: true,
     },
 
@@ -490,7 +490,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Meta Llama 3.3 70B via Fireworks AI — fast, cost-effective inference',
         contextLength: 131_072, maxOutputTokens: 16_384,
         provider: ProviderType.Fireworks,
-        pricing: $(0.0009, 0.0009),
+        pricing: $(0.9, 0.9),
         imageInput: false, toolCalling: true,
     },
     {
@@ -498,7 +498,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'DeepSeek V3 via Fireworks AI',
         contextLength: 131_072, maxOutputTokens: 16_384,
         provider: ProviderType.Fireworks,
-        pricing: $(0.001, 0.001),
+        pricing: $(1, 1),
         imageInput: false, toolCalling: true,
     },
 
@@ -508,7 +508,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Meta Llama 3.3 70B via SambaNova — high throughput inference',
         contextLength: 131_072, maxOutputTokens: 16_384,
         provider: ProviderType.SambaNova,
-        pricing: $(0.0006, 0.0012),
+        pricing: $(0.6, 1.2),
         imageInput: false, toolCalling: true,
     },
     {
@@ -516,7 +516,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'DeepSeek V3 via SambaNova',
         contextLength: 131_072, maxOutputTokens: 16_384,
         provider: ProviderType.SambaNova,
-        pricing: $(0.001, 0.001),
+        pricing: $(1, 1),
         imageInput: false, toolCalling: true,
     },
 
@@ -526,7 +526,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'DeepSeek R1 reasoning model via Baseten inference',
         contextLength: 131_072, maxOutputTokens: 16_384,
         provider: ProviderType.Baseten,
-        pricing: $(0.001, 0.001),
+        pricing: $(1, 1),
         imageInput: false, toolCalling: true,
     },
 
@@ -536,7 +536,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Requesty LLM router — proxies to multiple underlying providers',
         contextLength: 200_000, maxOutputTokens: 32_768,
         provider: ProviderType.Requesty,
-        pricing: $(0.001, 0.003),
+        pricing: $(1, 3),
         imageInput: true, toolCalling: true,
     },
 
@@ -546,7 +546,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Unbound LLM router — proxies to multiple underlying providers',
         contextLength: 200_000, maxOutputTokens: 32_768,
         provider: ProviderType.Unbound,
-        pricing: $(0.001, 0.003),
+        pricing: $(1, 3),
         imageInput: true, toolCalling: true,
     },
 
@@ -556,7 +556,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Vercel AI Gateway — proxies to multiple underlying providers',
         contextLength: 200_000, maxOutputTokens: 32_768,
         provider: ProviderType.VercelAiGateway,
-        pricing: $(0.001, 0.003),
+        pricing: $(1, 3),
         imageInput: true, toolCalling: true,
     },
 
@@ -568,7 +568,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu GLM-5.2 via Z.ai international API with interleaved thinking and 1M lossless context',
         contextLength: 1_000_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
-        pricing: $(0.0014, 0.0044, 0.00026),
+        pricing: $(1.4, 4.4, 0.26),
         imageInput: false, toolCalling: true,
     },
     {
@@ -576,7 +576,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu GLM-4.7 via Z.ai international API with turn-level thinking',
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
-        pricing: $(0.0006, 0.0022, 0.00011),
+        pricing: $(0.6, 2.2, 0.11),
         imageInput: false, toolCalling: true,
     },
     {
@@ -584,7 +584,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu GLM-5 via Z.ai international API with interleaved thinking',
         contextLength: 200_000, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
-        pricing: $(0.001, 0.0032, 0.0002),
+        pricing: $(1, 3.2, 0.2),
         imageInput: false, toolCalling: true,
     },
     {
@@ -592,7 +592,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu GLM-5V-Turbo via Z.ai international API — native multimodal vision model (image + video) with multimodal tool use',
         contextLength: 202_752, maxOutputTokens: 131_072,
         provider: ProviderType.ZAi,
-        pricing: $(0.0012, 0.004),
+        pricing: $(1.2, 4),
         imageInput: true, toolCalling: true,
     },
     {
@@ -600,7 +600,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu GLM-4.6V via Z.ai international API — vision model with auto-determined thinking and multimodal image understanding',
         contextLength: 131_072, maxOutputTokens: 32_768,
         provider: ProviderType.ZAi,
-        pricing: $(0.0003, 0.0009, 0.00005),
+        pricing: $(0.3, 0.9, 0.05),
         imageInput: true, toolCalling: true,
     },
     {
@@ -616,7 +616,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Zhipu GLM-4.5V via Z.ai international API — vision model with compulsory thinking and multimodal image understanding',
         contextLength: 65_536, maxOutputTokens: 16_384,
         provider: ProviderType.ZAi,
-        pricing: $(0.0006, 0.0018, 0.00011),
+        pricing: $(0.6, 1.8, 0.11),
         imageInput: true, toolCalling: true,
     },
 
@@ -629,7 +629,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Alibaba Qwen3-Max — flagship general model',
         contextLength: 262_144, maxOutputTokens: 65_536,
         provider: ProviderType.DashScope,
-        pricing: $(0.0012, 0.006),
+        pricing: $(1.2, 6),
         imageInput: false, toolCalling: true,
     },
     {
@@ -637,7 +637,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Alibaba Qwen3.6-Plus — latest flagship-tier model with 1M context',
         contextLength: 1_000_000, maxOutputTokens: 65_536,
         provider: ProviderType.DashScope,
-        pricing: $(0.0005, 0.003),
+        pricing: $(0.5, 3),
         imageInput: false, toolCalling: true,
     },
     {
@@ -645,7 +645,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Alibaba Qwen3.6-Flash — fast, cost-efficient model with 1M context',
         contextLength: 1_000_000, maxOutputTokens: 65_536,
         provider: ProviderType.DashScope,
-        pricing: $(0.00019, 0.00113),
+        pricing: $(0.19, 1.13),
         imageInput: false, toolCalling: true,
     },
     {
@@ -653,7 +653,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Alibaba Qwen3-Coder-Plus — high-performance agentic coding model with 1M context',
         contextLength: 1_000_000, maxOutputTokens: 65_536,
         provider: ProviderType.DashScope,
-        pricing: $(0.001, 0.005),
+        pricing: $(1, 5),
         imageInput: false, toolCalling: true,
     },
     {
@@ -661,7 +661,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Alibaba Qwen3-Coder-Flash — fast coding model with 1M context optimized for speed',
         contextLength: 1_000_000, maxOutputTokens: 65_536,
         provider: ProviderType.DashScope,
-        pricing: $(0.0003, 0.0015),
+        pricing: $(0.3, 1.5),
         imageInput: false, toolCalling: true,
     },
     {
@@ -669,7 +669,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Alibaba Qwen3-VL-Plus — multimodal vision-language model (high-res image + video) with long context',
         contextLength: 262_144, maxOutputTokens: 32_768,
         provider: ProviderType.DashScope,
-        pricing: $(0.0002, 0.0016),
+        pricing: $(0.2, 1.6),
         imageInput: true, toolCalling: true,
     },
     {
@@ -677,7 +677,7 @@ export const ALL_MODELS: ModelRegistryEntry[] = [
         description: 'Alibaba Qwen3-VL-Flash — fast, cost-efficient multimodal vision-language model',
         contextLength: 262_144, maxOutputTokens: 32_768,
         provider: ProviderType.DashScope,
-        pricing: $(0.0001, 0.0008),
+        pricing: $(0.1, 0.8),
         imageInput: true, toolCalling: true,
     },
 ];
