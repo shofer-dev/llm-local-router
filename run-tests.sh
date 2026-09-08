@@ -18,6 +18,7 @@ ALL_TESTS=(
     out/__tests__/config-converter.test.js
     out/__tests__/metrics-collector.test.js
     out/__tests__/metrics-server.test.js
+    out/__tests__/google-sanitize.test.js
 )
 
 FAILURES=0

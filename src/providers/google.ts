@@ -146,22 +146,22 @@ const GEMINI_NATIVE_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta
  * (standard JSON Schema), which must be removed before sending.
  */
 /** @test — exported for unit test coverage */
-export function stripAdditionalProperties(obj: Record<string, unknown>): Record<string, unknown> {
+export function sanitizeGeminiSchema(obj: Record<string, unknown>): Record<string, unknown> {
     if (typeof obj !== 'object' || obj === null) {
         return obj;
     }
 
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-        if (key === 'additionalProperties') {
+        if (key === 'additionalProperties' || key === '$comment' || key === 'enumDescriptions' || key === 'examples') {
             continue;
         }
         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            result[key] = stripAdditionalProperties(value as Record<string, unknown>);
+            result[key] = sanitizeGeminiSchema(value as Record<string, unknown>);
         } else if (Array.isArray(value)) {
             result[key] = value.map((item) =>
                 typeof item === 'object' && item !== null
-                    ? stripAdditionalProperties(item as Record<string, unknown>)
+                    ? sanitizeGeminiSchema(item as Record<string, unknown>)
                     : item
             );
         } else {
@@ -341,7 +341,7 @@ export function buildGeminiRequest(request: ChatCompletionRequest): GeminiReques
                 name: t.function.name,
                 description: t.function.description,
                 parameters: t.function.parameters
-                    ? stripAdditionalProperties(t.function.parameters as Record<string, unknown>) as Record<string, unknown>
+                    ? sanitizeGeminiSchema(t.function.parameters as Record<string, unknown>) as Record<string, unknown>
                     : undefined,
             }));
 
