@@ -30,6 +30,12 @@ branding.
 - Full suite: `./run-tests.sh` (== `npm test`) — runs `tsc --skipLibCheck` then
   `node --test` over `out/__tests__/*.test.js`. This is the **pre-push** gate
   (`.husky/pre-push`); `.husky/pre-commit` runs `tsc --skipLibCheck --noEmit`.
+- `lockfile-hosts.test.ts` fails if either `package-lock.json` (host or
+  `webview-ui/`) carries a `resolved` URL other than
+  `https://registry.npmjs.org/`. A host npm pointed at the platform's Nexus
+  NodePort writes `http://localhost:30084/...` there, which is dead in image
+  builds and CI pods; rewrite the prefix back before committing (npm swaps the
+  canonical host for `npm_config_registry` at install time).
 - No ESLint / Prettier config exists — strict `tsc` is the only static gate.
 
 ## Bazel (optional, for monorepo builds)
